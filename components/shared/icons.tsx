@@ -39,3 +39,41 @@ export const BaseLinkerIcon = (props: SVGProps<SVGSVGElement>) => {
     </svg>
   );
 };
+
+export const SuusIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 200 60"
+    width="100" // Domyślna szerokość
+    height="30" // Domyślna wysokość
+    {...props}
+  >
+    <defs>
+      <style>{`.cls-suus{fill:#003c71}`}</style>
+    </defs>
+    <path
+      className="cls-suus"
+      d="M29.5 35.8c-7.3 0-12.2-4.9-12.2-12.5s4.9-12.5 12.2-12.5 12.2 4.9 12.2 12.5-4.9 12.5-12.2 12.5zm0-20.3c-4.4 0-7.5 3.3-7.5 7.8s3.1 7.8 7.5 7.8 7.5-3.3 7.5-7.8-3.1-7.8-7.5-7.8zM61.9 35.8h-4.6V11h4.6v24.8zM87.4 35.8c-7.3 0-12.2-4.9-12.2-12.5s4.9-12.5 12.2-12.5 12.2 4.9 12.2 12.5-4.9 12.5-12.2 12.5zm0-20.3c-4.4 0-7.5 3.3-7.5 7.8s3.1 7.8 7.5 7.8 7.5-3.3 7.5-7.8-3.1-7.8-7.5-7.8zM119.8 35.8h-4.6V11h4.6v24.8z"
+    />
+  </svg>
+);
+
+export const ABIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 100 40"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-label="AB S.A. Logo"
+  >
+    <rect width="100" height="40" rx="4" fill="#E40521" />
+    <path
+      d="M21.94 28.5H16.18L13.54 11.5H19.3L20.62 21.82L21.94 11.5H27.58L29.02 21.82L30.34 11.5H36.1L33.46 28.5H27.82L24.7 15.1L21.94 28.5Z"
+      fill="white"
+    />
+    <path
+      d="M56.5 17.68C56.5 14.08 53.86 11.5 50.08 11.5H41.5V28.5H47.14V22.42H49.6L52.96 28.5H59.5L55.12 21.1C56 20.26 56.5 19.06 56.5 17.68ZM47.14 19.48V14.44H50.02C51.94 14.44 53.14 15.64 53.14 17.44C53.14 19.24 51.94 20.44 50.02 20.44L49.06 20.42L47.14 19.48Z"
+      fill="white"
+    />
+  </svg>
+);

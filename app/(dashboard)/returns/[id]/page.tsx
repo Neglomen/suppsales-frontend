@@ -12,8 +12,8 @@ interface ReturnDetails {
   id: string;
   external_return_id: string | null;
   status: string;
-  buyer_login: string | null;
-  details_payload: any;
+  buyerLogin: string | null;
+  detailsPayload: any;
 }
 
 function ReturnDetailsContent() {
@@ -43,7 +43,7 @@ function ReturnDetailsContent() {
         Szczegóły Zwrotu #{returnData.external_return_id}
       </h1>
       <pre className="mt-4 bg-muted p-4 rounded-lg overflow-x-auto">
-        {JSON.stringify(returnData.details_payload, null, 2)}
+        {JSON.stringify(returnData.detailsPayload, null, 2)}
       </pre>
     </div>
   );

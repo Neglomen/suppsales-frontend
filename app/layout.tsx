@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { Providers as QueryProviders } from "@/components/shared/providers";
 import { cn } from "@/lib/utils";
 import { Toaster } from "react-hot-toast";
 
@@ -12,7 +13,7 @@ const fontSans = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SaaS E-commerce Automation",
+  title: "SuupSales",
   description: "Automate your e-commerce business.",
 };
 
@@ -29,15 +30,18 @@ export default function RootLayout({
           fontSans.variable
         )}
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-          <Toaster position="bottom-right" reverseOrder={false} />
-        </ThemeProvider>
+        <QueryProviders>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+            <Toaster position="bottom-right" reverseOrder={false} />
+          </ThemeProvider>
+        </QueryProviders>
+        {/* === KONIEC POPRAWKI === */}
       </body>
     </html>
   );

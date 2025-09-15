@@ -77,7 +77,7 @@ export function ChatPanel({
       setError(null);
       try {
         const response = await api.get<Thread[]>("/threads/by-buyer-login", {
-          params: { buyer_login: buyerLogin, integration_id: integrationId },
+          params: { buyerLogin: buyerLogin, integration_id: integrationId },
         });
         setThreads(response.data);
       } catch (err) {
@@ -134,7 +134,7 @@ export function ChatPanel({
                 <MessageCircle className="h-5 w-5 text-muted-foreground" />
                 <div className="text-left">
                   <p className="font-semibold">
-                    Konwersacja z{" "}
+                    Konwersacja z
                     {new Date(thread.last_message_at).toLocaleString("pl-PL", {
                       day: "2-digit",
                       month: "2-digit",
@@ -142,7 +142,7 @@ export function ChatPanel({
                     })}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Ostatnia wiadomość:{" "}
+                    Ostatnia wiadomość:
                     {new Date(thread.last_message_at).toLocaleTimeString(
                       "pl-PL"
                     )}

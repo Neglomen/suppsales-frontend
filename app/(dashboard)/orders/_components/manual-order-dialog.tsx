@@ -38,7 +38,7 @@ interface ManualOrderDialogProps {
   onSuccess: () => void;
 }
 
-const AddressFields = ({ prefix }: { prefix: "delivery_address" }) => (
+const AddressFields = ({ prefix }: { prefix: "deliveryAddress" }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     <FormField
       name={`${prefix}.first_name`}
@@ -115,7 +115,7 @@ const AddressFields = ({ prefix }: { prefix: "delivery_address" }) => (
   </div>
 );
 
-const PickupPointFields = ({ prefix }: { prefix: "pickup_point" }) => (
+const PickupPointFields = ({ prefix }: { prefix: "pickupPoint" }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     <FormField
       name={`${prefix}.point_id`}
@@ -192,7 +192,7 @@ const PickupPointFields = ({ prefix }: { prefix: "pickup_point" }) => (
   </div>
 );
 
-const InvoiceFields = ({ prefix }: { prefix: "invoice_address" }) => (
+const InvoiceFields = ({ prefix }: { prefix: "invoiceAddress" }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     <FormField
       name={`${prefix}.company_name`}
@@ -290,11 +290,11 @@ export function ManualOrderDialog({
     resolver: zodResolver(ManualOrderSchema),
     defaultValues: {
       reference_number: "",
-      buyer_login: "",
-      buyer_email: "",
-      line_items: [{ name: "", quantity: 1, price: 0.01 }],
+      buyerLogin: "",
+      buyerEmail: "",
+      lineItems: [{ name: "", quantity: 1, price: 0.01 }],
       deliveryType: "address",
-      delivery_address: {
+      deliveryAddress: {
         first_name: "",
         last_name: "",
         street: "",
@@ -303,24 +303,24 @@ export function ManualOrderDialog({
         phone_number: "",
         country: "Polska",
       },
-      has_invoice_address: false,
+      has_invoiceAddress: false,
       note: "",
     },
   });
 
   const { fields, append, remove } = useFieldArray({
     control: methods.control,
-    name: "line_items",
+    name: "lineItems",
   });
   const watchDeliveryType = methods.watch("deliveryType");
-  const watchHasInvoice = methods.watch("has_invoice_address");
+  const watchHasInvoice = methods.watch("has_invoiceAddress");
 
   // Efekty do zarządzania stanem warunkowych pól formularza
   useEffect(() => {
     if (watchDeliveryType === "address") {
-      methods.setValue("pickup_point", undefined);
-      if (!methods.getValues("delivery_address")) {
-        methods.setValue("delivery_address", {
+      methods.setValue("pickupPoint", undefined);
+      if (!methods.getValues("deliveryAddress")) {
+        methods.setValue("deliveryAddress", {
           first_name: "",
           last_name: "",
           street: "",
@@ -330,10 +330,10 @@ export function ManualOrderDialog({
           country: "Polska",
         });
       }
-    } else if (watchDeliveryType === "pickup_point") {
-      methods.setValue("delivery_address", undefined);
-      if (!methods.getValues("pickup_point")) {
-        methods.setValue("pickup_point", {
+    } else if (watchDeliveryType === "pickupPoint") {
+      methods.setValue("deliveryAddress", undefined);
+      if (!methods.getValues("pickupPoint")) {
+        methods.setValue("pickupPoint", {
           point_id: "",
           name: "",
           street: "",
@@ -347,10 +347,10 @@ export function ManualOrderDialog({
 
   useEffect(() => {
     if (!watchHasInvoice) {
-      methods.setValue("invoice_address", undefined);
+      methods.setValue("invoiceAddress", undefined);
     } else {
-      if (!methods.getValues("invoice_address")) {
-        methods.setValue("invoice_address", {
+      if (!methods.getValues("invoiceAddress")) {
+        methods.setValue("invoiceAddress", {
           company_name: "",
           first_name: "",
           last_name: "",
@@ -367,12 +367,12 @@ export function ManualOrderDialog({
   const onSubmit = async (values: ManualOrderSchemaType) => {
     const payload = { ...values };
     if (values.deliveryType === "address") {
-      payload.pickup_point = undefined;
+      payload.pickupPoint = undefined;
     } else {
-      payload.delivery_address = undefined;
+      payload.deliveryAddress = undefined;
     }
-    if (!values.has_invoice_address) {
-      payload.invoice_address = undefined;
+    if (!values.has_invoiceAddress) {
+      payload.invoiceAddress = undefined;
     }
     // @ts-ignore
     delete payload.deliveryType;
@@ -408,7 +408,7 @@ export function ManualOrderDialog({
               <h3 className="text-lg font-semibold">Dane Kupującego</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <FormField
-                  name="buyer_email"
+                  name="buyerEmail"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email *</FormLabel>
@@ -420,7 +420,7 @@ export function ManualOrderDialog({
                   )}
                 />
                 <FormField
-                  name="buyer_login"
+                  name="buyerLogin"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Login (opcjonalnie)</FormLabel>
@@ -454,7 +454,7 @@ export function ManualOrderDialog({
                       </FormItem>
                       <FormItem className="flex items-center space-x-2">
                         <FormControl>
-                          <RadioGroupItem value="pickup_point" />
+                          <RadioGroupItem value="pickupPoint" />
                         </FormControl>
                         <FormLabel className="font-normal">
                           Punkt odbioru
@@ -468,15 +468,15 @@ export function ManualOrderDialog({
             />
 
             {watchDeliveryType === "address" && (
-              <AddressFields prefix="delivery_address" />
+              <AddressFields prefix="deliveryAddress" />
             )}
-            {watchDeliveryType === "pickup_point" && (
-              <PickupPointFields prefix="pickup_point" />
+            {watchDeliveryType === "pickupPoint" && (
+              <PickupPointFields prefix="pickupPoint" />
             )}
 
             <Separator />
             <FormField
-              name="has_invoice_address"
+              name="has_invoiceAddress"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center space-x-3 space-y-0 pt-2">
                   <FormControl>
@@ -492,7 +492,7 @@ export function ManualOrderDialog({
             {watchHasInvoice && (
               <>
                 <h3 className="text-lg font-semibold pt-4">Dane do Faktury</h3>
-                <InvoiceFields prefix="invoice_address" />
+                <InvoiceFields prefix="invoiceAddress" />
               </>
             )}
             <Separator />
@@ -516,7 +516,7 @@ export function ManualOrderDialog({
             {fields.map((field, index) => (
               <div key={field.id} className="flex items-end gap-2">
                 <FormField
-                  name={`line_items.${index}.name`}
+                  name={`lineItems.${index}.name`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
                       <FormLabel>Nazwa</FormLabel>
@@ -528,7 +528,7 @@ export function ManualOrderDialog({
                   )}
                 />
                 <FormField
-                  name={`line_items.${index}.quantity`}
+                  name={`lineItems.${index}.quantity`}
                   render={({ field }) => (
                     <FormItem className="w-24">
                       <FormLabel>Ilość</FormLabel>
@@ -546,7 +546,7 @@ export function ManualOrderDialog({
                   )}
                 />
                 <FormField
-                  name={`line_items.${index}.price`}
+                  name={`lineItems.${index}.price`}
                   render={({ field }) => (
                     <FormItem className="w-24">
                       <FormLabel>Cena (szt.)</FormLabel>
@@ -571,8 +571,7 @@ export function ManualOrderDialog({
                   onClick={() => remove(index)}
                   disabled={fields.length <= 1}
                 >
-                  {" "}
-                  <Trash2 className="h-4 w-4 text-destructive" />{" "}
+                  <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
             ))}

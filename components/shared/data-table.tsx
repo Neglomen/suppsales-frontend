@@ -1,4 +1,3 @@
-// src/components/shared/data-table.tsx
 "use client";
 
 import React from "react";
@@ -14,7 +13,9 @@ import {
   getSortedRowModel,
   getFilteredRowModel,
   ColumnFiltersState,
+  RowSelectionState,
 } from "@tanstack/react-table";
+import { Loader2 } from "lucide-react"; // DODAJ IMPORT
 
 import {
   Table,
@@ -26,18 +27,20 @@ import {
 } from "@/components/ui/table";
 import { DataTablePagination } from "./data-table-pagination";
 
-// Interfejs propsów - paginacja i sortowanie są teraz opcjonalne
+// === ZMIANA: DODANIE `isLoading` DO INTERFEJSU ===
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   toolbar?: React.ReactNode;
   onRowClick?: (row: Row<TData>) => void;
-  // Opcjonalne propsy dla paginacji i sortowania po stronie serwera
   pageCount?: number;
   pagination?: PaginationState;
   setPagination?: React.Dispatch<React.SetStateAction<PaginationState>>;
   sorting?: SortingState;
   setSorting?: React.Dispatch<React.SetStateAction<SortingState>>;
+  isLoading?: boolean; // Nowy, opcjonalny props
+  rowSelection?: RowSelectionState;
+  setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
 }
 
 export function DataTable<TData, TValue>({
@@ -50,16 +53,17 @@ export function DataTable<TData, TValue>({
   setPagination: setServerPagination,
   sorting: serverSorting,
   setSorting: setServerSorting,
+  isLoading, // Odbierz nowy props
+  rowSelection,
+  setRowSelection,
 }: DataTableProps<TData, TValue>) {
-  // Sprawdzamy, czy komponent ma działać w trybie serwerowym
   const isServerSide = pageCount !== undefined;
 
-  // Lokalne stany dla sortowania, filtrowania i paginacji po stronie klienta
   const [clientSorting, setClientSorting] = React.useState<SortingState>([]);
   const [clientPagination, setClientPagination] =
     React.useState<PaginationState>({
       pageIndex: 0,
-      pageSize: 10, // Możesz dostosować domyślny rozmiar strony dla trybu klienckiego
+      pageSize: 10,
     });
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -68,29 +72,26 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
-    // Jeśli `pageCount` jest zdefiniowany, używamy go. W przeciwnym razie, tabela sama go obliczy.
     pageCount: pageCount ?? -1,
     state: {
-      // Używamy stanów przekazanych z zewnątrz (serwer) lub lokalnych (klient)
       sorting: isServerSide ? serverSorting : clientSorting,
       pagination: isServerSide ? serverPagination : clientPagination,
       columnFilters,
     },
-    // Używamy setterów przekazanych z zewnątrz (serwer) lub lokalnych (klient)
     onPaginationChange: isServerSide
       ? setServerPagination
       : setClientPagination,
     onSortingChange: isServerSide ? setServerSorting : setClientSorting,
     onColumnFiltersChange: setColumnFilters,
-    // Włączamy odpowiednie modele wierszy
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    // Włączamy/wyłączamy tryb manualny w zależności od `isServerSide`
     manualPagination: isServerSide,
     manualSorting: isServerSide,
     manualFiltering: isServerSide,
+    enableRowSelection: true,
   });
 
   return (
@@ -121,7 +122,20 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {/* === NOWA LOGIKA RENDEROWANIA CIAŁA TABELI === */}
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  <div className="flex justify-center items-center gap-2">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <span>Ładowanie danych...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -151,11 +165,14 @@ export function DataTable<TData, TValue>({
                 </TableCell>
               </TableRow>
             )}
+            {/* === KONIEC NOWEJ LOGIKI === */}
           </TableBody>
         </Table>
       </div>
-      {/* Paginacja jest wyświetlana tylko, jeśli jest potrzebna */}
-      {table.getPageCount() > 1 && <DataTablePagination table={table} />}
+      {/* Paginacja jest wyświetlana tylko, jeśli jest potrzebna i dane nie są ładowane */}
+      {table.getPageCount() > 1 && !isLoading && (
+        <DataTablePagination table={table} />
+      )}
     </div>
   );
 }

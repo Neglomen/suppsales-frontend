@@ -131,11 +131,11 @@ const Step3 = () => {
           <div className="space-y-1 leading-none">
             <FormLabel>Akceptacja regulaminu</FormLabel>
             <FormDescription>
-              Akceptuję{" "}
+              Akceptuję
               <Link href="/terms" className="underline hover:text-primary">
                 regulamin
-              </Link>{" "}
-              oraz{" "}
+              </Link>
+              oraz
               <Link href="/privacy" className="underline hover:text-primary">
                 politykę prywatności
               </Link>

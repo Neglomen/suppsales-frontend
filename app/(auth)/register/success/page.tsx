@@ -18,7 +18,7 @@ function SuccessContent() {
         <CardContent className="space-y-4">
           <MailCheck className="mx-auto h-16 w-16 text-green-500" />
           <p>
-            Na Twój adres email <span className="font-semibold">{email}</span>{" "}
+            Na Twój adres email <span className="font-semibold">{email}</span>
             wysłaliśmy link aktywacyjny.
           </p>
           <p className="text-sm text-muted-foreground">

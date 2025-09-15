@@ -58,62 +58,84 @@ export const FullRegisterSchema =
   RegisterStep1Schema.merge(RegisterStep2Schema).merge(RegisterStep3Schema);
 export type FullRegisterSchemaType = z.infer<typeof FullRegisterSchema>;
 
-export const IntegrationSchema = z
+export const serviceIntegrationFormSchema = z
   .object({
-    // Wszystkie pola są teraz na jednym poziomie
-    type: z.enum(["ALLEGRO", "BASELINKER"]),
-    name: z
-      .string()
-      .min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
-    sync_orders: z.boolean(),
-    // Pola warunkowe są teraz opcjonalne
+    name: z.string().min(2, "Nazwa musi mieć co najmniej 2 znaki."),
+    provider_type: z.enum(["ALLEGRO", "BASELINKER", "SUUS", "AB"]),
+
+    sync_orders: z.boolean().optional(),
     sync_messages: z.boolean().optional(),
     sync_returns: z.boolean().optional(),
+
     api_token: z.string().optional(),
+    suus_login: z.string().optional(),
+    suus_password: z.string().optional(),
+
+    ab_client_code: z.string().optional(),
+    ab_login: z.string().optional(),
+    ab_password: z.string().optional(),
   })
-  .superRefine((data, ctx) => {
-    // Tutaj implementujemy logikę walidacji warunkowej
-    if (data.type === "BASELINKER") {
-      if (!data.api_token || data.api_token.length < 10) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Token API jest wymagany i musi być poprawny.",
-          path: ["api_token"],
-        });
+  .refine(
+    (data) => {
+      if (data.provider_type === "BASELINKER") {
+        return !!data.api_token && data.api_token.length > 5;
       }
+      if (data.provider_type === "SUUS") {
+        return (
+          !!data.suus_login &&
+          data.suus_login.length > 0 &&
+          !!data.suus_password &&
+          data.suus_password.length > 0
+        );
+      }
+      // ### DODAJ NOWY WARUNEK DLA AB ###
+      if (data.provider_type === "AB") {
+        return (
+          !!data.ab_client_code &&
+          data.ab_client_code.length > 0 &&
+          !!data.ab_login &&
+          data.ab_login.length > 0 &&
+          !!data.ab_password &&
+          data.ab_password.length > 0
+        );
+      }
+      return true;
+    },
+    {
+      message: "Wypełnij wymagane pola dla wybranego typu integracji.",
+      path: ["name"], // Błąd wciąż przypisujemy do ogólnego pola
     }
-    if (data.type === "ALLEGRO") {
-      // Dla Allegro, te pola są wymagane, więc sprawdzamy czy są zdefiniowane
-      if (typeof data.sync_messages !== "boolean") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "To pole jest wymagane.",
-          path: ["sync_messages"],
-        });
-      }
-      if (typeof data.sync_returns !== "boolean") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "To pole jest wymagane.",
-          path: ["sync_returns"],
-        });
-      }
-    }
-  });
-export type IntegrationSchemaType = z.infer<typeof IntegrationSchema>;
+  );
+
+// ### DODAJ NOWY TYP GENEROWANY Z ZOD ###
+export type ServiceIntegrationFormValues = z.infer<
+  typeof serviceIntegrationFormSchema
+>;
 
 // === KONIEC NOWYCH SCHEMATÓW INTEGRACJI ===
 
 // Schemat aktualizacji jest prostszy i nie zawiera 'type' ani 'api_token'
 export const IntegrationUpdateSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
-  sync_orders: z.boolean(),
-  sync_messages: z.boolean(),
-  sync_returns: z.boolean(),
+
+  // Pola dla Marketplace (wszystkie opcjonalne)
+  sync_orders: z.boolean().optional(),
+  sync_messages: z.boolean().optional(),
+  sync_returns: z.boolean().optional(),
   autoresponder_enabled: z.boolean().optional(),
   autoresponder_message: z.string().optional(),
+
+  // Pole dla BaseLinker (opcjonalne)
   api_token: z.string().optional(),
+
+  // NOWE Pola dla SUUS (opcjonalne)
+  suus_login: z.string().optional(),
+  suus_password: z.string().optional(),
+  ab_client_code: z.string().optional(),
+  ab_login: z.string().optional(),
+  ab_password: z.string().optional(),
 });
+
 export type IntegrationUpdateSchemaType = z.infer<
   typeof IntegrationUpdateSchema
 >;
@@ -172,26 +194,26 @@ export const ManualOrderInvoiceSchema = z
 export const ManualOrderSchema = z
   .object({
     reference_number: z.string().optional(),
-    buyer_login: z.string().optional(),
-    buyer_email: z.string().email("Nieprawidłowy adres email."),
+    buyerLogin: z.string().optional(),
+    buyerEmail: z.string().email("Nieprawidłowy adres email."),
 
-    deliveryType: z.enum(["address", "pickup_point"]),
-    delivery_address: ManualOrderAddressSchema.optional(),
-    pickup_point: ManualOrderPickupPointSchema.optional(),
+    deliveryType: z.enum(["address", "pickupPoint"]),
+    deliveryAddress: ManualOrderAddressSchema.optional(),
+    pickupPoint: ManualOrderPickupPointSchema.optional(),
 
-    line_items: z
+    lineItems: z
       .array(ManualOrderLineItemSchema)
       .min(1, "Zamówienie musi zawierać co najmniej jeden produkt."),
 
-    has_invoice_address: z.boolean(),
-    invoice_address: ManualOrderInvoiceSchema.optional(),
+    has_invoiceAddress: z.boolean(),
+    invoiceAddress: ManualOrderInvoiceSchema.optional(),
 
     note: z.string().optional(),
   })
   .refine(
     (data) => {
-      if (data.deliveryType === "address") return !!data.delivery_address;
-      if (data.deliveryType === "pickup_point") return !!data.pickup_point;
+      if (data.deliveryType === "address") return !!data.deliveryAddress;
+      if (data.deliveryType === "pickupPoint") return !!data.pickupPoint;
       return false;
     },
     {
@@ -202,32 +224,164 @@ export const ManualOrderSchema = z
   .superRefine((data, ctx) => {
     if (data.deliveryType === "address") {
       // Jeśli wybrano adres, sprawdź, czy został podany
-      if (!data.delivery_address) {
+      if (!data.deliveryAddress) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Adres dostawy jest wymagany.",
-          path: ["delivery_address"],
+          path: ["deliveryAddress"],
         });
       }
-    } else if (data.deliveryType === "pickup_point") {
+    } else if (data.deliveryType === "pickupPoint") {
       // Jeśli wybrano punkt odbioru, sprawdź, czy został podany
-      if (!data.pickup_point) {
+      if (!data.pickupPoint) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Punkt odbioru jest wymagany.",
-          path: ["pickup_point"],
+          path: ["pickupPoint"],
         });
       }
     }
 
-    if (data.has_invoice_address) {
-      if (!data.invoice_address) {
+    if (data.has_invoiceAddress) {
+      if (!data.invoiceAddress) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Dane do faktury są wymagane.",
-          path: ["has_invoice_address"],
+          path: ["has_invoiceAddress"],
         });
       }
     }
   });
 export type ManualOrderSchemaType = z.infer<typeof ManualOrderSchema>;
+
+export const packageFormSchema = z.object({
+  name: z.string().min(1, "Nazwa jest wymagana.").max(100),
+
+  // === OSTATECZNE, NAJPROSTSZE ROZWIĄZANIE ===
+  // Walidujemy jako string, ale sprawdzamy, czy można go przekonwertować na poprawną liczbę.
+
+  length_cm: z
+    .string()
+    .min(1, "Długość jest wymagana.")
+    .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
+      message: "Musi być liczbą większą od 0",
+    }),
+
+  width_cm: z
+    .string()
+    .min(1, "Szerokość jest wymagana.")
+    .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
+      message: "Musi być liczbą większą od 0",
+    }),
+
+  height_cm: z
+    .string()
+    .min(1, "Wysokość jest wymagana.")
+    .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
+      message: "Musi być liczbą większą od 0",
+    }),
+
+  weight_kg: z
+    .string()
+    .min(1, "Waga jest wymagana.")
+    .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
+      message: "Musi być liczbą większą od 0",
+    }),
+  courier_code: z.string().optional(),
+});
+
+// Teraz mamy tylko jeden typ, bo nie ma transformacji.
+export type PackageFormValues = z.infer<typeof packageFormSchema>;
+
+export const deliveryMappingFormSchema = z.object({
+  marketplace_delivery_method: z
+    .string()
+    .min(3, "Nazwa metody jest wymagana.")
+    .max(255),
+  serviceIntegration_id: z
+    .string()
+    .min(1, "Musisz wybrać integrację kurierską."),
+  courier_service_code: z.string().min(1, "Kod usługi jest wymagany.").max(100),
+  courier_credentials_id: z.string().optional(),
+  default_package_definition_id: z.string().optional(),
+});
+
+export type DeliveryMappingFormValues = z.infer<
+  typeof deliveryMappingFormSchema
+>;
+
+const postalCodeRegex = /^\d{2}-\d{3}$/;
+
+export const organizationSettingsSchema = z.object({
+  name: z.string().min(2, "Nazwa organizacji musi mieć co najmniej 2 znaki."),
+  company_name: z.string().optional(),
+  tax_id: z.string().optional(), // Można dodać .regex() do walidacji NIP
+  address_street: z.string().optional(),
+  address_city: z.string().optional(),
+  address_postal_code: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || postalCodeRegex.test(val),
+      "Nieprawidłowy kod pocztowy."
+    ),
+  address_country: z.string().optional(),
+
+  // Pola domyślnego nadawcy
+  default_sender_name: z.string().optional(),
+  default_sender_company: z.string().optional(),
+  default_sender_street: z.string().optional(),
+  default_sender_postal_code: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || postalCodeRegex.test(val),
+      "Nieprawidłowy kod pocztowy."
+    ),
+  default_sender_city: z.string().optional(),
+  default_sender_country_code: z.string().optional(),
+  default_sender_email: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || z.string().email().safeParse(val).success,
+      "Nieprawidłowy adres email."
+    ),
+  default_sender_phone: z.string().optional(),
+});
+
+export type OrganizationSettingsValues = z.infer<
+  typeof organizationSettingsSchema
+>;
+
+export const additionalServiceMappingFormSchema = z.object({
+  marketplace_service_id: z
+    .string()
+    .min(1, "ID usługi marketplace jest wymagane."),
+  marketplace_service_name: z
+    .string()
+    .min(1, "Nazwa usługi marketplace jest wymagana."),
+  source_integration_provider: z
+    .string()
+    .min(1, "Dostawca marketplace jest wymagany."),
+  courier_provider: z.string().min(1, "Dostawca kurierski jest wymagany."),
+  courier_service_code: z
+    .string()
+    .min(1, "Kod usługi kurierskiej jest wymagany."),
+  // Pola opcjonalne
+  param_name: z.string().optional(),
+  param_source: z.string().optional(),
+});
+export type AdditionalServiceMappingFormValues = z.infer<
+  typeof additionalServiceMappingFormSchema
+>;
+
+export const productSupplierMappingSchema = z.object({
+  marketplace_offer_id: z.string().min(1, "ID oferty jest wymagane."),
+  supplierIntegrationId: z.string().min(1, "Musisz wybrać hurtownię."),
+  supplierProductIndex: z.string().min(1, "Indeks dostawcy jest wymagany."),
+});
+
+export type ProductSupplierMappingFormValues = z.infer<
+  typeof productSupplierMappingSchema
+>;

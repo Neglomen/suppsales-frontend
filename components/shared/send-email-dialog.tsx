@@ -91,12 +91,12 @@ const renderPreview = (
     }`.trim();
     const customerEmail =
       order.integration?.type === "BASELINKER"
-        ? order.details_payload?.email
-        : order.details_payload?.buyer?.email;
+        ? order.detailsPayload?.email
+        : order.detailsPayload?.buyer?.email;
     const trackingNumber =
       order.integration?.type === "BASELINKER"
-        ? order.details_payload?.delivery_package_nr || "Brak"
-        : order.details_payload?.delivery?.tracking?.number || "Brak";
+        ? order.detailsPayload?.delivery_package_nr || "Brak"
+        : order.detailsPayload?.delivery?.tracking?.number || "Brak";
 
     rendered = rendered.replace(
       /{{customer_name}}/g,
@@ -105,7 +105,7 @@ const renderPreview = (
     rendered = rendered.replace(/{{customer_email}}/g, customerEmail || "");
     rendered = rendered.replace(
       /{{order_id_external}}/g,
-      order.external_order_id || ""
+      order.externalOrderId || ""
     );
     rendered = rendered.replace(/{{tracking_number}}/g, trackingNumber);
   }
@@ -182,8 +182,8 @@ export function SendEmailDialog({
 
       const customerEmail =
         order?.integration?.type === "BASELINKER"
-          ? order?.details_payload?.email
-          : order?.details_payload?.buyer?.email;
+          ? order?.detailsPayload?.email
+          : order?.detailsPayload?.buyer?.email;
       setRecipientEmail(customerEmail || "");
       setSelectedSmtpAccountId("default");
     }

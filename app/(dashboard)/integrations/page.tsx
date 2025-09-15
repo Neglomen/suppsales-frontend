@@ -21,7 +21,12 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { IntegrationFormDialog } from "./_components/integration-form-dialog";
-import { AllegroIcon, BaseLinkerIcon } from "@/components/shared/icons";
+import {
+  ABIcon,
+  AllegroIcon,
+  BaseLinkerIcon,
+  SuusIcon,
+} from "@/components/shared/icons";
 import { ManageIntegrationDialog } from "./_components/manage-integration-dialog";
 import {
   Tooltip,
@@ -30,36 +35,27 @@ import {
 } from "@/components/ui/tooltip";
 import { TooltipTrigger } from "@radix-ui/react-tooltip";
 import { cn } from "@/lib/utils";
+import { ServiceIntegration } from "@/types/service-integration";
 
 // Definicja typu, który otrzymamy z API (bez zmian)
-export interface Integration {
-  id: number;
-  name: string;
-  type: "ALLEGRO" | "BASELINKER" | "EMPIK";
-  is_active: boolean;
-  external_user_id: string | null;
-  sync_orders: boolean;
-  sync_messages: boolean;
-  sync_returns: boolean;
-  autoresponder_enabled: boolean;
-  autoresponder_message: string | null;
-}
 
 export default function IntegrationsPage() {
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [integrations, setIntegrations] = useState<ServiceIntegration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingIntegration, setEditingIntegration] =
-    useState<Integration | null>(null);
+    useState<ServiceIntegration | null>(null);
 
-  const openManageDialog = (integration: Integration) => {
+  const openManageDialog = (integration: ServiceIntegration) => {
     setEditingIntegration(integration);
   };
 
   const fetchIntegrations = async () => {
     setIsLoading(true);
     try {
-      const response = await api.get<Integration[]>("/integrations");
+      const response = await api.get<ServiceIntegration[]>(
+        "/service-integrations"
+      );
       setIntegrations(response.data);
     } catch (error) {
       toast.error("Nie udało się pobrać listy integracji.");
@@ -72,7 +68,7 @@ export default function IntegrationsPage() {
     fetchIntegrations();
   }, []);
 
-  const handleIntegrationUpdate = (updatedIntegration: Integration) => {
+  const handleIntegrationUpdate = (updatedIntegration: ServiceIntegration) => {
     setIntegrations((prev) =>
       prev.map((i) => (i.id === updatedIntegration.id ? updatedIntegration : i))
     );
@@ -138,7 +134,7 @@ export default function IntegrationsPage() {
     );
   };
 
-  const onIntegrationAdded = (newIntegration: Integration) => {
+  const onIntegrationAdded = (newIntegration: ServiceIntegration) => {
     setIntegrations([newIntegration, ...integrations]);
   };
 
@@ -189,11 +185,17 @@ export default function IntegrationsPage() {
             >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  {integration.type === "ALLEGRO" && (
+                  {integration.provider_type === "ALLEGRO" && (
                     <AllegroIcon className="h-6 w-6" />
                   )}
-                  {integration.type === "BASELINKER" && (
+                  {integration.provider_type === "BASELINKER" && (
                     <BaseLinkerIcon className="h-6 w-6 rounded" />
+                  )}
+                  {integration.provider_type === "SUUS" && (
+                    <SuusIcon className="h-6 w-6" />
+                  )}
+                  {integration.provider_type === "AB" && (
+                    <ABIcon className="h-6 w-auto" />
                   )}
                   {integration.name}
                   {!integration.is_active && (
@@ -214,13 +216,13 @@ export default function IntegrationsPage() {
                 </CardTitle>
                 {integration.is_active && integration.external_user_id ? (
                   <CardDescription>
-                    Połączono jako:{" "}
+                    Połączono jako:
                     <span className="font-semibold text-foreground">
                       {integration.external_user_id}
                     </span>
                   </CardDescription>
                 ) : (
-                  <CardDescription>{integration.type}</CardDescription>
+                  <CardDescription>{integration.provider_type}</CardDescription>
                 )}
               </CardHeader>
               <CardContent className="space-y-2 flex-grow">
@@ -231,15 +233,15 @@ export default function IntegrationsPage() {
                   {integration.sync_orders && (
                     <Badge variant="outline">Zamówienia</Badge>
                   )}
-                  {integration.type === "ALLEGRO" &&
+                  {integration.provider_type === "ALLEGRO" &&
                     integration.sync_messages && (
                       <Badge variant="outline">Wiadomości</Badge>
                     )}
-                  {integration.type === "ALLEGRO" &&
+                  {integration.provider_type === "ALLEGRO" &&
                     integration.sync_returns && (
                       <Badge variant="outline">Zwroty</Badge>
                     )}
-                  {integration.type === "ALLEGRO" &&
+                  {integration.provider_type === "ALLEGRO" &&
                     integration.autoresponder_enabled && (
                       <Badge
                         variant="default"
@@ -266,7 +268,7 @@ export default function IntegrationsPage() {
                   >
                     Zarządzaj
                   </Button>
-                ) : integration.type === "ALLEGRO" ? (
+                ) : integration.provider_type === "ALLEGRO" ? (
                   <Button
                     onClick={() => handleAllegroConnect(integration.id)}
                     size="sm"

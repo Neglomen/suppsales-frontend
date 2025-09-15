@@ -15,7 +15,7 @@ import {
   Truck,
   PlusCircle,
   MoreHorizontal,
-  Mail, // Dodajemy ikonę Mail
+  Mail,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
@@ -34,7 +34,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -43,34 +42,30 @@ import {
 } from "./_components/data-table-toolbar";
 import { format } from "date-fns";
 import { SendEmailDialog } from "@/components/shared/send-email-dialog";
+import type { ServiceIntegration } from "@/types/service-integration";
+import { useAuthGuard } from "@/hooks/use-auth-guard";
 import type { OrderDetailsApiResponse } from "@/types/order";
-import { useAuthGuard } from "@/hooks/use-auth-guard"; // Importujemy nasz hook
 
-// Typy dla danych w tabeli
 interface LineItem {
   id: string;
   offer: { name: string };
   quantity: number;
 }
-interface OrderIntegrationInfo {
-  id: number;
-  name: string;
-  external_user_id: string | null;
-  type: "ALLEGRO" | "BASELINKER";
-}
+
 interface Order {
   id: string;
-  external_order_id: string;
+  externalOrderId: string;
   status: string;
-  buyer_login: string | null;
-  buyer_first_name: string | null;
-  buyer_last_name: string | null;
-  purchased_at: string;
-  integration: OrderIntegrationInfo | null;
-  total_to_pay: number;
-  payment_type: "CASH_ON_DELIVERY" | "ONLINE" | null;
-  tracking_numbers: string[] | null;
-  line_items: LineItem[];
+  buyerLogin: string | null;
+  buyerFirstName: string | null;
+  buyerLastName: string | null;
+  purchasedAt: string;
+  serviceIntegration: ServiceIntegration | null;
+  totalToPay: number;
+  paymentType: "CASH_ON_DELIVERY" | "ONLINE" | null;
+  paymentStatus: "PENDING" | "COMPLETED" | "FAILED" | null;
+  trackingNumbers: string[] | null;
+  lineItems: LineItem[];
 }
 interface PaginatedOrdersResponse {
   total: number;
@@ -87,14 +82,12 @@ export default function OrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const [isManualOrderOpen, setManualOrderOpen] = useState(false);
-  const [integrations, setIntegrations] = useState<Order["integration"][]>([]);
+  const [integrations, setIntegrations] = useState<ServiceIntegration[]>([]);
 
-  // Stany dla modala wysyłki e-mail
   const [isSendEmailOpen, setSendEmailOpen] = useState(false);
   const [activeOrder, setActiveOrder] =
     useState<OrderDetailsApiResponse | null>(null);
 
-  // Stany dla DataTable
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
@@ -107,19 +100,8 @@ export default function OrdersPage() {
   });
   const debouncedSearch = useDebounce(filters.search, 500);
 
-  const customMessageTemplate = {
-    id: "custom",
-    title: "",
-    content: "",
-    scope: "organization" as const,
-    tags: [],
-    parent_template: null,
-    variants: [],
-  };
-
   const openSendEmailDialog = async (orderId: string) => {
     try {
-      // Pobieramy pełne szczegóły zamówienia, ponieważ modal ich potrzebuje (do `details_payload`)
       const response = await api.get<OrderDetailsApiResponse>(
         `/orders/${orderId}`
       );
@@ -133,13 +115,13 @@ export default function OrdersPage() {
   const columns = useMemo<ColumnDef<Order>[]>(
     () => [
       {
-        accessorKey: "line_items",
+        accessorKey: "lineItems",
         header: "Zamówienie",
         cell: ({ row }) => {
           const order = row.original;
-          const firstItem = order.line_items?.[0];
-          const buyerName = `${order.buyer_first_name || ""} ${
-            order.buyer_last_name || ""
+          const firstItem = order.lineItems?.[0];
+          const buyerName = `${order.buyerFirstName || ""} ${
+            order.buyerLastName || ""
           }`.trim();
           return (
             <div>
@@ -150,7 +132,7 @@ export default function OrdersPage() {
                 {firstItem?.offer.name || "Zamówienie ręczne"}
               </p>
               <p className="text-xs text-muted-foreground">
-                {order.buyer_login || "Brak loginu"}
+                {order.buyerLogin || "Brak loginu"}
               </p>
               {buyerName && (
                 <p className="text-xs text-muted-foreground">{buyerName}</p>
@@ -160,11 +142,11 @@ export default function OrdersPage() {
         },
       },
       {
-        accessorKey: "purchased_at",
+        accessorKey: "purchasedAt",
         header: "Data",
         cell: ({ row }) => (
           <div className="text-sm text-muted-foreground">
-            {new Date(row.getValue("purchased_at")).toLocaleString("pl-PL", {
+            {new Date(row.getValue("purchasedAt")).toLocaleString("pl-PL", {
               dateStyle: "short",
               timeStyle: "short",
             })}
@@ -172,10 +154,10 @@ export default function OrdersPage() {
         ),
       },
       {
-        accessorKey: "integration.name",
+        accessorKey: "serviceIntegration.name",
         header: "Konto / Źródło",
         cell: ({ row }) => {
-          const integration = row.original.integration;
+          const integration = row.original.serviceIntegration;
           return (
             <div>
               <p>{integration?.name || "Ręczne"}</p>
@@ -198,10 +180,17 @@ export default function OrdersPage() {
         header: () => <div className="text-right">Info</div>,
         cell: ({ row }) => {
           const order = row.original;
-          const isPaid = order.payment_type === "ONLINE";
-          const isCashOnDelivery = order.payment_type === "CASH_ON_DELIVERY";
           const hasTracking =
-            order.tracking_numbers && order.tracking_numbers.length > 0;
+            order.trackingNumbers && order.trackingNumbers.length > 0;
+
+          // === POPRAWIONA I BARDZIEJ CZYTELNA LOGIKA ===
+          const isPaid = order.paymentStatus === "COMPLETED";
+          const isCashOnDelivery = order.paymentType === "CASH_ON_DELIVERY";
+          const isPaymentPending =
+            order.paymentStatus === "PENDING" && !isCashOnDelivery;
+          // Dodajemy jawny warunek dla stanu "nieopłacone"
+          const isUnpaid = !isPaid && !isCashOnDelivery && !isPaymentPending;
+
           return (
             <TooltipProvider>
               <div className="flex justify-end items-center gap-2">
@@ -210,20 +199,21 @@ export default function OrdersPage() {
                     <DollarSign
                       className={cn(
                         "h-5 w-5",
-                        isPaid
-                          ? "text-green-500"
-                          : isCashOnDelivery
-                          ? "text-yellow-500"
-                          : "text-muted-foreground"
+                        isPaid && "text-green-500",
+                        isCashOnDelivery && "text-yellow-500",
+                        isPaymentPending && "text-red-500",
+                        isUnpaid && "text-red-500" // Czerwony dla nieopłaconych
                       )}
                     />
                   </TooltipTrigger>
                   <TooltipContent>
-                    {order.total_to_pay ? `${order.total_to_pay} PLN` : ""}
+                    {order.totalToPay ? `${order.totalToPay} PLN` : ""}
                     {isPaid
                       ? ` (Opłacone)`
                       : isCashOnDelivery
                       ? " (Pobranie)"
+                      : isPaymentPending
+                      ? " (Płatność rozpoczęta)"
                       : " (Nieopłacone)"}
                   </TooltipContent>
                 </Tooltip>
@@ -238,7 +228,7 @@ export default function OrdersPage() {
                   </TooltipTrigger>
                   <TooltipContent>
                     {hasTracking
-                      ? order.tracking_numbers?.join(", ")
+                      ? order.trackingNumbers?.join(", ")
                       : "Brak numeru przesyłki"}
                   </TooltipContent>
                 </Tooltip>
@@ -282,7 +272,9 @@ export default function OrdersPage() {
   useEffect(() => {
     const fetchIntegrations = async () => {
       try {
-        const response = await api.get<Order["integration"][]>("/integrations");
+        const response = await api.get<ServiceIntegration[]>(
+          "/service-integrations"
+        );
         setIntegrations(response.data);
       } catch {
         toast.error("Nie udało się pobrać listy integracji do filtra.");
@@ -294,11 +286,8 @@ export default function OrdersPage() {
   const fetchOrders = useCallback(async () => {
     if (!isLoading) setIsLoading(true);
     const sortParam = sorting[0]?.id;
-    const orderParam = sorting[0]
-      ? sorting[0].desc
-        ? "desc"
-        : "asc"
-      : undefined;
+    const orderParam =
+      sorting.length > 0 ? (sorting[0].desc ? "desc" : "asc") : undefined;
 
     try {
       const response = await api.get<PaginatedOrdersResponse>("/orders", {
@@ -332,6 +321,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination, sorting, debouncedSearch, filters]);
 
   const toolbar = useMemo(
@@ -388,7 +378,6 @@ export default function OrdersPage() {
           isOpen={isSendEmailOpen}
           setIsOpen={setSendEmailOpen}
           order={activeOrder}
-          // === ZMIANA: Nie przekazujemy `templateToEdit`, więc modal wie, że ma pokazać listę ===
         />
       )}
     </div>

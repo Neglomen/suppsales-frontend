@@ -135,11 +135,11 @@ export function AllCommunicationLogsTab() {
                       {config.label}
                     </Badge>
                     <span className="flex items-center gap-2 pt-1">
-                      <User className="h-4 w-4" />{" "}
+                      <User className="h-4 w-4" />
                       {log.author?.name || "Automat"}
                     </span>
                     <span className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />{" "}
+                      <Clock className="h-4 w-4" />
                       {new Date(log.sent_at).toLocaleString("pl-PL")}
                     </span>
                   </div>

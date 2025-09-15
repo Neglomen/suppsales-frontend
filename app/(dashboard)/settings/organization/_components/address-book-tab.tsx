@@ -162,7 +162,7 @@ export function AddressBookTab() {
               Czy na pewno chcesz usunąć kontakt?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Tej akcji nie można cofnąć. Kontakt dla{" "}
+              Tej akcji nie można cofnąć. Kontakt dla
               <strong>{contactToDelete?.email}</strong> zostanie trwale
               usunięty.
             </AlertDialogDescription>

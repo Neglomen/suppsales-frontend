@@ -239,7 +239,7 @@ export function TeamMembersTab() {
                               Czy na pewno chcesz usunąć użytkownika?
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                              Tej operacji nie można cofnąć. Użytkownik{" "}
+                              Tej operacji nie można cofnąć. Użytkownik
                               <strong>{member.user.email}</strong> utraci dostęp
                               do tej organizacji.
                             </AlertDialogDescription>
