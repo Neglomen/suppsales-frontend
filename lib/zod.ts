@@ -58,10 +58,33 @@ export const FullRegisterSchema =
   RegisterStep1Schema.merge(RegisterStep2Schema).merge(RegisterStep3Schema);
 export type FullRegisterSchemaType = z.infer<typeof FullRegisterSchema>;
 
+export type ServiceIntegrationFormValues = {
+  name: string;
+  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "KSEF" | "AB" | "SUBIEKT_GT" | "APACZKA" | "EMPIK";
+  sync_orders?: boolean; // Zmieniamy na opcjonalne, bo `reset` czasami go nie ma
+  sync_messages?: boolean;
+  sync_returns?: boolean;
+  api_token?: string;
+  suus_login?: string;
+  suus_password?: string;
+  ksef_token?: string;
+  ab_client_code?: string;
+  ab_login?: string;
+  ab_password?: string;
+  apaczka_app_id?: string;
+  apaczka_app_secret?: string;
+  subiekt_agent_url?: string;
+  subiekt_api_key?: string;
+  nip?: string;
+  environment?: string;
+  empik_token?: string;
+};
+
+// === KROK 2: Upraszczamy schemat, aby produkował zgodny typ ===
 export const serviceIntegrationFormSchema = z
   .object({
     name: z.string().min(2, "Nazwa musi mieć co najmniej 2 znaki."),
-    provider_type: z.enum(["ALLEGRO", "BASELINKER", "SUUS", "AB"]),
+    provider_type: z.enum(["ALLEGRO", "BASELINKER", "SUUS", "KSEF", "AB", "SUBIEKT_GT", "APACZKA", "EMPIK"]),
 
     sync_orders: z.boolean().optional(),
     sync_messages: z.boolean().optional(),
@@ -70,47 +93,114 @@ export const serviceIntegrationFormSchema = z
     api_token: z.string().optional(),
     suus_login: z.string().optional(),
     suus_password: z.string().optional(),
-
+    ksef_token: z.string().optional(),
     ab_client_code: z.string().optional(),
     ab_login: z.string().optional(),
     ab_password: z.string().optional(),
+    apaczka_app_id: z.string().optional(),
+    apaczka_app_secret: z.string().optional(),
+    subiekt_agent_url: z.string().optional(),
+    subiekt_api_key: z.string().optional(),
+    nip: z.string().optional(),
+    environment: z.string().optional(),
+    empik_token: z.string().optional(),
   })
-  .refine(
-    (data) => {
-      if (data.provider_type === "BASELINKER") {
-        return !!data.api_token && data.api_token.length > 5;
+  .superRefine((data, ctx) => {
+    if (data.provider_type === "BASELINKER") {
+      if (!data.api_token || data.api_token.length <= 5) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Podaj poprawny token API BaseLinker.",
+          path: ["api_token"],
+        });
       }
-      if (data.provider_type === "SUUS") {
-        return (
-          !!data.suus_login &&
-          data.suus_login.length > 0 &&
-          !!data.suus_password &&
-          data.suus_password.length > 0
-        );
-      }
-      // ### DODAJ NOWY WARUNEK DLA AB ###
-      if (data.provider_type === "AB") {
-        return (
-          !!data.ab_client_code &&
-          data.ab_client_code.length > 0 &&
-          !!data.ab_login &&
-          data.ab_login.length > 0 &&
-          !!data.ab_password &&
-          data.ab_password.length > 0
-        );
-      }
-      return true;
-    },
-    {
-      message: "Wypełnij wymagane pola dla wybranego typu integracji.",
-      path: ["name"], // Błąd wciąż przypisujemy do ogólnego pola
     }
-  );
+    
+    if (data.provider_type === "SUUS") {
+      if (!data.suus_login) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Login jest wymagany.",
+          path: ["suus_login"],
+        });
+      }
+      if (!data.suus_password) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Hasło jest wymagane.",
+          path: ["suus_password"],
+        });
+      }
+    }
 
-// ### DODAJ NOWY TYP GENEROWANY Z ZOD ###
-export type ServiceIntegrationFormValues = z.infer<
-  typeof serviceIntegrationFormSchema
->;
+    if (data.provider_type === "KSEF") {
+      if (!data.nip || data.nip.replace(/\D/g, "").length < 10) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Podaj poprawny NIP (10 cyfr).",
+          path: ["nip"],
+        });
+      }
+      if (!data.ksef_token || data.ksef_token.length < 10) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Podaj poprawny token KSeF.",
+          path: ["ksef_token"],
+        });
+      }
+    }
+
+    if (data.provider_type === "APACZKA") {
+      if (!data.apaczka_app_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "App ID jest wymagane.",
+          path: ["apaczka_app_id"],
+        });
+      }
+      if (!data.apaczka_app_secret) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "App Secret jest wymagany.",
+          path: ["apaczka_app_secret"],
+        });
+      }
+    }
+    
+    if (data.provider_type === "AB") {
+      if (!data.ab_client_code) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Kod klienta jest wymagany.",
+          path: ["ab_client_code"],
+        });
+      }
+      if (!data.ab_login) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Login jest wymagany.",
+          path: ["ab_login"],
+        });
+      }
+      if (!data.ab_password) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Hasło jest wymagane.",
+          path: ["ab_password"],
+        });
+      }
+    }
+    
+    if (data.provider_type === "EMPIK") {
+      if (!data.empik_token || data.empik_token.length <= 5) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Podaj poprawny token API Empik.",
+          path: ["empik_token"],
+        });
+      }
+    }
+  });
 
 // === KONIEC NOWYCH SCHEMATÓW INTEGRACJI ===
 
@@ -131,9 +221,24 @@ export const IntegrationUpdateSchema = z.object({
   // NOWE Pola dla SUUS (opcjonalne)
   suus_login: z.string().optional(),
   suus_password: z.string().optional(),
+
+  nip: z.string().optional(),
+  ksef_token: z.string().optional(),
+  environment: z.string().optional(),
+  
   ab_client_code: z.string().optional(),
   ab_login: z.string().optional(),
   ab_password: z.string().optional(),
+  
+  apaczka_app_id: z.string().optional(),
+  apaczka_app_secret: z.string().optional(),
+  apaczka_bank_account: z.string().optional(),
+  
+  subiekt_agent_url: z.string().optional(),
+  subiekt_api_key: z.string().optional(),
+  nip: z.string().optional(),
+  environment: z.string().optional(),
+  empik_token: z.string().optional(),
 });
 
 export type IntegrationUpdateSchemaType = z.infer<
@@ -194,26 +299,26 @@ export const ManualOrderInvoiceSchema = z
 export const ManualOrderSchema = z
   .object({
     reference_number: z.string().optional(),
-    buyerLogin: z.string().optional(),
-    buyerEmail: z.string().email("Nieprawidłowy adres email."),
+    buyer_login: z.string().optional(),
+    buyer_email: z.string().email("Nieprawidłowy adres email."),
 
-    deliveryType: z.enum(["address", "pickupPoint"]),
-    deliveryAddress: ManualOrderAddressSchema.optional(),
-    pickupPoint: ManualOrderPickupPointSchema.optional(),
+    deliveryType: z.enum(["address", "pickup_point"]),
+    delivery_address: ManualOrderAddressSchema.optional(),
+    pickup_point: ManualOrderPickupPointSchema.optional(),
 
-    lineItems: z
+    line_items: z
       .array(ManualOrderLineItemSchema)
       .min(1, "Zamówienie musi zawierać co najmniej jeden produkt."),
 
-    has_invoiceAddress: z.boolean(),
-    invoiceAddress: ManualOrderInvoiceSchema.optional(),
+    has_invoice_address: z.boolean(),
+    invoice_address: ManualOrderInvoiceSchema.optional(),
 
     note: z.string().optional(),
   })
   .refine(
     (data) => {
-      if (data.deliveryType === "address") return !!data.deliveryAddress;
-      if (data.deliveryType === "pickupPoint") return !!data.pickupPoint;
+      if (data.deliveryType === "address") return !!data.delivery_address;
+      if (data.deliveryType === "pickup_point") return !!data.pickup_point;
       return false;
     },
     {
@@ -224,30 +329,30 @@ export const ManualOrderSchema = z
   .superRefine((data, ctx) => {
     if (data.deliveryType === "address") {
       // Jeśli wybrano adres, sprawdź, czy został podany
-      if (!data.deliveryAddress) {
+      if (!data.delivery_address) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Adres dostawy jest wymagany.",
-          path: ["deliveryAddress"],
+          path: ["delivery_address"],
         });
       }
-    } else if (data.deliveryType === "pickupPoint") {
+    } else if (data.deliveryType === "pickup_point") {
       // Jeśli wybrano punkt odbioru, sprawdź, czy został podany
-      if (!data.pickupPoint) {
+      if (!data.pickup_point) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Punkt odbioru jest wymagany.",
-          path: ["pickupPoint"],
+          path: ["pickup_point"],
         });
       }
     }
 
-    if (data.has_invoiceAddress) {
-      if (!data.invoiceAddress) {
+    if (data.has_invoice_address) {
+      if (!data.invoice_address) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Dane do faktury są wymagane.",
-          path: ["has_invoiceAddress"],
+          path: ["has_invoice_address"],
         });
       }
     }
@@ -298,7 +403,7 @@ export const deliveryMappingFormSchema = z.object({
     .string()
     .min(3, "Nazwa metody jest wymagana.")
     .max(255),
-  serviceIntegration_id: z
+  service_integration_id: z
     .string()
     .min(1, "Musisz wybrać integrację kurierską."),
   courier_service_code: z.string().min(1, "Kod usługi jest wymagany.").max(100),

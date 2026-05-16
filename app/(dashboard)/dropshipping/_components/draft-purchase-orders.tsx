@@ -9,12 +9,10 @@ import { ServiceIntegration } from "@/types/service-integration";
 import { MarketplaceOrder } from "@/types/marketplace-order";
 
 import { Button } from "@/components/ui/button";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -22,173 +20,185 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Loader2,
   Send,
   PackageSearch,
   Info,
   Save,
-  Home,
   Trash2,
-  Edit,
+  MapPin,
+  ChevronDown,
+  User,
+  Package,
+  Building2,
+  Pencil,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogFooter,
-  DialogHeader,
-} from "@/components/ui/dialog";
 import { EditAddressDialog } from "../../shipping/_components/EditAddressDialog";
 
-// Komponent podrzędny do podglądu adresu
-const AddressPreviewDialog = ({
-  marketplaceOrderId,
-  isOpen,
-  onClose,
-  onEdit,
-}: {
-  marketplaceOrderId: string | null;
-  isOpen: boolean;
-  onClose: () => void;
-  onEdit: (order: MarketplaceOrder) => void;
-}) => {
-  const { data: marketplaceOrder, isLoading } = useQuery<MarketplaceOrder>({
-    queryKey: ["orderDetails", marketplaceOrderId],
-    queryFn: async () => (await api.get(`/orders/${marketplaceOrderId}`)).data,
-    enabled: !!marketplaceOrderId && isOpen,
-  });
+// Pomocnik do pobierania danych z PO (obsługa camelCase i snake_case)
+function getPOData(po: PurchaseOrder) {
+  const marketplaceOrder = (po as any).marketplace_order;
+  const supplierIntegration = (po as any).supplier_integration;
 
-  const address = marketplaceOrder?.deliveryAddress;
+  const buyerLogin =
+    po.buyerLogin ||
+    po.buyer_login ||
+    marketplaceOrder?.buyer_login ||
+    null;
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Podgląd adresu dostawy</DialogTitle>
-          <DialogDescription>
-            To jest adres, który zostanie zarejestrowany w hurtowni.
-          </DialogDescription>
-        </DialogHeader>
-        {isLoading || !address ? (
-          <div className="py-4 flex justify-center">
-            <Loader2 className="animate-spin" />
-          </div>
-        ) : (
-          <div className="text-sm space-y-1 py-4">
-            <p className="font-semibold">
-              {address.firstName} {address.lastName}
-            </p>
-            <p>{address.street}</p>
-            <p>
-              {address.zipCode} {address.city}
-            </p>
-            <p>Tel: {address.phoneNumber}</p>
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Zamknij
-          </Button>
-          <Button
-            onClick={() => onEdit(marketplaceOrder!)}
-            disabled={!marketplaceOrder}
-          >
-            <Edit className="mr-2 h-4 w-4" /> Edytuj
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-};
+  const firstItemName =
+    po.firstItemName ||
+    po.first_item_name ||
+    (marketplaceOrder?.line_items?.[0]?.offer as any)?.name ||
+    null;
 
-// Komponent podrzędny dla pojedynczego wiersza
-const DraftPurchaseOrderItem = ({
+  const externalId =
+    po.marketplaceExternalOrderId ||
+    po.marketplace_external_order_id ||
+    marketplaceOrder?.external_order_id ||
+    null;
+
+  const address = marketplaceOrder?.delivery_address || null;
+  const supplierName = supplierIntegration?.name || po.supplier_integration?.name || "";
+  const lineItems: PurchaseOrderLineItem[] = po.lineItems || po.line_items || [];
+  const moId = po.marketplaceOrderId || po.marketplace_order_id || "";
+
+  return { buyerLogin, firstItemName, externalId, address, supplierName, lineItems, moId };
+}
+
+// Karta pojedynczego zlecenia roboczego
+const DraftPOCard = ({
   po,
   onLineItemChange,
-  onPreviewAddress,
+  onEditAddress,
   onCancel,
 }: {
   po: PurchaseOrder;
   onLineItemChange: (poId: string, itemIndex: number, value: string) => void;
-  onPreviewAddress: (po: PurchaseOrder) => void;
+  onEditAddress: (po: PurchaseOrder) => void;
   onCancel: (poId: string) => void;
 }) => {
-  const lineItems = po.lineItems || [];
-  // ### POPRAWKA: Odwołanie do supplierProductIndex ###
+  const [erpOpen, setErpOpen] = useState(false);
+  const { buyerLogin, firstItemName, externalId, address, supplierName, lineItems } = getPOData(po);
+
   const areAllIndexesFilled = lineItems.every(
-    (item) => !!item.supplierProductIndex?.trim()
+    (item) => !!(item.supplierProductIndex || item.supplier_product_index)?.trim()
   );
 
   return (
-    <AccordionItem value={po.id}>
-      <AccordionTrigger>
-        <div className="flex justify-between w-full pr-4 items-center">
-          <div className="flex flex-col text-left min-w-0">
-            <span
-              className="font-semibold text-primary truncate"
-              title={po.firstItemName}
-            >
-              {po.firstItemName || "Brak nazwy produktu"}
-            </span>
-            <span className="text-sm text-muted-foreground truncate">
-              {po.buyerLogin || "Brak loginu"} (
-              {po.marketplaceExternalOrderId ||
-                // ### POPRAWKA: Odwołanie do marketplaceOrderId ###
-                po.marketplaceOrderId.substring(0, 8) + "..."}
-              )
-            </span>
+    <div className="rounded-2xl border border-border/15 bg-card/60 glass-dark shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md hover:shadow-primary/10 hover:border-primary/20">
+      {/* Header karty */}
+      <div className="px-4 py-3 flex items-start justify-between gap-3 bg-muted/20 border-b border-border/10">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Package className="h-4 w-4 text-primary" />
           </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-foreground truncate" title={firstItemName || undefined}>
+              {firstItemName || "Brak nazwy produktu"}
+            </p>
+            {externalId && (
+              <p className="text-xs text-muted-foreground font-mono">#{externalId}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           {!areAllIndexesFilled && (
-            <Badge variant="destructive" className="ml-4 flex-shrink-0">
-              Wymaga uwagi
-            </Badge>
+            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Brak indeksu</Badge>
+          )}
+          {areAllIndexesFilled && (
+            <Badge className="text-[10px] px-1.5 py-0 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Gotowe do wysłania</Badge>
           )}
         </div>
-      </AccordionTrigger>
-      <AccordionContent className="p-4 space-y-4 bg-muted/50">
-        {lineItems.map((item, index) => (
-          <div
-            key={`${item.marketplaceLineItemId}-${index}`}
-            className="space-y-1"
-          >
-            <Label htmlFor={`${po.id}-${index}`}>
-              {item.name} (x{item.quantity})
-            </Label>
-            <Input
-              id={`${po.id}-${index}`}
-              placeholder="Wprowadź indeks produktu..."
-              // ### POPRAWKA: Odwołanie do supplierProductIndex ###
-              defaultValue={item.supplierProductIndex || ""}
-              onChange={(e) => onLineItemChange(po.id, index, e.target.value)}
-            />
+      </div>
+
+      {/* Informacje o zamówieniu */}
+      <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+        {buyerLogin && (
+          <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
+            <User className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="font-medium text-foreground/80">{buyerLogin}</span>
           </div>
-        ))}
-        <div className="flex justify-end gap-2 pt-2 border-t mt-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onPreviewAddress(po)}
-          >
-            <Home className="mr-2 h-4 w-4" />
-            Pokaż adres
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => onCancel(po.id)}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Usuń z listy
-          </Button>
+        )}
+        {supplierName && (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">{supplierName}</span>
+          </div>
+        )}
+        {address && (
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">
+              {address.first_name} {address.last_name}, {address.city}
+            </span>
+          </div>
+        )}
+        <div className="text-muted-foreground/60 col-span-2 flex items-center gap-1.5">
+          <Package className="h-3 w-3" />
+          <span>{lineItems.length} produkt{lineItems.length !== 1 ? "y" : ""}</span>
         </div>
-      </AccordionContent>
-    </AccordionItem>
+      </div>
+
+      {/* Rozwijana sekcja ERP */}
+      <Collapsible open={erpOpen} onOpenChange={setErpOpen}>
+        <CollapsibleTrigger asChild>
+          <button
+            className="w-full px-4 py-2.5 flex items-center justify-between text-xs font-medium border-t border-border/10 bg-muted/10 hover:bg-primary/5 transition-colors duration-200 group"
+          >
+            <span className="text-muted-foreground group-hover:text-primary transition-colors">
+              Indeksy hurtowni ({lineItems.filter(i => !!(i.supplierProductIndex || i.supplier_product_index)?.trim()).length}/{lineItems.length} uzupełnione)
+            </span>
+            <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${erpOpen ? "rotate-180" : ""}`} />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="px-4 pb-3 pt-2 space-y-2.5 bg-background/30 border-t border-border/5">
+            {lineItems.map((item, index) => (
+              <div key={`${item.marketplaceLineItemId || item.marketplace_line_item_id}-${index}`} className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">
+                  {item.name} <span className="text-primary/70">×{item.quantity}</span>
+                </Label>
+                <Input
+                  placeholder="Indeks produktu w hurtowni..."
+                  defaultValue={item.supplierProductIndex || item.supplier_product_index || ""}
+                  onChange={(e) => onLineItemChange(po.id, index, e.target.value)}
+                  className="h-8 text-xs bg-background/60 border-border/20 focus-visible:ring-primary/30"
+                />
+              </div>
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Akcje */}
+      <div className="px-4 py-2.5 flex items-center justify-end gap-2 border-t border-border/10 bg-background/20">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-3 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10"
+          onClick={() => onEditAddress(po)}
+        >
+          <Pencil className="h-3.5 w-3.5 mr-1.5" />
+          Edytuj adres
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-3 text-xs text-destructive/80 hover:text-destructive hover:bg-destructive/10"
+          onClick={() => onCancel(po.id)}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+          Usuń
+        </Button>
+      </div>
+    </div>
   );
 };
 
@@ -196,9 +206,8 @@ export function DraftPurchaseOrders() {
   const queryClient = useQueryClient();
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [draftPOs, setDraftPOs] = useState<PurchaseOrder[]>([]);
-  const [previewOrder, setPreviewOrder] = useState<PurchaseOrder | null>(null);
-  const [orderToEditAddress, setOrderToEditAddress] =
-    useState<MarketplaceOrder | null>(null);
+  const [editingOrder, setEditingOrder] = useState<MarketplaceOrder | null>(null);
+  const [loadingAddressForPoId, setLoadingAddressForPoId] = useState<string | null>(null);
 
   const { data: suppliers } = useQuery<ServiceIntegration[]>({
     queryKey: ["serviceIntegrations", { category: "WHOLESALE" }],
@@ -206,10 +215,8 @@ export function DraftPurchaseOrders() {
       (await api.get("/service-integrations?category=WHOLESALE")).data,
   });
 
-  const queryKeyForDrafts = [
-    "purchaseOrders",
-    { status: "DRAFT", supplier: selectedSupplierId },
-  ];
+  // Ładuj WSZYSTKIE zlecenia robocze bez potrzeby wybrania hurtowni
+  const queryKeyForDrafts = ["purchaseOrders", { status: "DRAFT" }];
 
   const {
     data: fetchedData,
@@ -220,10 +227,9 @@ export function DraftPurchaseOrders() {
     queryFn: async () =>
       (
         await api.get(
-          `/purchase-orders?status=DRAFT&supplier_id=${selectedSupplierId}`
+          `/purchase-orders?status=DRAFT`
         )
       ).data,
-    enabled: !!selectedSupplierId,
   });
 
   useEffect(() => {
@@ -269,7 +275,7 @@ export function DraftPurchaseOrders() {
 
   const { mutate: updatePO, isPending: isUpdating } = useMutation({
     mutationFn: (
-      data: { poId: string; line_items: any[] } // Oczekujemy już snake_case
+      data: { poId: string; line_items: any[] }
     ) =>
       api.put(`/purchase-orders/${data.poId}`, { line_items: data.line_items }),
     onSuccess: () => {
@@ -293,13 +299,18 @@ export function DraftPurchaseOrders() {
     value: string
   ) => {
     setDraftPOs((prev) =>
-      prev.map((po) =>
+            prev.map((po) =>
         po.id === poId
           ? {
               ...po,
-              lineItems: (po.lineItems || []).map((item, i) =>
+              lineItems: (po.lineItems || po.line_items || []).map((item, i) =>
                 i === itemIndex
-                  ? { ...item, supplierProductIndex: value }
+                  ? { ...item, supplierProductIndex: value, supplier_product_index: value }
+                  : item
+              ),
+              line_items: (po.lineItems || po.line_items || []).map((item, i) =>
+                i === itemIndex
+                  ? { ...item, supplierProductIndex: value, supplier_product_index: value }
                   : item
               ),
             }
@@ -311,12 +322,11 @@ export function DraftPurchaseOrders() {
   const handleSaveAllChanges = () => {
     toast.loading("Zapisywanie zmian...", { id: "save-toast" });
     const promises = draftPOs.map((po) => {
-      // Ręczna konwersja na snake_case przed wysłaniem
-      const lineItemsSnakeCase = (po.lineItems || []).map((item) => ({
-        marketplace_line_item_id: item.marketplaceLineItemId,
+      const lineItemsSnakeCase = (po.lineItems || po.line_items || []).map((item) => ({
+        marketplace_line_item_id: item.marketplaceLineItemId || item.marketplace_line_item_id,
         name: item.name,
         quantity: item.quantity,
-        supplier_product_index: item.supplierProductIndex,
+        supplier_product_index: item.supplierProductIndex !== undefined ? item.supplierProductIndex : item.supplier_product_index,
       }));
 
       return updatePO({ poId: po.id, line_items: lineItemsSnakeCase });
@@ -326,37 +336,61 @@ export function DraftPurchaseOrders() {
 
   const handleSendBulk = () => {
     if (selectedSupplierId) {
-      handleSaveAllChanges(); // Zapisujemy przed wysłaniem
+      handleSaveAllChanges();
       sendBulk(parseInt(selectedSupplierId, 10));
     }
   };
 
-  const handleOpenEditAddress = (order: MarketplaceOrder) => {
-    setPreviewOrder(null);
-    setOrderToEditAddress(order);
+  const handleEditAddress = async (po: PurchaseOrder) => {
+    const moId = po.marketplaceOrderId || po.marketplace_order_id;
+    if (!moId) {
+      toast.error("Brak ID zamówienia - nie można edytować adresu.");
+      return;
+    }
+    setLoadingAddressForPoId(po.id);
+    try {
+      const response = await api.get(`/orders/${moId}`);
+      setEditingOrder(response.data);
+    } catch {
+      toast.error("Nie udało się załadować zamówienia do edycji.");
+    } finally {
+      setLoadingAddressForPoId(null);
+    }
   };
 
   const handleAddressUpdateSuccess = (updatedOrder: MarketplaceOrder) => {
-    setOrderToEditAddress(null);
+    setEditingOrder(null);
     queryClient.invalidateQueries({
       queryKey: ["orderDetails", updatedOrder.id],
     });
   };
 
+  // Filtrowanie po wybranej hurtowni (opcjonalne)
+  const filteredPOs = selectedSupplierId
+    ? draftPOs.filter(
+        (po) =>
+          String(po.supplierIntegrationId || po.supplier_integration_id || (po as any).supplier_integration?.id) === selectedSupplierId
+      )
+    : draftPOs;
+
   return (
     <>
       <div className="p-4 space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
-            <Label htmlFor="supplier-select">Wybierz hurtownię</Label>
+            <Label htmlFor="supplier-select" className="text-xs text-muted-foreground mb-1.5 block">
+              Filtruj po hurtowni (lub zostaw puste by zobaczyć wszystkie)
+            </Label>
             <Select
               value={selectedSupplierId}
-              onValueChange={setSelectedSupplierId}
+              onValueChange={(v) => setSelectedSupplierId(v === "all" ? "" : v)}
             >
-              <SelectTrigger id="supplier-select">
-                <SelectValue placeholder="Wybierz..." />
+              <SelectTrigger id="supplier-select" className="h-9 text-sm">
+                <SelectValue placeholder="Wszystkie hurtownie" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">Wszystkie</SelectItem>
                 {suppliers?.map((s) => (
                   <SelectItem key={s.id} value={String(s.id)}>
                     {s.name}
@@ -368,84 +402,93 @@ export function DraftPurchaseOrders() {
           <div className="flex gap-2 items-end">
             <Button
               variant="outline"
+              size="sm"
               onClick={handleSaveAllChanges}
               disabled={isUpdating}
+              className="h-9"
             >
               {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               <Save className="mr-2 h-4 w-4" />
-              Zapisz
+              Zapisz indeksy
             </Button>
             <Button
+              size="sm"
               onClick={handleSendBulk}
-              disabled={isSendingBulk || draftPOs.length === 0}
+              disabled={isSendingBulk || filteredPOs.length === 0 || !selectedSupplierId}
+              className="h-9"
+              title={!selectedSupplierId ? "Wybierz hurtownię by wysłać" : ""}
             >
               {isSendingBulk && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               <Send className="mr-2 h-4 w-4" />
-              Wyślij ({draftPOs.length})
+              Wyślij ({filteredPOs.length})
             </Button>
           </div>
         </div>
 
+        {/* Loading */}
         {(isLoading || isFetching) && (
           <div className="flex justify-center py-8">
-            <Loader2 className="animate-spin" />
+            <Loader2 className="animate-spin text-primary" />
           </div>
         )}
 
-        {selectedSupplierId &&
-          !isLoading &&
-          !isFetching &&
-          draftPOs.length === 0 && (
-            <div className="text-center py-16 border-2 border-dashed rounded-lg">
-              <PackageSearch className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-semibold">
-                Brak zleceń roboczych
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Brak oczekujących zleceń dla wybranej hurtowni.
-              </p>
-            </div>
-          )}
+        {/* Empty state */}
+        {!isLoading && !isFetching && draftPOs.length === 0 && (
+          <div className="text-center py-16 border-2 border-dashed rounded-2xl border-border/30">
+            <PackageSearch className="mx-auto h-12 w-12 text-muted-foreground/40" />
+            <h3 className="mt-4 text-base font-semibold text-muted-foreground">
+              Brak zleceń roboczych
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground/60">
+              Aby dodać zlecenie, wybierz zamówienia z listy po prawej i kliknij "Utwórz zlecenia robocze".
+            </p>
+          </div>
+        )}
 
-        {selectedSupplierId && draftPOs.length > 0 && (
-          <Alert variant="info">
-            <Info className="h-4 w-4" />
-            <AlertTitle>Tryb edycji</AlertTitle>
-            <AlertDescription>
-              Uzupełnij brakujące indeksy, zapisz zmiany, a następnie wyślij
-              wszystko do dostawcy.
+        {/* Info banner */}
+        {filteredPOs.length > 0 && (
+          <Alert className="border-primary/20 bg-primary/5 rounded-xl py-2.5">
+            <Info className="h-4 w-4 text-primary" />
+            <AlertTitle className="text-primary font-semibold text-sm">
+              {filteredPOs.length} zlecenie{filteredPOs.length > 1 ? "ń" : ""} robocze{filteredPOs.length > 1 ? "" : ""}
+            </AlertTitle>
+            <AlertDescription className="text-muted-foreground text-xs">
+              Uzupełnij indeksy produktów (z katalogu hurtowni) i użyj "Wyślij" po wybraniu hurtowni.
             </AlertDescription>
           </Alert>
         )}
 
-        <Accordion type="multiple" className="w-full">
-          {draftPOs.map((po) => (
-            <DraftPurchaseOrderItem
+        {/* Lista kart */}
+        <div className="space-y-3">
+          {filteredPOs.map((po) => (
+            <DraftPOCard
               key={po.id}
               po={po}
               onLineItemChange={handleLineItemChange}
-              onPreviewAddress={setPreviewOrder}
+              onEditAddress={handleEditAddress}
               onCancel={cancelPO}
             />
           ))}
-        </Accordion>
+        </div>
+
+        {/* Loading indicator dla edycji adresu */}
+        {loadingAddressForPoId && (
+          <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+            <div className="bg-card rounded-xl p-6 flex items-center gap-3 shadow-2xl">
+              <Loader2 className="animate-spin text-primary h-5 w-5" />
+              <span className="text-sm">Ładowanie danych adresu...</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      <AddressPreviewDialog
-        // ### POPRAWKA: Odwołanie do marketplaceOrderId ###
-        marketplaceOrderId={previewOrder?.marketplaceOrderId || null}
-        isOpen={!!previewOrder}
-        onClose={() => setPreviewOrder(null)}
-        onEdit={handleOpenEditAddress}
-      />
-
       <EditAddressDialog
-        isOpen={!!orderToEditAddress}
-        onClose={() => setOrderToEditAddress(null)}
+        isOpen={!!editingOrder}
+        onClose={() => setEditingOrder(null)}
         onSuccess={handleAddressUpdateSuccess}
-        order={orderToEditAddress}
+        order={editingOrder}
       />
     </>
   );

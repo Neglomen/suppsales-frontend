@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { ColumnDef, PaginationState } from "@tanstack/react-table";
 import {
   MoreHorizontal,
@@ -59,6 +60,8 @@ export function MappingsSubTab() {
     pageSize: 10,
   });
 
+  const queryClient = useQueryClient();
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -98,6 +101,7 @@ export function MappingsSubTab() {
         setTimeout(() => {
           toast.success("Skanowanie zakończone, odświeżanie listy...");
           fetchData();
+          queryClient.invalidateQueries({ queryKey: ["shippingConfig"] });
         }, 5000);
         return "Zadanie odkrywania metod dostawy zostało zlecone.";
       },
@@ -114,6 +118,7 @@ export function MappingsSubTab() {
         loading: "Usuwanie mapowania...",
         success: () => {
           fetchData();
+          queryClient.invalidateQueries({ queryKey: ["shippingConfig"] });
           setDeleteAlertOpen(false);
           return "Mapowanie usunięte.";
         },
@@ -148,7 +153,7 @@ export function MappingsSubTab() {
         header: "Mapowanie kuriera",
         cell: ({ row }) => {
           const courier = couriers.find(
-            (c) => c.id === row.original.serviceIntegration_id
+            (c) => c.id === row.original.service_integration_id
           );
           if (!courier)
             return <Badge variant="destructive">Nieskonfigurowane</Badge>;
@@ -243,7 +248,10 @@ export function MappingsSubTab() {
       <DeliveryMappingFormDialog
         isOpen={isFormOpen}
         setIsOpen={setFormOpen}
-        onSuccess={fetchData}
+        onSuccess={() => {
+          fetchData();
+          queryClient.invalidateQueries({ queryKey: ["shippingConfig"] });
+        }}
         mapping={selectedMapping}
         courierIntegrations={couriers}
         packageDefinitions={packages}

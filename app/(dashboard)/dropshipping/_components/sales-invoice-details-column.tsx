@@ -1,0 +1,649 @@
+"use client";
+
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import api, { getErrorMessage } from "@/lib/api";
+import { Thread } from "@/types/thread";
+import {
+  Loader2,
+  FilePlus2,
+  FileText,
+  User,
+  Building,
+  ShoppingCart,
+  ScrollText,
+  Truck,
+  AlertCircle,
+  MessageSquare,
+  Edit,
+  CheckCircle2,
+  KeyRound,
+  Sparkles,
+  ChevronsUpDown,
+  Check,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import toast from "react-hot-toast";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { useMemo, useState, useEffect } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ChatPanel } from "../../orders/[id]/_components/chat-panel";
+import { EditInvoiceDataDialog } from "@/components/shared/edit-invoice-data-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { mapOrderToMappedDetails } from "@/lib/mappers/order-mapper";
+import { MappedOrderDetails, OrderDetailsRead } from "@/types/order-schemas";
+import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { ServiceIntegration } from "@/types/service-integration";
+import { ProductErpMapping } from "@/types/product-erp-mapping";
+
+// ========================================================================
+// === KOMPONENTY POMOCNICZE (BEZ ZMIAN) ==================================
+// ========================================================================
+
+interface SalesInvoiceDetailsProps {
+  selectedOrderId: string | null;
+}
+
+function InvoicePreview({ invoice }: { invoice: any }) {
+  return (
+    <div className="p-6 h-full flex flex-col">
+      <div className="flex-shrink-0">
+        <h2 className="text-2xl font-bold mb-1">
+          Faktura nr {invoice.invoiceNumber}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Wystawiono dnia:{" "}
+          {new Date(invoice.issueDate).toLocaleDateString("pl-PL")}
+        </p>
+      </div>
+      <div className="mt-6 p-8 border-2 border-dashed rounded-lg text-center flex-grow flex items-center justify-center">
+        <div className="text-muted-foreground">
+          <FileText className="mx-auto h-16 w-16 mb-4" />
+          <p>Podgląd wygenerowanego PDF pojawi się tutaj w przyszłości.</p>
+        </div>
+      </div>
+      <div className="mt-6 flex-shrink-0 space-x-2">
+        <Button disabled>Pobierz PDF</Button>
+        <Button variant="outline" disabled>
+          Wyślij e-mail
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ========================================================================
+// === NOWY KOMPONENT: Inteligentne pole do wyszukiwania produktów =======
+// ========================================================================
+
+interface ErpProduct {
+  id: number;
+  symbol: string;
+  name: string | null;
+}
+
+interface SubiektProductComboboxProps {
+  erpIntegrationId: number;
+  value: string;
+  onValueChange: (value: string) => void;
+}
+
+function SubiektProductCombobox({
+  erpIntegrationId,
+  value,
+  onValueChange,
+}: SubiektProductComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
+
+  const { data: products, isLoading: isProductsLoading } = useQuery<
+    ErpProduct[]
+  >({
+    queryKey: ["subiektProducts", erpIntegrationId, debouncedSearchQuery],
+    queryFn: async () => {
+      const response = await api.get(
+        `/erp-proxy/integrations/${erpIntegrationId}/products`,
+        { params: { q: debouncedSearchQuery } }
+      );
+      return response.data;
+    },
+    enabled: !!erpIntegrationId && open,
+  });
+
+  const selectedProduct = useMemo(() => {
+    return products?.find(
+      (p) => p.symbol.toUpperCase() === value.toUpperCase()
+    );
+  }, [products, value]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between h-8 text-xs font-normal"
+        >
+          <span className="truncate">
+            {value
+              ? selectedProduct
+                ? `${selectedProduct.symbol} - ${selectedProduct.name}`
+                : value
+              : "Wyszukaj lub wpisz symbol..."}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[300px] p-0">
+        <Command>
+          <CommandInput
+            placeholder="Szukaj po symbolu lub nazwie..."
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+          />
+          <CommandList>
+            <CommandEmpty>
+              {isProductsLoading ? "Ładowanie..." : "Brak wyników."}
+            </CommandEmpty>
+            <CommandGroup>
+              {products?.map((product) => (
+                <CommandItem
+                  key={product.id}
+                  value={product.symbol}
+                  onSelect={(currentValue) => {
+                    onValueChange(currentValue.toUpperCase());
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value.toUpperCase() === product.symbol.toUpperCase()
+                        ? "opacity-100"
+                        : "opacity-0"
+                    )}
+                  />
+                  <div className="flex flex-col">
+                    <span className="font-medium">{product.symbol}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {product.name}
+                    </span>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ========================================================================
+// === GŁÓWNY KOMPONENT ===================================================
+// ========================================================================
+
+export function SalesInvoiceDetailsColumn({
+  selectedOrderId,
+}: SalesInvoiceDetailsProps) {
+  const queryClient = useQueryClient();
+  const [isEditInvoiceOpen, setEditInvoiceOpen] = useState(false);
+  const [productMappings, setProductMappings] = useState<
+    Record<string, string>
+  >({});
+  const [autoFilledMappings, setAutoFilledMappings] = useState<Set<string>>(
+    new Set()
+  );
+
+  const {
+    data: order,
+    isLoading: isOrderLoading,
+    isError,
+    refetch: refetchOrder,
+  } = useQuery<OrderDetailsRead>({
+    queryKey: ["orderDetails", selectedOrderId],
+    queryFn: async () => {
+      if (!selectedOrderId) throw new Error("No order ID");
+      const res = await api.get(`/orders/${selectedOrderId}`);
+      return res.data;
+    },
+    enabled: !!selectedOrderId,
+  });
+
+  const { data: erpIntegrations } = useQuery<ServiceIntegration[]>({
+    queryKey: ["serviceIntegrations", { category: "ERP" }],
+    queryFn: async () =>
+      (await api.get("/service-integrations?category=ERP")).data,
+  });
+
+  const subiektIntegrationId = useMemo(() => {
+    return erpIntegrations?.find((int) => int.provider_type === "SUBIEKT_GT")
+      ?.id;
+  }, [erpIntegrations]);
+
+  const { data: existingMappings } = useQuery<
+    Record<string, ProductErpMapping>
+  >({
+    queryKey: ["productErpMappings", selectedOrderId, order?.lineItems],
+    queryFn: async () => {
+      if (
+        !order?.lineItems ||
+        order.lineItems.length === 0 ||
+        !subiektIntegrationId ||
+        !order.serviceIntegration
+      ) {
+        return {};
+      }
+      const offerIds = order.lineItems
+        .map((item) => item.offer?.id)
+        .filter((id): id is string => !!id);
+      if (offerIds.length === 0) return {};
+
+      const params = new URLSearchParams();
+      offerIds.forEach((id) => params.append("offer_ids", id));
+      params.append(
+        "source_integration_id",
+        String(order.serviceIntegration.id)
+      );
+      params.append("erp_integration_id", String(subiektIntegrationId));
+
+      const res = await api.get(
+        `/product-erp-mappings/by-offers-and-integrations?${params.toString()}`
+      );
+      return res.data;
+    },
+    enabled: !!order && !!subiektIntegrationId,
+  });
+
+  useEffect(() => {
+    if (existingMappings && Object.keys(existingMappings).length > 0) {
+      const newMappings: Record<string, string> = {};
+      const newAutoFilled = new Set<string>();
+
+      order?.lineItems?.forEach((item) => {
+        const offerId = item.offer?.id;
+        if (offerId && existingMappings[offerId]) {
+          // Pobieramy TYLKO symbol z obiektu
+          newMappings[offerId] = existingMappings[offerId].erp_product_symbol;
+          newAutoFilled.add(offerId);
+        }
+      });
+
+      setProductMappings((prev) => ({ ...prev, ...newMappings }));
+      setAutoFilledMappings(newAutoFilled);
+    }
+  }, [existingMappings, order?.lineItems]);
+
+  useEffect(() => {
+    setProductMappings({});
+    setAutoFilledMappings(new Set());
+  }, [selectedOrderId]);
+
+  const { data: threads } = useQuery<Thread[]>({
+    queryKey: ["orderThreads", selectedOrderId],
+    queryFn: async () => {
+      if (!order?.buyerLogin || !order.serviceIntegration) return [];
+      const response = await api.get("/threads/by-buyer-login", {
+        params: {
+          buyer_login: order.buyerLogin,
+          integration_id: order.serviceIntegration.id,
+        },
+      });
+      return response.data;
+    },
+    enabled: !!order,
+  });
+
+  const handleMappingChange = (offerId: string, erpSymbol: string) => {
+    setProductMappings((prev) => ({
+      ...prev,
+      [offerId]: erpSymbol.toUpperCase(),
+    }));
+    setAutoFilledMappings((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(offerId);
+      return newSet;
+    });
+  };
+
+  const createInvoiceMutation = useMutation({
+    mutationFn: (mappings: Record<string, string>) => {
+      if (!selectedOrderId) throw new Error("Nie wybrano zamówienia!");
+
+      // Walidacja używa teraz `mappedDetails`, które ma bezpieczne `offerId`
+      const allItemsMapped = mappedDetails?.lineItems?.every((item) => {
+        if (!item.offerId) return false;
+        return !!mappings[item.offerId]?.trim();
+      });
+
+      if (!allItemsMapped) {
+        toast.error("Wprowadź symbole Subiekta dla wszystkich pozycji.");
+        return Promise.reject(new Error("Validation failed"));
+      }
+
+      const payload = { product_mappings: mappings };
+      const url = `/sales-invoices/orders/${selectedOrderId}/create-sales-invoice`;
+      return api.post(url, payload);
+    },
+    onSuccess: () => {
+      toast.success(
+        "Zlecono tworzenie faktury. Status zostanie wkrótce zaktualizowany."
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["orderDetails", selectedOrderId],
+      });
+    },
+    onError: (error) => {
+      if ((error as Error).message !== "Validation failed") {
+        toast.error(`Błąd: ${getErrorMessage(error)}`);
+      }
+    },
+  });
+
+  const totalMessages = useMemo(
+    () =>
+      threads?.reduce(
+        (sum, thread) => sum + (thread.messages?.length || 0),
+        0
+      ) ?? 0,
+    [threads]
+  );
+
+  const mappedDetails = useMemo<MappedOrderDetails | null>(() => {
+    if (!order) return null;
+    return mapOrderToMappedDetails(order);
+  }, [order]);
+
+  if (!selectedOrderId) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-center">
+        <FilePlus2 className="mx-auto h-12 w-12 text-muted-foreground" />
+        <h3 className="mt-4 text-lg font-semibold">Wybierz zamówienie</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Aby wyświetlić dane do faktury, wybierz zrealizowane zamówienie z
+          listy.
+        </p>
+      </div>
+    );
+  }
+
+  if (isOrderLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="animate-spin h-8 w-8 text-primary" />
+      </div>
+    );
+  }
+
+  if (isError || !order || !mappedDetails) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-center text-destructive">
+        <AlertCircle className="mx-auto h-12 w-12" />
+        <h3 className="mt-4 text-lg font-semibold">Błąd</h3>
+        <p className="mt-2 text-sm">
+          Nie udało się załadować danych zamówienia.
+        </p>
+      </div>
+    );
+  }
+
+  const { buyerDetails, deliveryDetails, deliveryCost } = mappedDetails;
+
+  return (
+    <>
+      <div className="p-6 h-full flex flex-col overflow-hidden">
+        <div className="flex-shrink-0">
+          <h2 className="text-2xl font-bold mb-1">Nowa faktura sprzedaży</h2>
+          <p className="text-sm text-muted-foreground">
+            Zamówienie: {order.externalOrderId}
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto mt-6 space-y-6 pr-4 -mr-4">
+          {deliveryDetails?.address && (
+            <section>
+              <h3 className="text-lg font-semibold flex items-center mb-2">
+                <Truck className="mr-2 h-5 w-5 text-primary" /> Dostawa do
+              </h3>
+              <div className="pl-7 text-sm space-y-1">
+                <p className="font-medium">
+                  {deliveryDetails.address.company_name ||
+                    `${deliveryDetails.address.first_name || ""} ${
+                      deliveryDetails.address.last_name || ""
+                    }`.trim()}
+                </p>
+                <p className="text-muted-foreground">
+                  {deliveryDetails.address.street}
+                </p>
+                <p className="text-muted-foreground">
+                  {deliveryDetails.address.zip_code}{" "}
+                  {deliveryDetails.address.city}
+                </p>
+              </div>
+            </section>
+          )}
+          <Separator />
+          <section>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-semibold flex items-center">
+                {buyerDetails?.isCompany ? <Building /> : <User />}
+                <span className="ml-2">Nabywca (dane do faktury)</span>
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setEditInvoiceOpen(true)}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+            </div>
+            {buyerDetails ? (
+              <div className="pl-7 text-sm space-y-1">
+                <p className="font-medium">{buyerDetails.name}</p>
+                {buyerDetails.taxId && (
+                  <p className="text-muted-foreground">
+                    NIP: {buyerDetails.taxId}
+                  </p>
+                )}
+                {buyerDetails.address && (
+                  <>
+                    <p className="text-muted-foreground">
+                      {buyerDetails.address.street}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {buyerDetails.address.zip_code}{" "}
+                      {buyerDetails.address.city}
+                    </p>
+                  </>
+                )}
+                {buyerDetails.source === "delivery" && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    (Uwaga: Użyto danych z adresu dostawy)
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="pl-7 text-sm text-destructive">
+                Brak danych nabywcy w zamówieniu!
+              </p>
+            )}
+          </section>
+          <Separator />
+          <section>
+            <h3 className="text-lg font-semibold flex items-center mb-3">
+              <ShoppingCart className="mr-2 h-5 w-5 text-primary" /> Pozycje
+            </h3>
+            <div className="space-y-4 pl-7 text-sm">
+              {mappedDetails.lineItems?.map((item) => (
+                <div key={item.id} className="border-b pb-4 last:border-b-0">
+                  <div className="flex justify-between items-start">
+                    <div className="pr-4">
+                      <p className="font-medium">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.quantity} szt. x {item.price}
+                      </p>
+                    </div>
+                    <p className="font-semibold text-right flex-shrink-0">
+                      {(
+                        item.quantity * parseFloat(item.price.split(" ")[0])
+                      ).toFixed(2)}{" "}
+                      {item.price.split(" ")[1]}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <KeyRound className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <Label
+                      htmlFor={`symbol-${item.id}`}
+                      className="text-xs text-muted-foreground whitespace-nowrap"
+                    >
+                      Symbol w Subiekt GT:
+                    </Label>
+
+                    {subiektIntegrationId && item.offerId ? (
+                      <SubiektProductCombobox
+                        erpIntegrationId={subiektIntegrationId}
+                        value={productMappings[item.offerId] || ""}
+                        onValueChange={(symbol) =>
+                          handleMappingChange(item.offerId!, symbol)
+                        }
+                      />
+                    ) : (
+                      <div className="text-xs text-muted-foreground w-full">
+                        Brak ID oferty lub integracji ERP...
+                      </div>
+                    )}
+
+                    {autoFilledMappings.has(item.offerId!) && (
+                      <Sparkles className="h-4 w-4 text-yellow-500" />
+                    )}
+                  </div>
+                </div>
+              ))}
+              {deliveryCost && deliveryCost.amount > 0 && (
+                <div className="flex justify-between items-center pt-2">
+                  <p className="font-medium">Dostawa</p>
+                  <p className="font-semibold text-right flex-shrink-0">
+                    {deliveryCost.amount.toFixed(2)} {deliveryCost.currency}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+          <Separator />
+          <section>
+            <h3 className="text-lg font-semibold flex items-center mb-3">
+              <ScrollText className="mr-2 h-5 w-5 text-primary" /> Podsumowanie
+            </h3>
+            <div className="pl-7 text-sm space-y-2">
+              <div className="flex justify-between items-center font-bold text-lg">
+                <span>Razem do zapłaty:</span>
+                <span>
+                  {order.totalToPay?.toLocaleString("pl-PL", {
+                    style: "currency",
+                    currency: "PLN",
+                  })}
+                </span>
+              </div>
+            </div>
+          </section>
+          {totalMessages > 0 && (
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="chat-history">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    <span>Historia Rozmowy</span>
+                    <Badge>{totalMessages}</Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="border-t max-h-[500px] overflow-y-auto">
+                    {order.buyerLogin && order.serviceIntegration && (
+                      <ChatPanel
+                        buyerLogin={order.buyerLogin}
+                        integrationId={order.serviceIntegration.id}
+                        currentOrderId={order.id}
+                        myLogin={order.serviceIntegration.external_user_id}
+                      />
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          )}
+        </div>
+        <div className="mt-6 flex-shrink-0">
+          {order.erp_sales_document_number ? (
+            <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div>
+                <span className="font-semibold">
+                  Faktura istnieje w Subiekcie:
+                </span>
+                <span className="ml-2 font-mono">
+                  {order.erp_sales_document_number}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <Button
+              onClick={() => createInvoiceMutation.mutate(productMappings)}
+              disabled={createInvoiceMutation.isPending}
+            >
+              {createInvoiceMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Przetwarzanie...
+                </>
+              ) : (
+                "Wystaw fakturę w Subiekt GT"
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+      <EditInvoiceDataDialog
+        isOpen={isEditInvoiceOpen}
+        onClose={() => setEditInvoiceOpen(false)}
+        onSuccess={() => {
+          setEditInvoiceOpen(false);
+          refetchOrder();
+        }}
+        order={order}
+      />
+    </>
+  );
+}

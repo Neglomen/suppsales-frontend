@@ -8,12 +8,11 @@ import { PaginatedResponse } from "@/types/pagination"; // Importuj typ
 const fetchShippingConfig = async () => {
   const [packagesRes, mappingsRes, couriersRes] = await Promise.all([
     api.get<PackageDefinition[]>("/package-definitions"),
-    // === POPRAWKA TUTAJ ===
-    // Oczekujemy teraz paginowanej odpowiedzi
+    // Oczekujemy teraz paginowanej odpowiedzi (zwiększamy limit by pobrać wszystkie dla strony wysyłek)
     api.get<PaginatedResponse<DeliveryMethodMapping>>(
-      "/delivery-method-mappings"
+      "/delivery-method-mappings",
+      { params: { size: 1000 } }
     ),
-    // === KONIEC POPRAWKI ===
     api.get<ServiceIntegration[]>("/service-integrations", {
       params: { canBeCourier: "true" },
     }),

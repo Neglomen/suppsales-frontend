@@ -22,7 +22,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { IntegrationFormDialog } from "./_components/integration-form-dialog";
 import {
-  ABIcon,
   AllegroIcon,
   BaseLinkerIcon,
   SuusIcon,
@@ -36,6 +35,7 @@ import {
 import { TooltipTrigger } from "@radix-ui/react-tooltip";
 import { cn } from "@/lib/utils";
 import { ServiceIntegration } from "@/types/service-integration";
+import { IntegrationCard } from "./_components/integration-card";
 
 // Definicja typu, który otrzymamy z API (bez zmian)
 
@@ -91,7 +91,7 @@ export default function IntegrationsPage() {
     const toastId = toast.loading("Przygotowywanie połączenia...");
     api
       .get<{ authorization_url: string }>(
-        `/integrations/${integrationId}/allegro/authorize`
+        `/service-integrations/${integrationId}/allegro/authorize`
       )
       .then((response) => {
         window.open(
@@ -134,6 +134,22 @@ export default function IntegrationsPage() {
     );
   };
 
+  const handleDeleteIntegration = async (integrationId: number) => {
+    await toast.promise(
+      api.delete(`/service-integrations/${integrationId}`),
+      {
+        loading: "Usuwanie integracji...",
+        success: () => {
+          setIntegrations((prev) => prev.filter((i) => i.id !== integrationId));
+          setEditingIntegration(null);
+          return "Integracja została usunięta.";
+        },
+        error: (err: any) =>
+          err.response?.data?.detail || "Nie udało się usunąć integracji.",
+      }
+    );
+  };
+
   const onIntegrationAdded = (newIntegration: ServiceIntegration) => {
     setIntegrations([newIntegration, ...integrations]);
   };
@@ -141,151 +157,70 @@ export default function IntegrationsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-8rem)]">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="relative">
+          <div className="absolute -inset-4 rounded-full bg-primary/20 blur-xl animate-pulse" />
+          <Loader2 className="relative h-10 w-10 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Zarządzanie Integracjami</h1>
-          <p className="text-muted-foreground">
+    <div className="relative p-6 sm:p-8 space-y-8 max-w-[1600px] mx-auto min-h-[calc(100vh-8rem)]">
+      {/* Dekoracyjne rozmyte tła */}
+      <div className="absolute top-0 left-1/4 w-[40vw] h-[40vw] bg-primary/10 rounded-full blur-[120px] -z-10 pointer-events-none opacity-50" />
+      <div className="absolute bottom-0 right-1/4 w-[30vw] h-[30vw] bg-indigo-500/10 rounded-full blur-[100px] -z-10 pointer-events-none opacity-50" />
+
+      {/* Header premium */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 glass-dark p-6 rounded-2xl border border-border/10 shadow-lg relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-transparent to-transparent opacity-50 pointer-events-none" />
+        <div className="relative z-10">
+          <h1 className="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+            Zarządzanie Integracjami
+          </h1>
+          <p className="text-muted-foreground mt-1.5 font-medium">
             Podłącz swoje konta marketplace i inne narzędzia.
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Dodaj Integrację
+        <Button 
+          onClick={() => setDialogOpen(true)}
+          size="lg"
+          className="relative z-10 shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-shadow rounded-xl"
+        >
+          <PlusCircle className="mr-2.5 h-5 w-5" />
+          <span className="font-semibold tracking-wide">Dodaj Integrację</span>
         </Button>
       </div>
 
       {integrations.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed rounded-lg">
-          <PlugZap className="mx-auto h-12 w-12 text-muted-foreground" />
-          <h3 className="mt-4 text-lg font-semibold">Brak integracji</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Nie masz jeszcze żadnych połączonych kont.
+        <div className="flex flex-col items-center justify-center py-24 glass-dark rounded-2xl border border-dashed border-border/30 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-primary/5 pointer-events-none" />
+          <div className="relative z-10 p-5 rounded-full bg-background/50 border border-border/20 mb-6 shadow-inner">
+            <PlugZap className="h-12 w-12 text-muted-foreground/50" />
+          </div>
+          <h3 className="relative z-10 text-xl font-bold font-heading mb-2">Brak integracji</h3>
+          <p className="relative z-10 text-muted-foreground max-w-sm text-center mb-8">
+            Podłącz swoje pierwsze konto marketplace lub system ERP, aby zautomatyzować procesy.
           </p>
-          <Button className="mt-4" onClick={() => setDialogOpen(true)}>
-            Dodaj swoją pierwszą integrację
+          <Button 
+            size="lg" 
+            variant="outline" 
+            className="relative z-10 border-primary/30 text-primary hover:bg-primary/10 rounded-xl font-medium" 
+            onClick={() => setDialogOpen(true)}
+          >
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Rozpocznij Konfigurację
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-stretch">
           {integrations.map((integration) => (
-            <Card
+            <IntegrationCard
               key={integration.id}
-              className={cn(
-                "flex flex-col",
-                !integration.is_active &&
-                  "border-destructive/50 bg-destructive/5"
-              )}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {integration.provider_type === "ALLEGRO" && (
-                    <AllegroIcon className="h-6 w-6" />
-                  )}
-                  {integration.provider_type === "BASELINKER" && (
-                    <BaseLinkerIcon className="h-6 w-6 rounded" />
-                  )}
-                  {integration.provider_type === "SUUS" && (
-                    <SuusIcon className="h-6 w-6" />
-                  )}
-                  {integration.provider_type === "AB" && (
-                    <ABIcon className="h-6 w-auto" />
-                  )}
-                  {integration.name}
-                  {!integration.is_active && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <AlertCircle className="h-5 w-5 text-destructive" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>
-                            Połączenie wygasło lub jest nieprawidłowe. Wymagana
-                            akcja.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </CardTitle>
-                {integration.is_active && integration.external_user_id ? (
-                  <CardDescription>
-                    Połączono jako:
-                    <span className="font-semibold text-foreground">
-                      {integration.external_user_id}
-                    </span>
-                  </CardDescription>
-                ) : (
-                  <CardDescription>{integration.provider_type}</CardDescription>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-2 flex-grow">
-                <p className="text-sm font-medium">
-                  Ustawienia synchronizacji:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {integration.sync_orders && (
-                    <Badge variant="outline">Zamówienia</Badge>
-                  )}
-                  {integration.provider_type === "ALLEGRO" &&
-                    integration.sync_messages && (
-                      <Badge variant="outline">Wiadomości</Badge>
-                    )}
-                  {integration.provider_type === "ALLEGRO" &&
-                    integration.sync_returns && (
-                      <Badge variant="outline">Zwroty</Badge>
-                    )}
-                  {integration.provider_type === "ALLEGRO" &&
-                    integration.autoresponder_enabled && (
-                      <Badge
-                        variant="default"
-                        className="bg-amber-500 hover:bg-amber-600"
-                      >
-                        <MessageSquareReply className="mr-1 h-3 w-3" />
-                        Autoresponder
-                      </Badge>
-                    )}
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between items-center bg-muted/50 p-3 mt-4">
-                <Badge
-                  variant={integration.is_active ? "default" : "destructive"}
-                >
-                  {integration.is_active ? "Połączona" : "Wymaga uwagi"}
-                </Badge>
-
-                {integration.is_active ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openManageDialog(integration)}
-                  >
-                    Zarządzaj
-                  </Button>
-                ) : integration.provider_type === "ALLEGRO" ? (
-                  <Button
-                    onClick={() => handleAllegroConnect(integration.id)}
-                    size="sm"
-                  >
-                    Połącz ponownie
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openManageDialog(integration)}
-                  >
-                    Popraw konfigurację
-                  </Button>
-                )}
-              </CardFooter>
-            </Card>
+              integration={integration}
+              onManageClick={openManageDialog}
+              onReconnectClick={handleAllegroConnect}
+            />
           ))}
         </div>
       )}
@@ -304,6 +239,8 @@ export default function IntegrationsPage() {
         onManualMessageSync={handleManualMessageSync}
         onUpdate={handleIntegrationUpdate}
         onManualReturnSync={handleManualReturnSync}
+        onDelete={handleDeleteIntegration}
+        onReconnect={handleAllegroConnect}
       />
     </div>
   );

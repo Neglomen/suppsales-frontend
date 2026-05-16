@@ -14,6 +14,7 @@ import { DeliveryMethodMapping } from "@/types/delivery-method-mapping";
 import { ServiceIntegration } from "@/types/service-integration";
 import { PackageDefinition } from "@/types/package-definition";
 import { SUUS_PACKAGE_CODES } from "@/lib/courier-data";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -64,12 +65,25 @@ export function DeliveryMappingFormDialog({
     resolver: zodResolver(deliveryMappingFormSchema),
   });
 
-  const selectedIntegrationId = form.watch("serviceIntegration_id");
+  const selectedIntegrationId = form.watch("service_integration_id");
 
-  const filteredPackages = useMemo(() => {
-    const selectedIntegration = courierIntegrations.find(
+  const selectedIntegration = useMemo(() => {
+    return courierIntegrations.find(
       (integ) => String(integ.id) === selectedIntegrationId
     );
+  }, [selectedIntegrationId, courierIntegrations]);
+
+  const { data: apaczkaServices, isLoading: isLoadingApaczkaServices } = useQuery({
+    queryKey: ["apaczkaServices", selectedIntegrationId],
+    queryFn: async () => {
+      if (!selectedIntegration || selectedIntegration.provider_type !== "APACZKA") return [];
+      const res = await api.get(`/service-integrations/${selectedIntegration.id}/apaczka/services`);
+      return res.data;
+    },
+    enabled: !!selectedIntegration && selectedIntegration.provider_type === "APACZKA",
+  });
+
+  const filteredPackages = useMemo(() => {
 
     if (!selectedIntegration || selectedIntegration.provider_type !== "SUUS") {
       return packageDefinitions.filter((pkg) => !pkg.courier_code);
@@ -85,10 +99,13 @@ export function DeliveryMappingFormDialog({
     if (mapping) {
       form.reset({
         marketplace_delivery_method: mapping.marketplace_delivery_method,
-        serviceIntegration_id: mapping.serviceIntegration_id
-          ? String(mapping.serviceIntegration_id)
+        service_integration_id: mapping.service_integration_id
+          ? String(mapping.service_integration_id)
           : "",
-        courier_service_code: mapping.courier_service_code || "",
+        courier_service_code:
+          mapping.courier_service_code ||
+          mapping.marketplace_delivery_method ||
+          "",
         default_package_definition_id:
           mapping.default_package_definition_id || "NONE",
       });
@@ -112,7 +129,7 @@ export function DeliveryMappingFormDialog({
     if (!mapping) return;
 
     const payload = {
-      serviceIntegration_id: parseInt(values.serviceIntegration_id, 10),
+      service_integration_id: parseInt(values.service_integration_id, 10),
       courier_service_code: values.courier_service_code,
       default_package_definition_id:
         values.default_package_definition_id === "NONE"
@@ -170,7 +187,7 @@ export function DeliveryMappingFormDialog({
             <div className="space-y-4">
               <FormField
                 control={form.control}
-                name="serviceIntegration_id"
+                name="service_integration_id"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>1. Wybierz kuriera</FormLabel>
@@ -198,15 +215,39 @@ export function DeliveryMappingFormDialog({
                 name="courier_service_code"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>2. Wpisz kod usługi</FormLabel>
+                    <FormLabel>2. {selectedIntegration?.provider_type === "APACZKA" ? "Wybierz usługę kurierską" : "Wpisz kod usługi"}</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Np. SUUS_STANDARD, KEX_EXPRESS"
-                        {...field}
-                      />
+                      {selectedIntegration?.provider_type === "APACZKA" ? (
+                        isLoadingApaczkaServices ? (
+                          <div className="flex items-center text-sm text-muted-foreground h-10 px-3 border rounded-md bg-muted/30">
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Ładowanie usług...
+                          </div>
+                        ) : (
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Wybierz usługę Apaczka..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {apaczkaServices?.map((s: any) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  <span className="font-medium">{s.name}</span>
+                                  {s.description && <span className="text-muted-foreground ml-2 text-xs">{s.description}</span>}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )
+                      ) : (
+                        <Input
+                          placeholder="Np. SUUS_STANDARD, KEX_EXPRESS"
+                          {...field}
+                        />
+                      )}
                     </FormControl>
                     <FormDescription>
-                      Kod, który identyfikuje konkretną usługę u kuriera.
+                      {selectedIntegration?.provider_type === "APACZKA" 
+                        ? "Wybierz usługę kurierską przypisaną do tego mapowania."
+                        : "Kod, który identyfikuje konkretną usługę u kuriera."}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

@@ -16,6 +16,7 @@ import {
   PlusCircle,
   MoreHorizontal,
   Mail,
+  Package,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
@@ -34,6 +35,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -43,9 +45,10 @@ import {
 import { format } from "date-fns";
 import { SendEmailDialog } from "@/components/shared/send-email-dialog";
 import type { ServiceIntegration } from "@/types/service-integration";
-import { useAuthGuard } from "@/hooks/use-auth-guard";
+import { useAuthGuard } from "@/hooks/use-auth-guard"; // Importujemy nasz hook
 import type { OrderDetailsApiResponse } from "@/types/order";
 
+// Typy dla danych w tabeli
 interface LineItem {
   id: string;
   offer: { name: string };
@@ -54,18 +57,17 @@ interface LineItem {
 
 interface Order {
   id: string;
-  externalOrderId: string;
+  external_order_id: string;
   status: string;
-  buyerLogin: string | null;
-  buyerFirstName: string | null;
-  buyerLastName: string | null;
-  purchasedAt: string;
-  serviceIntegration: ServiceIntegration | null;
-  totalToPay: number;
-  paymentType: "CASH_ON_DELIVERY" | "ONLINE" | null;
-  paymentStatus: "PENDING" | "COMPLETED" | "FAILED" | null;
-  trackingNumbers: string[] | null;
-  lineItems: LineItem[];
+  buyer_login: string | null;
+  buyer_first_name: string | null;
+  buyer_last_name: string | null;
+  purchased_at: string;
+  service_integration: ServiceIntegration | null;
+  total_to_pay: number;
+  payment_type: "CASH_ON_DELIVERY" | "ONLINE" | null;
+  tracking_numbers: string[] | null;
+  line_items: LineItem[];
 }
 interface PaginatedOrdersResponse {
   total: number;
@@ -84,10 +86,12 @@ export default function OrdersPage() {
   const [isManualOrderOpen, setManualOrderOpen] = useState(false);
   const [integrations, setIntegrations] = useState<ServiceIntegration[]>([]);
 
+  // Stany dla modala wysyłki e-mail
   const [isSendEmailOpen, setSendEmailOpen] = useState(false);
   const [activeOrder, setActiveOrder] =
     useState<OrderDetailsApiResponse | null>(null);
 
+  // Stany dla DataTable
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
@@ -100,8 +104,19 @@ export default function OrdersPage() {
   });
   const debouncedSearch = useDebounce(filters.search, 500);
 
+  const customMessageTemplate = {
+    id: "custom",
+    title: "",
+    content: "",
+    scope: "organization" as const,
+    tags: [],
+    parent_template: null,
+    variants: [],
+  };
+
   const openSendEmailDialog = async (orderId: string) => {
     try {
+      // Pobieramy pełne szczegóły zamówienia, ponieważ modal ich potrzebuje (do `details_payload`)
       const response = await api.get<OrderDetailsApiResponse>(
         `/orders/${orderId}`
       );
@@ -115,55 +130,87 @@ export default function OrdersPage() {
   const columns = useMemo<ColumnDef<Order>[]>(
     () => [
       {
-        accessorKey: "lineItems",
-        header: "Zamówienie",
+        id: "product_image",
+        header: "Produkt",
         cell: ({ row }) => {
-          const order = row.original;
-          const firstItem = order.lineItems?.[0];
-          const buyerName = `${order.buyerFirstName || ""} ${
-            order.buyerLastName || ""
-          }`.trim();
+          const firstItem = row.original.line_items?.[0];
+          // Próbujemy pobrać obrazek z metadanych lub używamy placeholderu
           return (
-            <div>
-              <p
-                className="font-medium truncate max-w-[250px]"
-                title={firstItem?.offer.name}
-              >
-                {firstItem?.offer.name || "Zamówienie ręczne"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {order.buyerLogin || "Brak loginu"}
-              </p>
-              {buyerName && (
-                <p className="text-xs text-muted-foreground">{buyerName}</p>
+            <div className="relative h-12 w-12 rounded-xl border border-border/10 overflow-hidden bg-muted group-hover/row:scale-105 transition-transform">
+              {firstItem?.imageUrl ? (
+                <img 
+                  src={firstItem.imageUrl} 
+                  alt={firstItem.offer?.name || "Produkt"} 
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40">
+                  <Package className="h-6 w-6" />
+                </div>
               )}
             </div>
           );
         },
       },
       {
-        accessorKey: "purchasedAt",
+        accessorKey: "line_items",
+        header: "Szczegóły Zamówienia",
+        cell: ({ row }) => {
+          const order = row.original;
+          const firstItem = order.line_items?.[0];
+          const buyerName = `${order.buyer_first_name || ""} ${
+            order.buyer_last_name || ""
+          }`.trim();
+          return (
+            <div className="space-y-1">
+              <p
+                className="font-bold text-sm truncate max-w-[250px] premium-gradient-text"
+                title={firstItem?.offer.name}
+              >
+                {firstItem?.offer.name || "Zamówienie ręczne"}
+              </p>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-medium bg-primary/5 text-primary border-primary/10">
+                  {order.external_order_id.split("-").pop()}
+                </Badge>
+                <p className="text-xs text-muted-foreground font-medium">
+                  {order.buyer_login || "Brak loginu"}
+                </p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "purchased_at",
         header: "Data",
         cell: ({ row }) => (
-          <div className="text-sm text-muted-foreground">
-            {new Date(row.getValue("purchasedAt")).toLocaleString("pl-PL", {
-              dateStyle: "short",
-              timeStyle: "short",
-            })}
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">
+              {format(new Date(row.original.purchased_at), "dd.MM.yyyy")}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {format(new Date(row.original.purchased_at), "HH:mm")}
+            </span>
           </div>
         ),
       },
       {
-        accessorKey: "serviceIntegration.name",
-        header: "Konto / Źródło",
+        accessorKey: "service_integration.name",
+        header: "Źródło",
         cell: ({ row }) => {
-          const integration = row.original.serviceIntegration;
+          const integration = row.original.service_integration;
           return (
-            <div>
-              <p>{integration?.name || "Ręczne"}</p>
-              <p className="text-xs text-muted-foreground">
-                {integration?.external_user_id}
-              </p>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Badge variant="outline" className="p-0 border-none text-primary font-bold">{integration?.name?.[0] || "R"}</Badge>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold truncate">{integration?.name || "Ręczne"}</p>
+                <p className="text-[10px] text-muted-foreground truncate italic">
+                  {integration?.external_user_id}
+                </p>
+              </div>
             </div>
           );
         },
@@ -171,65 +218,63 @@ export default function OrdersPage() {
       {
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => (
-          <Badge variant="outline">{row.getValue("status")}</Badge>
-        ),
+        cell: ({ row }) => {
+          const status = row.getValue("status") as string;
+          const isCompleted = ["PICKED_LISTED", "SENT"].includes(status);
+          return (
+            <Badge 
+              variant={isCompleted ? "default" : "outline"}
+              className={cn(
+                "rounded-lg font-bold text-[10px] uppercase tracking-tighter h-6 px-2",
+                isCompleted ? "bg-emerald-500 hover:bg-emerald-600 border-none" : "border-primary/20 text-primary bg-primary/5"
+              )}
+            >
+              {status}
+            </Badge>
+          );
+        },
       },
       {
         id: "indicators",
-        header: () => <div className="text-right">Info</div>,
+        header: () => <div className="text-right">Wpłata / Wysyłka</div>,
         cell: ({ row }) => {
           const order = row.original;
+          const isPaid = order.payment_type === "ONLINE";
+          const isCashOnDelivery = order.payment_type === "CASH_ON_DELIVERY";
           const hasTracking =
-            order.trackingNumbers && order.trackingNumbers.length > 0;
-
-          // === POPRAWIONA I BARDZIEJ CZYTELNA LOGIKA ===
-          const isPaid = order.paymentStatus === "COMPLETED";
-          const isCashOnDelivery = order.paymentType === "CASH_ON_DELIVERY";
-          const isPaymentPending =
-            order.paymentStatus === "PENDING" && !isCashOnDelivery;
-          // Dodajemy jawny warunek dla stanu "nieopłacone"
-          const isUnpaid = !isPaid && !isCashOnDelivery && !isPaymentPending;
-
+            order.tracking_numbers && order.tracking_numbers.length > 0;
           return (
             <TooltipProvider>
-              <div className="flex justify-end items-center gap-2">
+              <div className="flex justify-end items-center gap-3">
                 <Tooltip>
-                  <TooltipTrigger>
-                    <DollarSign
-                      className={cn(
-                        "h-5 w-5",
-                        isPaid && "text-green-500",
-                        isCashOnDelivery && "text-yellow-500",
-                        isPaymentPending && "text-red-500",
-                        isUnpaid && "text-red-500" // Czerwony dla nieopłaconych
-                      )}
-                    />
+                  <TooltipTrigger asChild>
+                    <div className={cn(
+                      "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+                      isPaid ? "bg-emerald-500/10 text-emerald-500" : isCashOnDelivery ? "bg-yellow-500/10 text-yellow-500" : "bg-muted text-muted-foreground"
+                    )}>
+                      <DollarSign className="h-4 w-4" />
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {order.totalToPay ? `${order.totalToPay} PLN` : ""}
-                    {isPaid
-                      ? ` (Opłacone)`
-                      : isCashOnDelivery
-                      ? " (Pobranie)"
-                      : isPaymentPending
-                      ? " (Płatność rozpoczęta)"
-                      : " (Nieopłacone)"}
+                    <div className="font-bold">{order.total_to_pay} PLN</div>
+                    <p className="text-xs opacity-80">
+                      {isPaid ? "Opłacone online" : isCashOnDelivery ? "Pobranie" : "Nieopłacone"}
+                    </p>
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                  <TooltipTrigger>
-                    <Truck
-                      className={cn(
-                        "h-5 w-5",
-                        hasTracking ? "text-green-500" : "text-muted-foreground"
-                      )}
-                    />
+                  <TooltipTrigger asChild>
+                    <div className={cn(
+                      "h-8 w-8 rounded-full flex items-center justify-center transition-all",
+                      hasTracking ? "bg-blue-500/10 text-blue-500" : "bg-muted text-muted-foreground"
+                    )}>
+                      <Truck className="h-4 w-4" />
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
                     {hasTracking
-                      ? order.trackingNumbers?.join(", ")
-                      : "Brak numeru przesyłki"}
+                      ? order.tracking_numbers?.join(", ")
+                      : "Brak numeru nadania"}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -321,7 +366,6 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination, sorting, debouncedSearch, filters]);
 
   const toolbar = useMemo(
@@ -339,12 +383,14 @@ export default function OrdersPage() {
   );
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 max-w-7xl mx-auto w-full pb-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Zamówienia</h1>
-          <p className="text-muted-foreground">
-            Przeglądaj i zarządzaj swoimi zamówieniami ze wszystkich kanałów.
+          <h1 className="text-4xl font-extrabold tracking-tight premium-gradient-text">
+            Zamówienia
+          </h1>
+          <p className="text-muted-foreground mt-2 text-lg">
+            Inteligentne zarządzanie sprzedażą wielokanałową.
           </p>
         </div>
       </div>
@@ -378,6 +424,7 @@ export default function OrdersPage() {
           isOpen={isSendEmailOpen}
           setIsOpen={setSendEmailOpen}
           order={activeOrder}
+          // === ZMIANA: Nie przekazujemy `templateToEdit`, więc modal wie, że ma pokazać listę ===
         />
       )}
     </div>

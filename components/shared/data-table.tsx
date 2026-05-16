@@ -15,7 +15,9 @@ import {
   ColumnFiltersState,
   RowSelectionState,
 } from "@tanstack/react-table";
-import { Loader2 } from "lucide-react"; // DODAJ IMPORT
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 import {
   Table,
@@ -95,9 +97,9 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {toolbar}
-      <div className="rounded-md border">
+      <div className="rounded-xl border border-border/30 bg-card overflow-hidden shadow-sm">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -105,6 +107,7 @@ export function DataTable<TData, TValue>({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
+                    className="bg-primary/5 text-primary font-bold uppercase tracking-wider text-[10px] py-4"
                     style={{
                       width:
                         header.getSize() !== 150 ? header.getSize() : undefined,
@@ -137,23 +140,27 @@ export function DataTable<TData, TValue>({
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
+                <motion.tr
                   key={row.id}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: row.index * 0.03 }}
                   data-state={row.getIsSelected() && "selected"}
                   onClick={() => onRowClick && onRowClick(row)}
-                  className={
-                    onRowClick ? "cursor-pointer hover:bg-muted/50" : ""
-                  }
+                  className={cn(
+                    "group/row transition-colors duration-200 border-b border-border/15 hover:bg-muted/30",
+                    onRowClick ? "cursor-pointer" : ""
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-4">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
                       )}
                     </TableCell>
                   ))}
-                </TableRow>
+                </motion.tr>
               ))
             ) : (
               <TableRow>

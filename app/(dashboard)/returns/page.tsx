@@ -15,14 +15,14 @@ import { Button } from "@/components/ui/button";
 // Definicje typów
 interface ReturnOrderInfo {
   id: string;
-  externalOrderId: string;
+  external_order_id: string;
 }
 interface Return {
   id: string;
   external_return_id: string | null;
   reference_number: string | null;
   status: string;
-  buyerLogin: string | null;
+  buyer_login: string | null;
   created_at_external: string;
   order: ReturnOrderInfo | null;
 }
@@ -54,19 +54,19 @@ export default function ReturnsPage() {
               {row.original.external_return_id || row.original.reference_number}
             </p>
             <p className="text-xs text-muted-foreground">
-              {row.original.buyerLogin || "Brak danych kupującego"}
+              {row.original.buyer_login || "Brak danych kupującego"}
             </p>
           </div>
         ),
       },
       {
-        accessorKey: "order.externalOrderId",
+        accessorKey: "order.external_order_id",
         header: "Powiązane Zamówienie",
         cell: ({ row }) =>
           row.original.order ? (
             <Button variant="link" className="p-0 h-auto" asChild>
               <Link href={`/orders/${row.original.order.id}`}>
-                {row.original.order.externalOrderId}
+                {row.original.order.external_order_id}
               </Link>
             </Button>
           ) : (

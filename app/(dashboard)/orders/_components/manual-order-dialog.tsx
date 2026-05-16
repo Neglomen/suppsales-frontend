@@ -38,7 +38,7 @@ interface ManualOrderDialogProps {
   onSuccess: () => void;
 }
 
-const AddressFields = ({ prefix }: { prefix: "deliveryAddress" }) => (
+const AddressFields = ({ prefix }: { prefix: "delivery_address" }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     <FormField
       name={`${prefix}.first_name`}
@@ -115,7 +115,7 @@ const AddressFields = ({ prefix }: { prefix: "deliveryAddress" }) => (
   </div>
 );
 
-const PickupPointFields = ({ prefix }: { prefix: "pickupPoint" }) => (
+const PickupPointFields = ({ prefix }: { prefix: "pickup_point" }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     <FormField
       name={`${prefix}.point_id`}
@@ -192,7 +192,7 @@ const PickupPointFields = ({ prefix }: { prefix: "pickupPoint" }) => (
   </div>
 );
 
-const InvoiceFields = ({ prefix }: { prefix: "invoiceAddress" }) => (
+const InvoiceFields = ({ prefix }: { prefix: "invoice_address" }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     <FormField
       name={`${prefix}.company_name`}
@@ -290,11 +290,11 @@ export function ManualOrderDialog({
     resolver: zodResolver(ManualOrderSchema),
     defaultValues: {
       reference_number: "",
-      buyerLogin: "",
-      buyerEmail: "",
-      lineItems: [{ name: "", quantity: 1, price: 0.01 }],
+      buyer_login: "",
+      buyer_email: "",
+      line_items: [{ name: "", quantity: 1, price: 0.01 }],
       deliveryType: "address",
-      deliveryAddress: {
+      delivery_address: {
         first_name: "",
         last_name: "",
         street: "",
@@ -303,24 +303,24 @@ export function ManualOrderDialog({
         phone_number: "",
         country: "Polska",
       },
-      has_invoiceAddress: false,
+      has_invoice_address: false,
       note: "",
     },
   });
 
   const { fields, append, remove } = useFieldArray({
     control: methods.control,
-    name: "lineItems",
+    name: "line_items",
   });
   const watchDeliveryType = methods.watch("deliveryType");
-  const watchHasInvoice = methods.watch("has_invoiceAddress");
+  const watchHasInvoice = methods.watch("has_invoice_address");
 
   // Efekty do zarządzania stanem warunkowych pól formularza
   useEffect(() => {
     if (watchDeliveryType === "address") {
-      methods.setValue("pickupPoint", undefined);
-      if (!methods.getValues("deliveryAddress")) {
-        methods.setValue("deliveryAddress", {
+      methods.setValue("pickup_point", undefined);
+      if (!methods.getValues("delivery_address")) {
+        methods.setValue("delivery_address", {
           first_name: "",
           last_name: "",
           street: "",
@@ -330,10 +330,10 @@ export function ManualOrderDialog({
           country: "Polska",
         });
       }
-    } else if (watchDeliveryType === "pickupPoint") {
-      methods.setValue("deliveryAddress", undefined);
-      if (!methods.getValues("pickupPoint")) {
-        methods.setValue("pickupPoint", {
+    } else if (watchDeliveryType === "pickup_point") {
+      methods.setValue("delivery_address", undefined);
+      if (!methods.getValues("pickup_point")) {
+        methods.setValue("pickup_point", {
           point_id: "",
           name: "",
           street: "",
@@ -347,10 +347,10 @@ export function ManualOrderDialog({
 
   useEffect(() => {
     if (!watchHasInvoice) {
-      methods.setValue("invoiceAddress", undefined);
+      methods.setValue("invoice_address", undefined);
     } else {
-      if (!methods.getValues("invoiceAddress")) {
-        methods.setValue("invoiceAddress", {
+      if (!methods.getValues("invoice_address")) {
+        methods.setValue("invoice_address", {
           company_name: "",
           first_name: "",
           last_name: "",
@@ -367,12 +367,12 @@ export function ManualOrderDialog({
   const onSubmit = async (values: ManualOrderSchemaType) => {
     const payload = { ...values };
     if (values.deliveryType === "address") {
-      payload.pickupPoint = undefined;
+      payload.pickup_point = undefined;
     } else {
-      payload.deliveryAddress = undefined;
+      payload.delivery_address = undefined;
     }
-    if (!values.has_invoiceAddress) {
-      payload.invoiceAddress = undefined;
+    if (!values.has_invoice_address) {
+      payload.invoice_address = undefined;
     }
     // @ts-ignore
     delete payload.deliveryType;
@@ -408,7 +408,7 @@ export function ManualOrderDialog({
               <h3 className="text-lg font-semibold">Dane Kupującego</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <FormField
-                  name="buyerEmail"
+                  name="buyer_email"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email *</FormLabel>
@@ -420,7 +420,7 @@ export function ManualOrderDialog({
                   )}
                 />
                 <FormField
-                  name="buyerLogin"
+                  name="buyer_login"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Login (opcjonalnie)</FormLabel>
@@ -454,7 +454,7 @@ export function ManualOrderDialog({
                       </FormItem>
                       <FormItem className="flex items-center space-x-2">
                         <FormControl>
-                          <RadioGroupItem value="pickupPoint" />
+                          <RadioGroupItem value="pickup_point" />
                         </FormControl>
                         <FormLabel className="font-normal">
                           Punkt odbioru
@@ -468,15 +468,15 @@ export function ManualOrderDialog({
             />
 
             {watchDeliveryType === "address" && (
-              <AddressFields prefix="deliveryAddress" />
+              <AddressFields prefix="delivery_address" />
             )}
-            {watchDeliveryType === "pickupPoint" && (
-              <PickupPointFields prefix="pickupPoint" />
+            {watchDeliveryType === "pickup_point" && (
+              <PickupPointFields prefix="pickup_point" />
             )}
 
             <Separator />
             <FormField
-              name="has_invoiceAddress"
+              name="has_invoice_address"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center space-x-3 space-y-0 pt-2">
                   <FormControl>
@@ -492,7 +492,7 @@ export function ManualOrderDialog({
             {watchHasInvoice && (
               <>
                 <h3 className="text-lg font-semibold pt-4">Dane do Faktury</h3>
-                <InvoiceFields prefix="invoiceAddress" />
+                <InvoiceFields prefix="invoice_address" />
               </>
             )}
             <Separator />
@@ -516,7 +516,7 @@ export function ManualOrderDialog({
             {fields.map((field, index) => (
               <div key={field.id} className="flex items-end gap-2">
                 <FormField
-                  name={`lineItems.${index}.name`}
+                  name={`line_items.${index}.name`}
                   render={({ field }) => (
                     <FormItem className="flex-1">
                       <FormLabel>Nazwa</FormLabel>
@@ -528,7 +528,7 @@ export function ManualOrderDialog({
                   )}
                 />
                 <FormField
-                  name={`lineItems.${index}.quantity`}
+                  name={`line_items.${index}.quantity`}
                   render={({ field }) => (
                     <FormItem className="w-24">
                       <FormLabel>Ilość</FormLabel>
@@ -546,7 +546,7 @@ export function ManualOrderDialog({
                   )}
                 />
                 <FormField
-                  name={`lineItems.${index}.price`}
+                  name={`line_items.${index}.price`}
                   render={({ field }) => (
                     <FormItem className="w-24">
                       <FormLabel>Cena (szt.)</FormLabel>

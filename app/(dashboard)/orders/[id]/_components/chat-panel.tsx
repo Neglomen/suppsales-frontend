@@ -77,7 +77,7 @@ export function ChatPanel({
       setError(null);
       try {
         const response = await api.get<Thread[]>("/threads/by-buyer-login", {
-          params: { buyerLogin: buyerLogin, integration_id: integrationId },
+          params: { buyer_login: buyerLogin, integration_id: integrationId },
         });
         setThreads(response.data);
       } catch (err) {

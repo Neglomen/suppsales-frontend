@@ -42,3 +42,14 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+export function getErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.detail || error.response?.data?.message || error.message;
+  }
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error)
+    return String((error as any).message);
+  return "Wystąpił nieznany błąd";
+}

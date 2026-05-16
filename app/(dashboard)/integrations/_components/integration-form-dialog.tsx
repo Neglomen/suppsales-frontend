@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useForm, FormProvider, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import api from "@/lib/api";
+import api, { getErrorMessage } from "@/lib/api";
 import toast from "react-hot-toast";
 import {
   ServiceIntegrationFormValues,
@@ -19,25 +19,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import {
   AllegroIcon,
   BaseLinkerIcon,
   SuusIcon,
   ABIcon,
+  SubiektIcon,
+  EmpikIcon,
 } from "@/components/shared/icons";
+import { KsefIcon } from "@/components/shared/ksef-icon";
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
+
+import { AllegroFormFields } from "./providers/AllegroFormFields";
+import { BaselinkerFormFields } from "./providers/BaselinkerFormFields";
+import { ABFormFields } from "./providers/ABFormFields";
+import { SuusFormFields } from "./providers/SuusFormFields";
+import { SubiektFormFields } from "./providers/SubiektFormFields";
+import { KsefFormFields } from "./providers/KsefFormFields";
+import { ApaczkaFormFields } from "./providers/ApaczkaFormFields";
+import { EmpikFormFields } from "./providers/EmpikFormFields";
+import { Package } from "lucide-react";
 
 interface IntegrationFormDialogProps {
   isOpen: boolean;
@@ -45,7 +54,44 @@ interface IntegrationFormDialogProps {
   onSuccess: (newIntegration: ServiceIntegration) => void;
 }
 
-type ProviderType = "ALLEGRO" | "BASELINKER" | "SUUS" | "AB";
+type ProviderType = "ALLEGRO" | "BASELINKER" | "SUUS" | "AB" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "EMPIK";
+
+const ProviderTile = ({
+  onClick,
+  icon,
+  title,
+  description,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) => (
+  <div
+    onClick={onClick}
+    className="flex items-center gap-4 rounded-lg border bg-card p-4 hover:border-primary/50 hover:bg-card/40 cursor-pointer transition-all shadow-sm"
+  >
+    {icon}
+    <div>
+      <p className="font-semibold">{title}</p>
+      <p className="text-sm text-muted-foreground">{description}</p>
+    </div>
+  </div>
+);
+
+const SyncSwitch = ({ name, label }: { name: any; label: string }) => (
+  <FormField
+    name={name}
+    render={({ field }) => (
+      <FormItem className="flex flex-row items-center justify-between rounded-lg border bg-card/20 p-3 shadow-sm">
+        <FormLabel className="text-sm">{label}</FormLabel>
+        <FormControl>
+          <Switch checked={field.value} onCheckedChange={field.onChange} />
+        </FormControl>
+      </FormItem>
+    )}
+  />
+);
 
 const Step1SelectType = ({
   onSelect,
@@ -57,244 +103,114 @@ const Step1SelectType = ({
       Wybierz serwis, który chcesz zintegrować.
     </p>
 
-    <p className="font-semibold text-sm pt-2">Marketplace</p>
-    <div
+    <h4 className="font-semibold text-sm pt-2 text-muted-foreground">
+      Marketplace
+    </h4>
+    <ProviderTile
       onClick={() => onSelect("ALLEGRO")}
-      className="flex items-center gap-4 rounded-lg border p-4 hover:bg-accent cursor-pointer transition-colors"
-    >
-      <AllegroIcon className="h-10 w-10" />
-      <div>
-        <p className="font-semibold">Allegro</p>
-        <p className="text-sm text-muted-foreground">
-          Synchronizuj zamówienia, wiadomości i zwroty.
-        </p>
-      </div>
-    </div>
-    <div
+      icon={<AllegroIcon className="w-24 h-auto" />}
+      title="Allegro"
+      description="Zamówienia, wiadomości, zwroty."
+    />
+    <ProviderTile
       onClick={() => onSelect("BASELINKER")}
-      className="flex items-center gap-4 rounded-lg border p-4 hover:bg-accent cursor-pointer transition-colors"
-    >
-      <BaseLinkerIcon className="h-10 w-10 rounded" />
-      <div>
-        <p className="font-semibold">BaseLinker</p>
-        <p className="text-sm text-muted-foreground">
-          Synchronizuj zamówienia ze swojego konta BaseLinker.
-        </p>
-      </div>
-    </div>
+      icon={<BaseLinkerIcon className="w-24 h-auto" />}
+      title="BaseLinker"
+      description="Synchronizuj zamówienia."
+    />
+    <ProviderTile
+      onClick={() => onSelect("EMPIK")}
+      icon={<EmpikIcon className="w-20 h-auto" />}
+      title="Empik"
+      description="Obsługa zamówień z Empik Place."
+    />
 
-    <p className="font-semibold text-sm pt-4">Kurierzy</p>
-    <div
-      onClick={() => onSelect("SUUS")}
-      className="flex items-center gap-4 rounded-lg border p-4 hover:bg-accent cursor-pointer transition-colors"
-    >
-      <SuusIcon className="h-auto w-20" />
-      <div>
-        <p className="font-semibold">RÖHLIG SUUS</p>
-        <p className="text-sm text-muted-foreground">
-          Nadawaj przesyłki i generuj etykiety.
-        </p>
-      </div>
-    </div>
-
-    <p className="font-semibold text-sm pt-4">Hurtownie</p>
-    <div
+    <h4 className="font-semibold text-sm pt-4 text-muted-foreground">
+      Hurtownie
+    </h4>
+    <ProviderTile
       onClick={() => onSelect("AB")}
-      className="flex items-center gap-4 rounded-lg border p-4 hover:bg-accent cursor-pointer transition-colors"
-    >
-      <ABIcon className="h-10 w-auto" />
-      <div>
-        <p className="font-semibold">AB S.A.</p>
-        <p className="text-sm text-muted-foreground">
-          Dodawaj adresy wysyłkowe, pobieraj faktury.
-        </p>
-      </div>
-    </div>
+      icon={<ABIcon className="h-6 w-auto" />}
+      title="AB S.A."
+      description="Zlecenia, faktury, adresy."
+    />
+
+    <h4 className="font-semibold text-sm pt-4 text-muted-foreground">
+      Systemy ERP
+    </h4>
+    <ProviderTile
+      onClick={() => onSelect("SUBIEKT_GT")}
+      icon={<SubiektIcon className="w-20 h-auto" />}
+      title="Subiekt GT"
+      description="Synchronizuj statusy faktur."
+    />
+
+    <h4 className="font-semibold text-sm pt-4 text-muted-foreground">
+      Kurierzy
+    </h4>
+    <ProviderTile
+      onClick={() => onSelect("SUUS")}
+      icon={<SuusIcon className="w-30 h-auto" />}
+      title="RÖHLIG SUUS"
+      description="Nadawaj przesyłki, etykiety."
+    />
+    <ProviderTile
+      onClick={() => onSelect("APACZKA")}
+      icon={<Package className="h-10 w-10 text-primary" />}
+      title="Apaczka"
+      description="Tanie przesyłki kurierskie (DPD, UPS, itp.)."
+    />
+
+    <h4 className="font-semibold text-sm pt-4 text-muted-foreground">
+      Administracja
+    </h4>
+    <ProviderTile
+      onClick={() => onSelect("KSEF")}
+      icon={<KsefIcon className="w-20 h-auto" />}
+      title="KSeF"
+      description="Pobieraj faktury zakupowe."
+    />
   </div>
 );
 
+// Ten komponent pozostaje pusty, bo cała logika jest w dedykowanych plikach
 const Step2EnterDetails = ({
   providerType,
 }: {
   providerType: ProviderType;
-}) => (
-  <div className="space-y-4">
-    <FormField
-      name="name"
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>Nazwa własna</FormLabel>
-          <FormControl>
-            <Input
-              placeholder={
-                providerType === "ALLEGRO"
-                  ? "Moje konto Allegro"
-                  : providerType === "BASELINKER"
-                  ? "Magazyn główny BaseLinker"
-                  : "SUUS"
-              }
-              {...field}
-            />
-          </FormControl>
-          <FormDescription>
-            Nazwa, która pomoże Ci zidentyfikować tę integrację.
-          </FormDescription>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-    {providerType === "BASELINKER" && (
-      <FormField
-        name="api_token"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Token API</FormLabel>
-            <FormControl>
-              <Input
-                type="password"
-                placeholder="••••••••••••••••••••"
-                {...field}
+}) => {
+  return (
+    <div className="space-y-4">
+      {/* Dynamiczne renderowanie odpowiedniego zestawu pól, KTÓRY ZAWIERA JUŻ POLE 'NAME' */}
+      {providerType === "ALLEGRO" && <AllegroFormFields />}
+      {providerType === "BASELINKER" && <BaselinkerFormFields />}
+      {providerType === "SUUS" && <SuusFormFields />}
+      {providerType === "APACZKA" && <ApaczkaFormFields />}
+      {providerType === "AB" && <ABFormFields />}
+      {providerType === "SUBIEKT_GT" && <SubiektFormFields />}
+      {providerType === "KSEF" && <KsefFormFields />}
+      {providerType === "EMPIK" && <EmpikFormFields />}
+
+      {["ALLEGRO", "BASELINKER", "EMPIK"].includes(providerType) && (
+        <div className="space-y-3 pt-2">
+          <h4 className="text-sm font-medium text-muted-foreground">
+            Opcje synchronizacji
+          </h4>
+          <SyncSwitch name="sync_orders" label="Synchronizuj zamówienia" />
+          {providerType === "ALLEGRO" && (
+            <>
+              <SyncSwitch
+                name="sync_messages"
+                label="Synchronizuj wiadomości"
               />
-            </FormControl>
-            <FormDescription>
-              Znajdziesz go w panelu BaseLinker &rarr; Moje konto &rarr; API.
-            </FormDescription>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-    )}
-    {providerType === "SUUS" && (
-      <>
-        <FormField
-          name="suus_login"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Login SUUS</FormLabel>
-              <FormControl>
-                <Input placeholder="Twój login do WebAPI" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+              <SyncSwitch name="sync_returns" label="Synchronizuj zwroty" />
+            </>
           )}
-        />
-        <FormField
-          name="suus_password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Hasło SUUS</FormLabel>
-              <FormControl>
-                <Input
-                  type="password"
-                  placeholder="••••••••••••••••••••"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </>
-    )}
-
-    {providerType === "AB" && (
-      <>
-        <FormField
-          name="ab_client_code"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Kod klienta AB</FormLabel>
-              <FormControl>
-                <Input placeholder="Twój kod klienta" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          name="ab_login"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Login do systemu AB</FormLabel>
-              <FormControl>
-                <Input placeholder="Login do dealer.ab.pl" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          name="ab_password"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Hasło do systemu AB</FormLabel>
-              <FormControl>
-                <Input
-                  type="password"
-                  placeholder="••••••••••••••••••••"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </>
-    )}
-
-    {providerType !== "SUUS" && providerType !== "AB" && (
-      <>
-        <p className="text-sm font-medium pt-2">Opcje synchronizacji</p>
-        <FormField
-          name="sync_orders"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-              <FormLabel>Synchronizuj zamówienia</FormLabel>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-        {providerType === "ALLEGRO" && (
-          <>
-            <FormField
-              name="sync_messages"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <FormLabel>Synchronizuj wiadomości</FormLabel>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              name="sync_returns"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                  <FormLabel>Synchronizuj zwroty</FormLabel>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </>
-        )}
-      </>
-    )}
-  </div>
-);
+        </div>
+      )}
+    </div>
+  );
+};
 
 export function IntegrationFormDialog({
   isOpen,
@@ -307,9 +223,24 @@ export function IntegrationFormDialog({
   const methods = useForm<ServiceIntegrationFormValues>({
     resolver: zodResolver(serviceIntegrationFormSchema),
     defaultValues: {
+      name: "",
       sync_orders: false,
       sync_messages: false,
       sync_returns: false,
+      api_token: "",
+      suus_login: "",
+      suus_password: "",
+      ab_client_code: "",
+      ab_login: "",
+      ab_password: "",
+      subiekt_agent_url: "",
+      subiekt_api_key: "",
+      nip: "",
+      ksef_token: "",
+      apaczka_app_id: "",
+      apaczka_app_secret: "",
+      empik_token: "",
+      // environment: undefined, // Select może być undefined
     },
   });
 
@@ -320,56 +251,41 @@ export function IntegrationFormDialog({
 
   const handleSelectType = (type: ProviderType) => {
     setProviderType(type);
-    if (type === "ALLEGRO") {
-      methods.reset({
-        provider_type: "ALLEGRO",
-        name: "",
-        sync_orders: true,
-        sync_messages: true,
-        sync_returns: true,
-      });
-    } else if (type === "BASELINKER") {
-      methods.reset({
-        provider_type: "BASELINKER",
-        name: "",
-        sync_orders: true,
-        api_token: "",
-      });
-    } else if (type === "SUUS") {
-      // Dla SUUS nie resetujemy opcji synchronizacji, bo są ukryte
-      methods.reset({
-        provider_type: "SUUS",
-        name: "SUUS",
-        suus_login: "",
-        suus_password: "",
-      });
-    } else if (type === "AB") {
-      // ### DODAJ NOWY WARUNEK ###
-      methods.reset({
-        provider_type: "AB",
-        name: "Hurtownia AB",
-        ab_client_code: "",
-        ab_login: "",
-        ab_password: "",
-      });
+    let defaultName = "";
+    switch (type) {
+      case "ALLEGRO":
+        defaultName = "Moje konto Allegro";
+        break;
+      case "BASELINKER":
+        defaultName = "Magazyn BaseLinker";
+        break;
+      case "EMPIK":
+        defaultName = "Konto Empik";
+        break;
+      case "SUUS":
+        defaultName = "SUUS";
+        break;
+      case "AB":
+        defaultName = "Hurtownia AB";
+        break;
+      case "APACZKA":
+        defaultName = "Apaczka.pl";
+        break;
+      case "SUBIEKT_GT":
+        defaultName = "Subiekt GT";
+        break;
+      case "KSEF":
+        defaultName = "KSeF";
+        break;
     }
+    methods.reset({ provider_type: type, name: defaultName });
     setStep(2);
   };
+
   const handleDialogChange = (open: boolean) => {
     if (!open) {
       setTimeout(() => {
-        methods.reset({
-          name: "",
-          api_token: "",
-          suus_login: "",
-          suus_password: "",
-          ab_client_code: "", // <-- DODAJ
-          ab_login: "", // <-- DODAJ
-          ab_password: "",
-          sync_orders: false,
-          sync_messages: false,
-          sync_returns: false,
-        });
+        methods.reset();
         setStep(1);
         setProviderType(null);
       }, 300);
@@ -395,9 +311,6 @@ export function IntegrationFormDialog({
   const onSubmit: SubmitHandler<ServiceIntegrationFormValues> = async (
     values
   ) => {
-    // ### START OSTATECZNEJ POPRAWKI ###
-
-    // 1. Destrukturyzujemy WSZYSTKIE potencjalne pola z formularza
     const {
       api_token,
       suus_login,
@@ -405,37 +318,53 @@ export function IntegrationFormDialog({
       ab_client_code,
       ab_login,
       ab_password,
-      ...integrationData // reszta pól (name, provider_type, sync_*)
+      subiekt_agent_url,
+      subiekt_api_key,
+      ksef_token,
+      apaczka_app_id,
+      apaczka_app_secret,
+      nip,
+      environment,
+      empik_token,
+      ...integrationData
     } = values;
 
-    // 2. Ustalamy kategorię
     const category =
-      values.provider_type === "SUUS"
+      values.provider_type === "SUUS" || values.provider_type === "APACZKA"
         ? "COURIER"
         : values.provider_type === "AB"
         ? "WHOLESALE"
+        : values.provider_type === "SUBIEKT_GT"
+        ? "ERP"
+        : values.provider_type === "KSEF"
+        ? "GOVERNMENT"
         : "MARKETPLACE";
 
-    // 3. Budujemy obiekt `api_config` w zależności od typu integracji
     let api_config;
-    if (values.provider_type === "BASELINKER") {
+    let sync_config;
+
+    if (values.provider_type === "BASELINKER")
       api_config = { api_token: api_token };
-    } else if (values.provider_type === "SUUS") {
+    else if (values.provider_type === "EMPIK")
+      api_config = { api_token: empik_token };
+    else if (values.provider_type === "SUUS")
       api_config = { login: suus_login, password: suus_password };
-    } else if (values.provider_type === "AB") {
+    else if (values.provider_type === "AB")
       api_config = {
         client_code: ab_client_code,
         login: ab_login,
         password: ab_password,
       };
+    else if (values.provider_type === "SUBIEKT_GT")
+      api_config = { agent_url: subiekt_agent_url, api_key: subiekt_api_key };
+    else if (values.provider_type === "APACZKA")
+      api_config = { app_id: apaczka_app_id, app_secret: apaczka_app_secret };
+    else if (values.provider_type === "KSEF") {
+      api_config = { token: ksef_token }; // Encrypted
+      sync_config = { nip: nip, environment: environment }; // Public
     }
 
-    // 4. Składamy finalny payload, który jest w 100% zgodny z oczekiwaniami backendu
-    const payload = {
-      ...integrationData,
-      category,
-      api_config: api_config, // `api_config` będzie `undefined` dla Allegro, co jest OK
-    };
+    const payload = { ...integrationData, category, api_config, sync_config };
 
     try {
       const response = await api.post<ServiceIntegration>(
@@ -443,7 +372,6 @@ export function IntegrationFormDialog({
         payload
       );
       toast.success("Integracja dodana pomyślnie!");
-
       onSuccess(response.data);
       handleDialogChange(false);
 
@@ -451,27 +379,10 @@ export function IntegrationFormDialog({
         handleAllegroConnect(response.data.id);
       }
     } catch (err: any) {
-      // Ta obsługa błędów jest już poprawna i teraz powinna
-      // wyświetlić czytelny komunikat z błędu 422, jeśli taki wystąpi.
-      let errorMessage = "Wystąpił nieoczekiwany błąd.";
-      if (err.response?.data?.detail) {
-        // Sprawdzamy, czy 'detail' to string, czy obiekt błędu walidacji
-        if (typeof err.response.data.detail === "string") {
-          errorMessage = err.response.data.detail;
-        } else if (
-          Array.isArray(err.response.data.detail) &&
-          err.response.data.detail[0]?.msg
-        ) {
-          // Błąd walidacji Pydantic
-          errorMessage = err.response.data.detail[0].msg;
-        }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      toast.error(errorMessage);
+      toast.error(getErrorMessage(err));
     }
-    // ### KONIEC OSTATECZNEJ POPRAWKI ###
   };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogChange}>
       <DialogContent className="sm:max-w-lg">
@@ -484,41 +395,49 @@ export function IntegrationFormDialog({
           </DialogDescription>
         </DialogHeader>
         <FormProvider {...methods}>
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-4">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={step}
-                initial={{ x: 300, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: -300, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                {step === 1 && <Step1SelectType onSelect={handleSelectType} />}
-                {step === 2 && providerType && (
-                  <Step2EnterDetails providerType={providerType} />
-                )}
-              </motion.div>
-            </AnimatePresence>
-            <div className="pt-6 flex justify-end gap-2">
-              {step === 2 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setStep(1)}
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="min-h-[300px] py-4">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={step}
+                  initial={{ x: 20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: -20, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
                 >
-                  Wróć
-                </Button>
-              )}
-              {step === 2 && (
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {step === 1 && (
+                    <Step1SelectType onSelect={handleSelectType} />
                   )}
-                  {providerType === "ALLEGRO"
-                    ? "Zapisz i połącz"
-                    : "Zapisz i aktywuj"}
-                </Button>
-              )}
+                  {step === 2 && providerType && (
+                    <Step2EnterDetails providerType={providerType} />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+            <div className="pt-4 flex justify-between items-center border-t">
+              <div>
+                {step === 2 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setStep(1)}
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Wróć
+                  </Button>
+                )}
+              </div>
+              <div>
+                {step === 2 && (
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {providerType === "ALLEGRO"
+                      ? "Zapisz i połącz"
+                      : "Zapisz i aktywuj"}
+                  </Button>
+                )}
+              </div>
             </div>
           </form>
         </FormProvider>

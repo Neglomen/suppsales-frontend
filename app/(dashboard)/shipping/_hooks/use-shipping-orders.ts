@@ -15,7 +15,7 @@ const fetchShippingOrders = async ({
   const [_key, filters] = queryKey;
 
   const params = new URLSearchParams();
-  params.append("sortBy", "purchasedAt");
+  params.append("sortBy", "purchased_at");
   params.append("sortOrder", "asc");
   params.append("page", String(pageParam));
   params.append("size", "50"); // Pobieramy paczki po 50

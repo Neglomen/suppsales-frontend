@@ -90,13 +90,13 @@ const renderPreview = (
       mapped.delivery.address.lastName || ""
     }`.trim();
     const customerEmail =
-      order.integration?.type === "BASELINKER"
-        ? order.detailsPayload?.email
-        : order.detailsPayload?.buyer?.email;
+      order.integration?.provider_type === "BASELINKER"
+        ? order.details_payload?.email
+        : order.details_payload?.buyer?.email;
     const trackingNumber =
-      order.integration?.type === "BASELINKER"
-        ? order.detailsPayload?.delivery_package_nr || "Brak"
-        : order.detailsPayload?.delivery?.tracking?.number || "Brak";
+      order.integration?.provider_type === "BASELINKER"
+        ? order.details_payload?.delivery_package_nr || "Brak"
+        : order.details_payload?.delivery?.tracking?.number || "Brak";
 
     rendered = rendered.replace(
       /{{customer_name}}/g,
@@ -105,7 +105,7 @@ const renderPreview = (
     rendered = rendered.replace(/{{customer_email}}/g, customerEmail || "");
     rendered = rendered.replace(
       /{{order_id_external}}/g,
-      order.externalOrderId || ""
+      order.external_order_id || ""
     );
     rendered = rendered.replace(/{{tracking_number}}/g, trackingNumber);
   }
@@ -181,9 +181,9 @@ export function SendEmailDialog({
       setSelectedVariantId(initialId);
 
       const customerEmail =
-        order?.integration?.type === "BASELINKER"
-          ? order?.detailsPayload?.email
-          : order?.detailsPayload?.buyer?.email;
+        order?.integration?.provider_type === "BASELINKER"
+          ? order?.details_payload?.email
+          : order?.details_payload?.buyer?.email;
       setRecipientEmail(customerEmail || "");
       setSelectedSmtpAccountId("default");
     }

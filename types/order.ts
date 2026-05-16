@@ -1,31 +1,54 @@
-// src/types/order.ts
 import { ServiceIntegration } from "./service-integration";
 
+// Prosty typ dla logów zdarzeń
 interface OrderEventLog {
   id: string;
   source: string;
   type: string;
   summary: string;
-  occurred_at: string;
+  occurred_at: string; // ISO date string
 }
 
+// Główny, szczegółowy typ odpowiedzi z API dla /orders/{id}
 export interface OrderDetailsApiResponse {
   id: string;
-  externalOrderId: string;
+  external_order_id: string;
+  organization_id: string;
   status: string;
-  buyerLogin: string | null;
-  buyerEmail: string | null;
-  purchasedAt: string;
-  serviceIntegration: ServiceIntegration | null;
-  trackingNumbers: string[] | null;
-  detailsPayload: any;
-  event_logs: OrderEventLog[];
+  external_status: string;
+  fulfillment_status: string | null;
+  buyer_login: string | null;
+  buyer_email: string | null;
+  buyer_first_name: string | null;
+  buyer_last_name: string | null;
+  tracking_numbers: string[] | null;
+  purchased_at: string; // ISO date string
+  erp_sales_document_number?: string | null;
 
-  // === POPRAWKA: Dodajemy oba pola zwracane przez API ===
-  paymentType: "CASH_ON_DELIVERY" | "ONLINE" | null;
-  paymentStatus: "PENDING" | "COMPLETED" | "FAILED" | null;
+  service_integration: ServiceIntegration | null;
+  // alias używany na stronie szczegółów
+  integration?: ServiceIntegration | null;
+
+  // Na stronie szczegółów ZAWSZE dostajemy pełny payload
+  details_payload: any;
+
+  // Znormalizowany adres FV z bazy danych
+  invoice_address?: {
+    first_name?: string | null;
+    last_name?: string | null;
+    company_name?: string | null;
+    tax_id?: string | null;
+    street?: string | null;
+    zip_code?: string | null;
+    city?: string | null;
+  } | null;
+
+  // Dołączamy też listę logów zdarzeń
+  event_logs: OrderEventLog[];
 }
 
+// Typ dla zmapowanych, przetworzonych danych używanych w UI
+// (dla komponentów DeliveryCard, PaymentCard, etc.)
 export interface MappedOrderDetails {
   delivery: {
     methodName: string;
@@ -43,9 +66,9 @@ export interface MappedOrderDetails {
     };
   };
   payment: {
-    type: "CASH_ON_DELIVERY" | "ONLINE" | null;
+    type?: string;
     provider?: string;
-    status: "PENDING" | "COMPLETED" | "FAILED" | null;
+    status: string;
     total: string;
   };
   invoice: {
@@ -61,17 +84,13 @@ export interface MappedOrderDetails {
       countryCode?: string;
     };
   };
-  lineItems: {
+  line_items: {
     id: string;
     name: string;
     quantity: number;
     price: string;
+    imageUrl?: string;
+    sku?: string;
+    ean?: string;
   }[];
 }
-
-export type PaymentStatus =
-  | "COMPLETED"
-  | "PENDING"
-  | "FAILED"
-  | "CANCELLED"
-  | "UNKNOWN";

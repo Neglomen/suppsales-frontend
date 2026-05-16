@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
-import { MarketplaceOrder } from "@/types/marketplace-order";
 import {
   getAddressValidator,
   AddressSchema,
@@ -32,12 +31,38 @@ import {
 } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
 
+// Minimalny interfejs wymagany przez dialog
+export interface OrderLikeForAddress {
+  id: string;
+  deliveryAddress?: {
+    firstName?: string | null;
+    lastName?: string | null;
+    street?: string | null;
+    zipCode?: string | null;
+    city?: string | null;
+    phoneNumber?: string | null;
+  } | null;
+  delivery_address?: {
+    first_name?: string | null;
+    last_name?: string | null;
+    street?: string | null;
+    zip_code?: string | null;
+    city?: string | null;
+    phone_number?: string | null;
+  } | null;
+  buyerPhoneNumber?: string | null;
+  buyer_phone_number?: string | null;
+  buyerEmail?: string | null;
+  buyer_email?: string | null;
+  details_payload?: any;
+}
+
 interface EditAddressDialogProps {
-  order: MarketplaceOrder | null;
+  order: OrderLikeForAddress | null;
   courierProvider?: string;
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (updatedOrder: MarketplaceOrder) => void;
+  onSuccess: (updatedOrder: any) => void;
 }
 
 export function EditAddressDialog({
@@ -54,31 +79,43 @@ export function EditAddressDialog({
     mode: "onChange",
   });
 
-  // Uproszczony `useEffect` bazujący na ustandaryzowanych danych
   useEffect(() => {
     if (order && isOpen) {
-      const address = order.deliveryAddress; // <-- Poprawka
-      const recipientName = `${address?.firstName || ""} ${
-        address?.lastName || ""
-      }`.trim();
+      const da = (order as any).delivery_address;
+      const address = (order as any).deliveryAddress;
+      const payload = (order as any).details_payload || {};
+      const pointId = payload?.delivery?.pickupPoint?.id || payload?.delivery_point_id || "";
 
       form.reset({
-        name: recipientName,
-        street: address?.street || "",
-        postalCode: address?.zipCode || "", // <-- Poprawka
-        city: address?.city || "",
-        phone: address?.phoneNumber || order.buyerPhoneNumber || "", // <-- Poprawka
-        email: order.buyerEmail || "", // <-- Poprawka
+        firstName: da?.first_name || address?.firstName || payload.delivery?.address?.firstName || payload.delivery_fullname?.split(" ")[0] || "",
+        lastName: da?.last_name || address?.lastName || payload.delivery?.address?.lastName || payload.delivery_fullname?.split(" ").slice(1).join(" ") || "",
+        companyName: da?.company_name || address?.companyName || "",
+        street: da?.street || address?.street || payload.delivery?.address?.street || payload.delivery_address || "",
+        postalCode: da?.zip_code || address?.zipCode || payload.delivery?.address?.zipCode || payload.delivery_postcode || "",
+        city: da?.city || address?.city || payload.delivery?.address?.city || payload.delivery_city || "",
+        phone: da?.phone_number || address?.phoneNumber || (order as any).buyerPhoneNumber || (order as any).buyer_phone_number || payload.phone || "",
+        email: (order as any).buyerEmail || (order as any).buyer_email || "",
+        deliveryPointId: pointId,
       });
     }
   }, [order, isOpen, form]);
 
-  // Mutacja z prawdziwym wywołaniem API
   const { mutate: updateAddress, isPending } = useMutation({
     mutationFn: (data: AddressSchema) => {
       if (!order) throw new Error("Order is not defined.");
-      // Używamy nowego endpointu PATCH
-      return api.patch(`/orders/${order.id}/delivery-address`, data);
+      // Backend expects: name, street, postal_code, city, phone, email
+      const name = data.companyName?.trim()
+        ? data.companyName.trim()
+        : `${data.firstName || ""} ${data.lastName || ""}`.trim();
+      return api.patch(`/orders/${order.id}/delivery-address`, {
+        name,
+        street: data.street,
+        postal_code: data.postalCode,
+        city: data.city,
+        phone: data.phone,
+        email: data.email || null,
+        delivery_point_id: data.deliveryPointId || null,
+      });
     },
     onSuccess: (response) => {
       toast.success("Adres został pomyślnie zaktualizowany.");
@@ -86,9 +123,13 @@ export function EditAddressDialog({
       onClose();
     },
     onError: (error: any) => {
-      toast.error(
-        error.response?.data?.detail || "Nie udało się zaktualizować adresu."
-      );
+      const detail = error.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map((e: any) => e.msg || String(e)).join(", ")
+        : typeof detail === "string"
+        ? detail
+        : "Nie udało się zaktualizować adresu.";
+      toast.error(msg);
     },
   });
 
@@ -110,14 +151,44 @@ export function EditAddressDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-4 py-4"
           >
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Odbiorca</p>
+            <p className="text-xs text-muted-foreground -mt-2">Wypełnij imię i nazwisko <strong>lub</strong> nazwę firmy &mdash; wystarczy jedno.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="firstName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Imię</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Jan" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nazwisko</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Kowalski" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <FormField
               control={form.control}
-              name="name"
+              name="companyName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Imię i nazwisko / Nazwa firmy</FormLabel>
+                  <FormLabel>Nazwa firmy <span className="text-muted-foreground font-normal">(opcjonalne)</span></FormLabel>
                   <FormControl>
-                    <Input placeholder="Jan Kowalski" {...field} />
+                    <Input placeholder="Firma Sp. z o.o." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -185,6 +256,19 @@ export function EditAddressDialog({
                   <FormLabel>Adres e-mail</FormLabel>
                   <FormControl>
                     <Input placeholder="kontakt@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="deliveryPointId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Punkt odbioru (ID) <span className="text-muted-foreground font-normal">(opcjonalne)</span></FormLabel>
+                  <FormControl>
+                    <Input placeholder="np. ROT01M, DPD-1234" {...field} className="font-mono uppercase" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

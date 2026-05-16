@@ -12,10 +12,8 @@ export interface SenderConfig {
 export interface ServiceIntegration {
   id: number;
   name: string;
-  // ### START ZMIANY ###
-  category: "MARKETPLACE" | "COURIER" | "ACCOUNTING" | "WHOLESALE";
-  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "AB";
-  // ### KONIEC ZMIANY ###
+  category: "MARKETPLACE" | "COURIER" | "ACCOUNTING" | "ERP" | "GOVERNMENT";
+  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "AB";
   is_active: boolean;
   external_user_id: string | null;
   sync_orders: boolean;
@@ -25,4 +23,6 @@ export interface ServiceIntegration {
   autoresponder_message: string | null;
   sender_config: SenderConfig | null;
   has_credentials: boolean;
+  api_config?: Record<string, any> | null;
+  sync_config?: Record<string, any> | null;
 }

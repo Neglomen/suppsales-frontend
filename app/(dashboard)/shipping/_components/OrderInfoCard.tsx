@@ -149,13 +149,13 @@ export function OrderInfoCard({
           </div>
         </div>
 
-        {lineItems.length > 0 && (
+        {(lineItems || []).length > 0 && (
           <>
             <Separator />
             <div>
               <p className="font-medium mb-2">Produkty</p>
               <ul className="text-muted-foreground space-y-1">
-                {lineItems.map((item, index) => (
+                {(lineItems || []).map((item, index) => (
                   <li key={item.id || index} className="flex justify-between">
                     <span>{item.offer?.name}</span>
                     <span className="font-semibold text-foreground whitespace-nowrap pl-2">

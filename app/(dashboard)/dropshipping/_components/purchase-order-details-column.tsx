@@ -28,12 +28,17 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import {
-  Loader2,
-  Send,
-  FilePlus2,
   AlertCircle,
-  Link as LinkIcon,
+  CheckCircle,
   Edit,
+  Loader2,
+  Package,
+  Plus,
+  Send,
+  User,
+  CreditCard,
+  Link as LinkIcon,
+  FilePlus2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EditAddressDialog } from "../../shipping/_components/EditAddressDialog";
@@ -77,8 +82,8 @@ const ProductLineItem = ({
       <Label htmlFor={`item-${item.marketplaceLineItemId}`}>
         {item.name} (x{item.quantity})
       </Label>
-      <p className="text-xs text-muted-foreground">
-        ID Oferty: {item.marketplace_offer_id || "Brak"}
+      <p className="text-xs text-muted-foreground mt-1 mb-2">
+        ID Oferty: <span className="text-primary font-mono">{item.marketplace_offer_id || "Brak"}</span>
       </p>
       <div className="flex gap-2">
         <Input
@@ -87,6 +92,7 @@ const ProductLineItem = ({
           value={currentIndex}
           onChange={handleIndexChange}
           disabled={disabled}
+          className="bg-background/60 border-border/20 focus-visible:ring-primary/30"
         />
         <Button
           variant="outline"
@@ -163,19 +169,19 @@ export function PurchaseOrderDetailsColumn({
   useEffect(() => {
     const updateLineItems = async () => {
       if (activePurchaseOrder) {
-        setLineItems(activePurchaseOrder.lineItems || []);
+        setLineItems(activePurchaseOrder.lineItems || activePurchaseOrder.line_items || []);
         return;
       }
       if (!order) {
         setLineItems([]);
         return;
       }
-      const baseItems = (order.lineItems || []).map((item) => ({
+      const baseItems = (order.lineItems || order.line_items || []).map((item) => ({
         marketplaceLineItemId: item.id,
-        name: item.offer.name,
+        name: item.offer?.name || (item as any).name || "Produkt bez nazwy",
         quantity: item.quantity,
         supplierProductIndex: null,
-        marketplace_offer_id: item.offer.id || undefined,
+        marketplace_offer_id: item.offer?.id || (item as any).offer_id || (item as any).product_id || undefined,
       }));
       if (selectedSupplierId) {
         const offerIds = baseItems
@@ -394,25 +400,80 @@ export function PurchaseOrderDetailsColumn({
     );
   }
 
-  const address = order.deliveryAddress;
-  const email = order.buyerEmail || "";
+  const address = order.deliveryAddress || (order as any).delivery_address;
+  const email = order.buyerEmail || order.buyer_email || "";
   const isDraft = activePurchaseOrder?.status === "DRAFT";
   const isSentOrCompleted =
     activePurchaseOrder &&
     (activePurchaseOrder.status === "SENT_TO_SUPPLIER" ||
       activePurchaseOrder.status === "COMPLETED");
 
+  const payload = order.detailsPayload || (order as any).details_payload || {};
+  const paymentInfo = (() => {
+    if (payload.payment?.type === "CASH_ON_DELIVERY" || String(payload.payment_method_cod) === "1") {
+      const amount = payload.cashOnDelivery?.amount || payload.payment_done || order.totalToPay || (order as any).total_to_pay;
+      return { type: "cod", label: "Pobranie", amount, color: "text-amber-400" };
+    }
+    const amount = payload.summary?.totalToPay?.amount || payload.payment_done || order.totalToPay || (order as any).total_to_pay;
+    return { type: "paid", label: "Opłacone", amount, color: "text-emerald-400" };
+  })();
+
+  const providerType = (order.serviceIntegration || (order as any).service_integration)?.provider_type;
+  
   return (
     <>
-      <div className="p-4 space-y-4 h-full overflow-y-auto">
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-start">
-              <CardTitle>Adres dostawy</CardTitle>
+      <div className="p-4 space-y-4 h-full overflow-y-auto w-full">
+        {/* ── HERO HEADER (Premium Design) ── */}
+        <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800/90 to-slate-900 shadow-xl shrink-0">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent pointer-events-none" />
+          <div className="relative p-5">
+            <div className="flex flex-col md:flex-row md:items-start gap-5">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-lg">
+                  {!providerType && <Package className="h-6 w-6 text-white/70" />}
+                  {providerType === "ALLEGRO" && <span className="text-white font-bold text-xs uppercase">ALL</span>}
+                  {providerType === "BASELINKER" && <span className="text-white font-bold text-xs uppercase">BL</span>}
+                </div>
+                <div>
+                  <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                    {(order.serviceIntegration || (order as any).service_integration)?.name || "Zamówienie ręczne"}
+                  </p>
+                  <h1 className="text-lg font-bold text-white leading-tight">
+                    #{order.externalOrderId || (order as any).external_order_id}
+                  </h1>
+                  <p className="text-[10px] text-white/30 font-mono mt-0.5">{order.buyerLogin || (order as any).buyer_login}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 md:ml-auto mt-2 md:mt-0">
+                <div className="flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10">
+                  <span className="text-white/50"><CreditCard className="h-4 w-4" /></span>
+                  <div className="min-w-0">
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Kwota</p>
+                    <p className="text-xs font-semibold text-white truncate">{paymentInfo.amount} {payload.currency || "PLN"}</p>
+                  </div>
+                </div>
+                <div className={`flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10 ${paymentInfo.color}`}>
+                  {paymentInfo.type === "paid" ? <CheckCircle className={`h-4 w-4 ${paymentInfo.color}`} /> : <AlertCircle className={`h-4 w-4 ${paymentInfo.color}`} />}
+                  <div>
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Status</p>
+                    <p className="text-xs font-semibold truncate">{paymentInfo.label}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Card className="glass-dark border-primary/10 shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="bg-muted/30 border-b border-border/10 pb-4">
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-lg">Adres dostawy</CardTitle>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors duration-300"
                 onClick={() => setEditAddressOpen(true)}
               >
                 <Edit className="h-4 w-4" />
@@ -440,10 +501,49 @@ export function PurchaseOrderDetailsColumn({
           </CardContent>
         </Card>
 
+        {/* Notatki */}
+        {((order.detailsPayload || (order as any).details_payload)?.message_to_seller || (order.detailsPayload || (order as any).details_payload)?.user_comments) && (
+          <Alert className="border-border/60 shadow-sm bg-muted/10">
+            <AlertTitle className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">Wiadomość od kupującego</AlertTitle>
+            <AlertDescription className="mt-2 text-sm italic font-medium">"{ (order.detailsPayload || (order as any).details_payload)?.message_to_seller || (order.detailsPayload || (order as any).details_payload)?.user_comments }"</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Dane do faktury */}
+        {((order.invoiceAddress || (order as any).invoice_address) || (order.detailsPayload || (order as any).details_payload)?.invoice_fullname) && (
+          <Card className="glass-dark border-primary/10 shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="bg-muted/30 border-b border-border/10 pb-4">
+              <CardTitle className="text-lg">Dane do faktury</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm">
+              {order.invoiceAddress || (order as any).invoice_address ? (
+                <>
+                  <p className="font-semibold">
+                    {(order.invoiceAddress || (order as any).invoice_address).companyName || (order.invoiceAddress || (order as any).invoice_address).company_name || `${(order.invoiceAddress || (order as any).invoice_address).firstName || (order.invoiceAddress || (order as any).invoice_address).first_name || ""} ${(order.invoiceAddress || (order as any).invoice_address).lastName || (order.invoiceAddress || (order as any).invoice_address).last_name || ""}`.trim()}
+                  </p>
+                  {((order.invoiceAddress || (order as any).invoice_address).taxId || (order.invoiceAddress || (order as any).invoice_address).tax_id) && <p className="text-xs text-muted-foreground font-mono mb-0.5">NIP: {(order.invoiceAddress || (order as any).invoice_address).taxId || (order.invoiceAddress || (order as any).invoice_address).tax_id}</p>}
+                  <p>{(order.invoiceAddress || (order as any).invoice_address).street}</p>
+                  <p>
+                    {(order.invoiceAddress || (order as any).invoice_address).zipCode || (order.invoiceAddress || (order as any).invoice_address).zip_code} {(order.invoiceAddress || (order as any).invoice_address).city}
+                  </p>
+                </>
+              ) : (
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-primary">{(order.detailsPayload || (order as any).details_payload)?.invoice_fullname}</p>
+                  {((order.detailsPayload || (order as any).details_payload)?.invoice_nip) && <p className="text-xs text-muted-foreground font-mono mb-0.5">NIP: {(order.detailsPayload || (order as any).details_payload)?.invoice_nip}</p>}
+                  <p className="text-muted-foreground">{(order.detailsPayload || (order as any).details_payload)?.invoice_address}</p>
+                  <p className="text-muted-foreground">{(order.detailsPayload || (order as any).details_payload)?.invoice_postcode} {(order.detailsPayload || (order as any).details_payload)?.invoice_city}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+        </div>
+
         {cancelledPurchaseOrders.length > 0 && (
-          <Card className="border-dashed">
-            <CardHeader>
-              <CardTitle className="text-base">Historia zleceń</CardTitle>
+          <Card className="glass-dark border border-dashed border-red-500/30 shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="bg-red-500/5 border-b border-red-500/10 pb-4">
+              <CardTitle className="text-base text-red-500/80">Historia zleceń</CardTitle>
               <CardDescription>
                 Poniższe zlecenia dla tego zamówienia zostały anulowane.
               </CardDescription>
@@ -461,11 +561,11 @@ export function PurchaseOrderDetailsColumn({
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
+        <Card className="glass-dark border-primary/10 shadow-sm rounded-2xl overflow-hidden mb-6">
+          <CardHeader className="bg-primary/5 border-b border-primary/10 pb-4">
             <div className="flex justify-between items-start">
               <div>
-                <CardTitle>Zlecenie do dostawcy</CardTitle>
+                <CardTitle className="text-lg text-primary">Zlecenie do dostawcy</CardTitle>
                 <CardDescription>
                   Przygotuj dane i wyślij zamówienie do hurtowni.
                 </CardDescription>
@@ -501,34 +601,34 @@ export function PurchaseOrderDetailsColumn({
             )}
             <Separator />
             <div className="space-y-4">
-              {lineItems.map((item, index) => (
-                <ProductLineItem
-                  key={item.marketplaceLineItemId || index}
-                  item={{
-                    ...item,
-                    marketplace_offer_id:
-                      order.lineItems[index]?.offer.id || undefined,
-                  }}
-                  onIndexChange={(value) =>
-                    handleLineItemIndexChange(index, value)
-                  }
-                  onMap={() =>
-                    handleMapClick({
-                      ...item,
-                      marketplace_offer_id:
-                        order.lineItems[index]?.offer.id || undefined,
-                    })
-                  }
-                  disabled={(!!activePurchaseOrder && !isDraft) || isMapping}
-                  isMapping={isMapping}
-                />
-              ))}
+              {lineItems.map((item, index) => {
+                const rawItem = (order.lineItems || (order as any).line_items)?.[index];
+                const offerId =
+                  rawItem?.offer?.id ||
+                  rawItem?.offer_id ||
+                  rawItem?.product_id ||
+                  item.marketplace_offer_id ||
+                  undefined;
+
+                return (
+                  <ProductLineItem
+                    key={item.marketplaceLineItemId || index}
+                    item={{ ...item, marketplace_offer_id: offerId }}
+                    onIndexChange={(value) => handleLineItemIndexChange(index, value)}
+                    onMap={() =>
+                      handleMapClick({ ...item, marketplace_offer_id: offerId })
+                    }
+                    disabled={(!!activePurchaseOrder && !isDraft) || isMapping}
+                    isMapping={isMapping}
+                  />
+                );
+              })}
             </div>
             {isSentOrCompleted && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Zlecenie w trakcie realizacji</AlertTitle>
-                <AlertDescription>
+              <Alert className="border-primary/20 bg-primary/5 rounded-xl">
+                <AlertCircle className="h-4 w-4 text-primary" />
+                <AlertTitle className="text-primary font-semibold">Zlecenie w trakcie realizacji</AlertTitle>
+                <AlertDescription className="text-muted-foreground">
                   To zlecenie zostało już przetworzone. Nie można go edytować.
                 </AlertDescription>
               </Alert>

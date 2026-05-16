@@ -33,31 +33,31 @@ export const getShippingTableColumns = ({
     enableHiding: false,
   },
   {
-    accessorKey: "externalOrderId",
+    accessorKey: "external_order_id",
     header: "Zamówienie",
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
-        {row.original.serviceIntegration?.provider_type === "ALLEGRO" && (
+        {row.original.service_integration?.provider_type === "ALLEGRO" && (
           <AllegroIcon className="h-4 w-4" />
         )}
-        {row.original.serviceIntegration?.provider_type === "BASELINKER" && (
+        {row.original.service_integration?.provider_type === "BASELINKER" && (
           <BaseLinkerIcon className="h-4 w-4 rounded-sm" />
         )}
         <span className="font-mono text-xs">
-          {row.original.externalOrderId}
+          {row.original.external_order_id}
         </span>
       </div>
     ),
   },
   {
-    accessorKey: "buyerLogin",
+    accessorKey: "buyer_login",
     header: "Kupujący",
-    cell: ({ row }) => row.original.buyerLogin || "Brak",
+    cell: ({ row }) => row.original.buyer_login || "Brak",
   },
   {
     header: "Odbiorca",
     cell: ({ row }) => {
-      const payload = row.original.detailsPayload;
+      const payload = row.original.details_payload;
       if (!payload) return "Brak danych";
 
       // === BEZPIECZNY DOSTĘP DO DANYCH ===
@@ -79,7 +79,7 @@ export const getShippingTableColumns = ({
   {
     header: "Dostawa",
     cell: ({ row }) => {
-      const payload = row.original.detailsPayload;
+      const payload = row.original.details_payload;
       if (!payload) return "Brak danych";
 
       // === BEZPIECZNY DOSTĘP DO DANYCH ===

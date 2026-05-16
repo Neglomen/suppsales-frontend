@@ -14,7 +14,7 @@ import { MarketplaceOrder } from "@/types/marketplace-order";
 import { ServiceIntegration } from "@/types/service-integration";
 import { PaginatedResponse } from "@/types/pagination";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, Truck, Wand2 } from "lucide-react";
+import { Loader2, Search, Truck, Wand2, CreditCard, PackageCheck, MapPin, FileText, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AllegroIcon, BaseLinkerIcon } from "@/components/shared/icons";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,6 +29,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 
 interface MarketplaceOrderListColumnProps {
   selectedOrderId: string | null;
@@ -49,8 +50,12 @@ const fetchMarketplaceOrders = async ({
   if (filters.search) {
     params.append("search", filters.search);
   }
-  params.append("fulfillmentStatus", "NEW");
-  params.append("fulfillmentStatus", "PROCESSING");
+  if (filters.fulfillmentStatus && Array.isArray(filters.fulfillmentStatus)) {
+    // Backend API takes multiple `fulfillmentStatus` params
+    filters.fulfillmentStatus.forEach((status: string) => {
+      params.append("fulfillmentStatus", status);
+    });
+  }
 
   const res = await api.get("/orders", { params });
   return res.data;
@@ -65,12 +70,16 @@ export function MarketplaceOrderListColumn({
   const [debouncedSearchTerm] = useDebounce(searchTerm, 300);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({
       queryKey: [
         "marketplaceOrdersForDropshipping",
-        { search: debouncedSearchTerm },
+        {
+          search: debouncedSearchTerm,
+          fulfillmentStatus: statusFilter === "ALL" ? undefined : statusFilter.split(","),
+        },
       ],
       queryFn: fetchMarketplaceOrders,
       initialPageParam: 1,
@@ -139,7 +148,7 @@ export function MarketplaceOrderListColumn({
   const rowVirtualizer = useVirtualizer({
     count: hasNextPage ? allOrders.length + 1 : allOrders.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 90,
+    estimateSize: () => 140,
     overscan: 5,
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
@@ -185,17 +194,29 @@ export function MarketplaceOrderListColumn({
   };
 
   return (
-    <div className="flex flex-col h-full bg-card relative">
-      <div className="p-2 border-b">
+    <div className="flex flex-col h-full bg-transparent relative">
+      <div className="p-3 border-b border-border/10 bg-muted/20 backdrop-blur-md space-y-3">
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Szukaj zamówienia..."
-            className="pl-8"
+            className="pl-8 bg-background"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-full bg-background mt-2">
+            <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="Filtruj statusy" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Wszystkie zamówienia</SelectItem>
+            <SelectItem value="NEW,PROCESSING,READY_FOR_SHIPMENT">Do wysłania</SelectItem>
+            <SelectItem value="SENT,COMPLETED">Wysłane / Zakończone</SelectItem>
+            <SelectItem value="CANCELLED">Anulowane</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div ref={parentRef} className="flex-1 overflow-y-auto">
         {isLoading && (
@@ -230,12 +251,25 @@ export function MarketplaceOrderListColumn({
               ) : null;
             if (!order) return null;
 
+            const lineItems = order.lineItems || order.line_items || [];
             const firstItemName =
-              order.lineItems?.[0]?.offer?.name || "Zamówienie bez produktów";
+              lineItems[0]?.offer?.name || "Zamówienie bez produktów";
+            
+            const buyerFirstName = order.buyerFirstName || order.buyer_first_name || "";
+            const buyerLastName = order.buyerLastName || order.buyer_last_name || "";
+            const buyerLogin = order.buyerLogin || order.buyer_login || "";
             const receiverFullName =
-              `${order.buyerFirstName || ""} ${
-                order.buyerLastName || ""
-              }`.trim() || order.buyerLogin;
+              `${buyerFirstName} ${buyerLastName}`.trim() || buyerLogin;
+
+            const serviceIntegration = order.serviceIntegration || order.service_integration;
+            const hasPurchaseOrder = order.hasPurchaseOrder || (order as any).has_purchase_order;
+            const payload = order.detailsPayload || (order as any).details_payload || {};
+            
+            const isCod = payload.payment?.type === "CASH_ON_DELIVERY" || String(payload.payment_method_cod) === "1";
+            const deliveryMethodName = payload.delivery?.method?.name || payload.delivery_method || "Inna metoda";
+            const pickupPoint = payload.delivery?.pickupPoint || payload.delivery_point_id;
+            const invoice = payload.invoice || (payload.want_invoice === "1" ? payload : null);
+            const hasInvoice = !!(invoice?.required || invoice?.invoice_company);
 
             return (
               <div
@@ -245,10 +279,11 @@ export function MarketplaceOrderListColumn({
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
                 className={cn(
-                  "absolute top-0 left-0 w-full p-3 border-b cursor-pointer flex items-center gap-3",
-                  "hover:bg-muted/50 transition-colors duration-150",
-                  selectedOrderId === order.id &&
-                    "bg-accent text-accent-foreground"
+                  "absolute top-0 left-0 w-full p-4 border-b border-border/10 cursor-pointer flex items-center gap-3",
+                  "hover:bg-primary/5 hover:border-primary/20 transition-all duration-300",
+                  selectedOrderId === order.id
+                    ? "bg-primary/10 border-l-4 border-l-primary"
+                    : "border-l-4 border-l-transparent"
                 )}
                 onClick={() => onOrderSelect(order)}
               >
@@ -261,29 +296,29 @@ export function MarketplaceOrderListColumn({
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between text-xs items-center">
                     <span className="flex items-center gap-1.5 font-medium truncate">
-                      {order.serviceIntegration?.provider_type ===
+                      {serviceIntegration?.provider_type ===
                         "ALLEGRO" && <AllegroIcon className="h-4 w-4" />}
-                      {order.serviceIntegration?.provider_type ===
+                      {serviceIntegration?.provider_type ===
                         "BASELINKER" && (
                         <BaseLinkerIcon className="h-4 w-4 rounded-sm" />
                       )}
                       <span
                         className="truncate"
                         title={
-                          order.serviceIntegration?.name || "Brak integracji"
+                          serviceIntegration?.name || "Brak integracji"
                         }
                       >
-                        {order.serviceIntegration?.name || "Brak integracji"}
+                        {serviceIntegration?.name || "Brak integracji"}
                       </span>
                     </span>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {order.hasPurchaseOrder && (
+                      {hasPurchaseOrder && (
                         <span title="Dla tego zamówienia istnieje już zlecenie do dostawcy">
                           <Truck className="h-4 w-4 text-primary" />
                         </span>
                       )}
                       <span>
-                        {new Date(order.purchasedAt).toLocaleDateString()}
+                        {order.purchasedAt || order.purchased_at ? new Date((order.purchasedAt || order.purchased_at) as string).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' }) : 'Brak daty'}
                       </span>
                     </div>
                   </div>
@@ -299,14 +334,40 @@ export function MarketplaceOrderListColumn({
                   >
                     {receiverFullName}
                   </p>
-                  {order.buyerLogin && (
+                  {buyerLogin && (
                     <p
                       className="text-xs text-muted-foreground truncate"
-                      title={order.buyerLogin}
+                      title={buyerLogin}
                     >
-                      {order.buyerLogin}
+                      {buyerLogin}
                     </p>
                   )}
+                  
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <Badge variant="outline" className="truncate border-primary/20 bg-primary/5 text-[10px] px-1.5 py-0 h-4 font-normal text-primary">
+                      {deliveryMethodName}
+                    </Badge>
+                    {isCod ? (
+                      <Badge className="bg-yellow-500 hover:bg-yellow-600 text-yellow-foreground text-[10px] px-1.5 py-0 h-4 font-normal">
+                        <CreditCard className="h-2.5 w-2.5 mr-1" /> Pobranie
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-green-600 hover:bg-green-700 text-green-foreground text-[10px] px-1.5 py-0 h-4 font-normal">
+                        <PackageCheck className="h-2.5 w-2.5 mr-1" /> Opłacone
+                      </Badge>
+                    )}
+                    {pickupPoint && (
+                      <Badge className="bg-blue-500 hover:bg-blue-600 text-blue-foreground text-[10px] px-1.5 py-0 h-4 font-normal">
+                        <MapPin className="h-2.5 w-2.5 mr-1" /> Punkt
+                      </Badge>
+                    )}
+                    {hasInvoice && (
+                      <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-1.5 py-0 h-4 font-normal">
+                        <FileText className="h-2.5 w-2.5 mr-1" /> FV
+                      </Badge>
+                    )}
+                  </div>
+                  
                 </div>
               </div>
             );
@@ -317,48 +378,43 @@ export function MarketplaceOrderListColumn({
       <AnimatePresence>
         {selectedRows.size > 0 && (
           <motion.div
-            initial={{ y: 100 }}
-            animate={{ y: 0 }}
-            exit={{ y: 100 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[95%] bg-background border rounded-lg shadow-2xl p-3"
+            initial={{ y: 60, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 60, opacity: 0, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 35 }}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[92%] z-10 rounded-xl p-[1px] bg-gradient-to-r from-primary/60 via-primary to-primary/60 shadow-2xl shadow-primary/30"
           >
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-sm font-medium whitespace-nowrap">
-                Zaznaczono:{" "}
-                <span className="text-primary">{selectedRows.size}</span>
-              </p>
-              <div className="flex items-center gap-2 w-full">
-                <Label htmlFor="bulk-supplier" className="sr-only">
-                  Hurtownia
-                </Label>
-                <Select
-                  value={selectedSupplierId}
-                  onValueChange={setSelectedSupplierId}
-                >
-                  <SelectTrigger id="bulk-supplier" className="w-full">
-                    <SelectValue placeholder="Wybierz hurtownię..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suppliers?.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  onClick={handleBulkCreate}
-                  disabled={!selectedSupplierId || isCreatingBulk}
-                  className="flex-shrink-0"
-                >
-                  {isCreatingBulk && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Utwórz zlecenia
-                </Button>
-              </div>
+            <div className="rounded-[11px] bg-card/95 backdrop-blur-xl px-3 py-2.5 flex items-center gap-2">
+              <Select
+                value={selectedSupplierId}
+                onValueChange={setSelectedSupplierId}
+              >
+                <SelectTrigger id="bulk-supplier" className="flex-1 min-w-0 bg-background/80 border-border/60 h-8 text-xs">
+                  <SelectValue placeholder="Wybierz hurtownię..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers?.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={handleBulkCreate}
+                disabled={!selectedSupplierId || isCreatingBulk}
+                size="sm"
+                className="flex-shrink-0 h-8 px-3 gap-1.5 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+              >
+                {isCreatingBulk ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3.5 w-3.5" />
+                )}
+                <span className="text-xs font-semibold">
+                  Utwórz ({selectedRows.size})
+                </span>
+              </Button>
             </div>
           </motion.div>
         )}
