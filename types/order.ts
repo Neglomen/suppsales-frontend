@@ -21,9 +21,13 @@ export interface OrderDetailsApiResponse {
   buyer_email: string | null;
   buyer_first_name: string | null;
   buyer_last_name: string | null;
+  buyer_phone_number?: string | null;
   tracking_numbers: string[] | null;
   purchased_at: string; // ISO date string
   erp_sales_document_number?: string | null;
+  erp_sales_document_sync_status?: string | null;
+  erp_sales_document_synced_at?: string | null;
+  flags?: string[] | null;
 
   service_integration: ServiceIntegration | null;
   // alias używany na stronie szczegółów
@@ -41,7 +45,33 @@ export interface OrderDetailsApiResponse {
     street?: string | null;
     zip_code?: string | null;
     city?: string | null;
+    country_code?: string | null;
   } | null;
+
+  delivery_address?: {
+    first_name?: string | null;
+    last_name?: string | null;
+    company_name?: string | null;
+    street?: string | null;
+    zip_code?: string | null;
+    city?: string | null;
+    country_code?: string | null;
+    phone_number?: string | null;
+  } | null;
+
+  payment_type?: string | null;
+  payment_status?: string | null;
+  total_to_pay?: number | null;
+
+  line_items?: {
+    id: string;
+    quantity: number;
+    price: { amount: string; currency: string };
+    offer: { id: string; name: string };
+    imageUrl?: string | null;
+    sku?: string | null;
+    ean?: string | null;
+  }[];
 
   // Dołączamy też listę logów zdarzeń
   event_logs: OrderEventLog[];
@@ -93,4 +123,5 @@ export interface MappedOrderDetails {
     sku?: string;
     ean?: string;
   }[];
+  buyerComments?: string;
 }

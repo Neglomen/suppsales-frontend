@@ -75,6 +75,7 @@ export type ServiceIntegrationFormValues = {
   apaczka_app_secret?: string;
   subiekt_agent_url?: string;
   subiekt_api_key?: string;
+  subiekt_erp_sales_reference_template?: string;
   nip?: string;
   environment?: string;
   empik_token?: string;
@@ -101,6 +102,7 @@ export const serviceIntegrationFormSchema = z
     apaczka_app_secret: z.string().optional(),
     subiekt_agent_url: z.string().optional(),
     subiekt_api_key: z.string().optional(),
+    subiekt_erp_sales_reference_template: z.string().optional(),
     nip: z.string().optional(),
     environment: z.string().optional(),
     empik_token: z.string().optional(),
@@ -233,12 +235,11 @@ export const IntegrationUpdateSchema = z.object({
   apaczka_app_id: z.string().optional(),
   apaczka_app_secret: z.string().optional(),
   apaczka_bank_account: z.string().optional(),
-  
   subiekt_agent_url: z.string().optional(),
   subiekt_api_key: z.string().optional(),
-  nip: z.string().optional(),
-  environment: z.string().optional(),
+  subiekt_erp_sales_reference_template: z.string().optional(),
   empik_token: z.string().optional(),
+  sync_config: z.any().optional(),
 });
 
 export type IntegrationUpdateSchemaType = z.infer<

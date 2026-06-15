@@ -49,9 +49,10 @@ export function LinkOfferDialog({ productId, open, onOpenChange, onSuccess }: Li
   const [isLoading, setIsLoading] = useState(false);
   const [integrations, setIntegrations] = useState<any[]>([]);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      service_integration_id: undefined as any,
       external_offer_id: "",
     },
   });
@@ -71,7 +72,8 @@ export function LinkOfferDialog({ productId, open, onOpenChange, onSuccess }: Li
     form.setValue("external_offer_id", "");
   }, [selectedIntegrationId, form]);
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(data: any) {
+    const values = data as z.infer<typeof formSchema>;
     try {
       setIsLoading(true);
       await api.post(`/inventory/${productId}/channel-offers`, values);
@@ -127,7 +129,7 @@ export function LinkOfferDialog({ productId, open, onOpenChange, onSuccess }: Li
                   <FormLabel>Wybierz Ofertę</FormLabel>
                   <FormControl>
                     <MarketplaceOfferCombobox
-                      marketplaceIntegrationId={selectedIntegrationId}
+                      marketplaceIntegrationId={selectedIntegrationId as any}
                       value={field.value}
                       onValueChange={(offerId, offerName) => field.onChange(offerId)}
                       disabled={!selectedIntegrationId}

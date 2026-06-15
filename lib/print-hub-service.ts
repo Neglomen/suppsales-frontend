@@ -128,7 +128,12 @@ class PrintHubService {
   public printPdf(
     pdfBase64: string,
     documentName: string,
-    options?: { printerName?: string }
+    options?: { 
+      printerName?: string;
+      printErpSymbols?: boolean;
+      labelItemsPerPage?: number;
+      erpItems?: Array<{ erpSymbol: string; name: string; quantity: number }>;
+    }
   ) {
     this.sendMessage({
       type: "PRINT_PDF",
@@ -136,6 +141,9 @@ class PrintHubService {
       documentName,
       options: {
         printer: options?.printerName,
+        printErpSymbols: options?.printErpSymbols,
+        labelItemsPerPage: options?.labelItemsPerPage,
+        erpItems: options?.erpItems,
       },
     });
   }
@@ -154,7 +162,34 @@ class PrintHubService {
       },
     });
   }
+
+  /**
+   * Zleca PrintHubowi wydruk faktury sprzedaży (FS) przez suppprint.exe.
+   * PrintHub sam pobierze PDF z Subiekt Agenta (używając lokalnie skonfigurowanego
+   * agentBaseUrl i agentApiKey z ustawień PrintHub), zapisze tymczasowo i wydrukuje.
+   *
+   * @param docNumber      - Pełny numer dokumentu FS z Subiekta, np. "FS 12500/MAG/2026"
+   * @param agentBaseUrl   - (Opcjonalny override) Bazowy URL agenta Subiekt
+   * @param apiKey         - (Opcjonalny override) Klucz API do endpointu PDF agenta
+   *
+   * Operacja jest fire-and-forget: ewentualny błąd wydruku jest logowany
+   * wyłącznie w PrintHub i nie blokuje głównego przepływu zamówienia.
+   */
+  public printSalesInvoice(
+    docNumber: string,
+    agentBaseUrl?: string,
+    apiKey?: string
+  ) {
+    this.sendMessage({
+      type: "PRINT_SALES_INVOICE",
+      docNumber,
+      ...(agentBaseUrl && { agentBaseUrl }),
+      ...(apiKey && { apiKey }),
+    });
+  }
 }
 
 // Inicjalizujemy serwis jako singleton, ale nie łączymy się od razu
 export const printHubService = PrintHubService.getInstance();
+
+

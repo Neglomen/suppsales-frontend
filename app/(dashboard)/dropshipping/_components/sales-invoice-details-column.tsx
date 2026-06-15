@@ -20,6 +20,8 @@ import {
   Sparkles,
   ChevronsUpDown,
   Check,
+  Sliders,
+  Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
@@ -227,6 +229,9 @@ export function SalesInvoiceDetailsColumn({
     new Set()
   );
 
+  const [referenceTemplate, setReferenceTemplate] = useState("");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
   const {
     data: order,
     isLoading: isOrderLoading,
@@ -243,15 +248,47 @@ export function SalesInvoiceDetailsColumn({
   });
 
   const { data: erpIntegrations } = useQuery<ServiceIntegration[]>({
-    queryKey: ["serviceIntegrations", { category: "ERP" }],
+    queryKey: ["serviceIntegrations"],
     queryFn: async () =>
-      (await api.get("/service-integrations?category=ERP")).data,
+      (await api.get("/service-integrations")).data,
   });
 
-  const subiektIntegrationId = useMemo(() => {
-    return erpIntegrations?.find((int) => int.provider_type === "SUBIEKT_GT")
-      ?.id;
+  const subiektIntegration = useMemo(() => {
+    return erpIntegrations?.find((int) => int.provider_type === "SUBIEKT_GT");
   }, [erpIntegrations]);
+
+  const subiektIntegrationId = subiektIntegration?.id;
+
+  useEffect(() => {
+    if (subiektIntegration?.sync_config?.erp_sales_reference_template) {
+      setReferenceTemplate(subiektIntegration.sync_config.erp_sales_reference_template);
+    } else {
+      setReferenceTemplate("{order_id}");
+    }
+  }, [subiektIntegration]);
+
+  const handleSaveSettings = async () => {
+    if (!subiektIntegrationId) return;
+    try {
+      setIsSavingSettings(true);
+      const patchPayload = {
+        sync_config: {
+          ...(subiektIntegration?.sync_config || {}),
+          erp_sales_reference_template: referenceTemplate,
+        }
+      };
+      await api.patch(`/service-integrations/${subiektIntegrationId}`, patchPayload);
+      toast.success("Ustawienia nabijania zostały zapisane.");
+      queryClient.invalidateQueries({
+        queryKey: ["serviceIntegrations"],
+      });
+    } catch (err: any) {
+      const errMsg = err.response?.data?.detail || err.message || "Nieznany błąd";
+      toast.error(`Nie udało się zapisać ustawień: ${errMsg}`);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   const { data: existingMappings } = useQuery<
     Record<string, ProductErpMapping>
@@ -286,6 +323,49 @@ export function SalesInvoiceDetailsColumn({
     },
     enabled: !!order && !!subiektIntegrationId,
   });
+
+  const { data: subiektStock } = useQuery<any>({
+    queryKey: ["subiektStock", selectedOrderId],
+    queryFn: async () => {
+      if (!selectedOrderId) return null;
+      const res = await api.get(`/orders/${selectedOrderId}/subiekt-stock`);
+      return res.data;
+    },
+    enabled: !!selectedOrderId && !!subiektIntegrationId,
+  });
+
+  const updateMappingMutation = useMutation({
+    mutationFn: async ({ offerId, erpSymbol }: { offerId: string; erpSymbol: string }) => {
+      if (!subiektIntegrationId || !order?.serviceIntegration) {
+        throw new Error("Brak integracji ERP lub źródłowej.");
+      }
+      const existing = existingMappings?.[offerId];
+      const payload = {
+        source_integration_id: order.serviceIntegration.id,
+        erp_integration_id: subiektIntegrationId,
+        marketplace_offer_id: offerId,
+        erp_product_symbol: erpSymbol,
+      };
+      if (existing?.id) {
+        return api.put(`/product-erp-mappings/${existing.id}`, payload);
+      } else {
+        return api.post("/product-erp-mappings", payload);
+      }
+    },
+    onSuccess: () => {
+      toast.success("Zapisano mapowanie w ERP.");
+      queryClient.invalidateQueries({
+        queryKey: ["productErpMappings", selectedOrderId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["subiektStock", selectedOrderId],
+      });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.detail || "Nie udało się zapisać mapowania.");
+    }
+  });
+
 
   useEffect(() => {
     if (existingMappings && Object.keys(existingMappings).length > 0) {
@@ -506,52 +586,91 @@ export function SalesInvoiceDetailsColumn({
             <h3 className="text-lg font-semibold flex items-center mb-3">
               <ShoppingCart className="mr-2 h-5 w-5 text-primary" /> Pozycje
             </h3>
+            {subiektStock && !subiektStock.is_connected && (
+              <Alert variant="destructive" className="mb-4 bg-red-950/20 border-red-500/20 text-red-400">
+                <AlertCircle className="h-4 w-4 text-red-400" />
+                <AlertTitle className="text-xs font-semibold">Brak połączenia z ERP</AlertTitle>
+                <AlertDescription className="text-xs">
+                  {subiektStock.reason || "Nie można sprawdzić stanów magazynowych w Subiekcie."}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-4 pl-7 text-sm">
-              {mappedDetails.lineItems?.map((item) => (
-                <div key={item.id} className="border-b pb-4 last:border-b-0">
-                  <div className="flex justify-between items-start">
-                    <div className="pr-4">
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.quantity} szt. x {item.price}
+              {mappedDetails.lineItems?.map((item) => {
+                const stockInfo = subiektStock?.items?.find(
+                  (s: any) => s.offer_id === item.offerId
+                );
+                return (
+                  <div key={item.id} className="border-b pb-4 last:border-b-0">
+                    <div className="flex justify-between items-start">
+                      <div className="pr-4">
+                        <p className="font-medium">{item.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <p className="text-xs text-muted-foreground">
+                            {item.quantity} szt. x {item.price}
+                          </p>
+                          {subiektStock?.is_connected && stockInfo && (
+                            <span className="inline-flex items-center">
+                              {stockInfo.is_service ? (
+                                <Badge variant="outline" className="text-[10px] h-5 bg-blue-500/10 text-blue-400 border-blue-500/20 font-normal">
+                                  Usługa ERP
+                                </Badge>
+                              ) : !stockInfo.has_mapping ? (
+                                <Badge variant="outline" className="text-[10px] h-5 bg-amber-500/10 text-amber-400 border-amber-500/20 font-normal">
+                                  Brak mapowania ERP
+                                </Badge>
+                              ) : stockInfo.has_sufficient_stock ? (
+                                <Badge variant="outline" className="text-[10px] h-5 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-normal">
+                                  W ERP: {stockInfo.quantity_available} szt.
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] h-5 bg-rose-500/10 text-rose-400 border-rose-500/20 font-medium">
+                                  Brak w ERP (dostępne: {stockInfo.quantity_available ?? 0} szt.)
+                                </Badge>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="font-semibold text-right flex-shrink-0">
+                        {(
+                          item.quantity * parseFloat(item.price.split(" ")[0])
+                        ).toFixed(2)}{" "}
+                        {item.price.split(" ")[1]}
                       </p>
                     </div>
-                    <p className="font-semibold text-right flex-shrink-0">
-                      {(
-                        item.quantity * parseFloat(item.price.split(" ")[0])
-                      ).toFixed(2)}{" "}
-                      {item.price.split(" ")[1]}
-                    </p>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <KeyRound className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <Label
-                      htmlFor={`symbol-${item.id}`}
-                      className="text-xs text-muted-foreground whitespace-nowrap"
-                    >
-                      Symbol w Subiekt GT:
-                    </Label>
+                    <div className="mt-2 flex items-center gap-2">
+                      <KeyRound className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <Label
+                        htmlFor={`symbol-${item.id}`}
+                        className="text-xs text-muted-foreground whitespace-nowrap"
+                      >
+                        Symbol w Subiekt GT:
+                      </Label>
 
-                    {subiektIntegrationId && item.offerId ? (
-                      <SubiektProductCombobox
-                        erpIntegrationId={subiektIntegrationId}
-                        value={productMappings[item.offerId] || ""}
-                        onValueChange={(symbol) =>
-                          handleMappingChange(item.offerId!, symbol)
-                        }
-                      />
-                    ) : (
-                      <div className="text-xs text-muted-foreground w-full">
-                        Brak ID oferty lub integracji ERP...
-                      </div>
-                    )}
+                      {subiektIntegrationId && item.offerId ? (
+                        <SubiektProductCombobox
+                          erpIntegrationId={subiektIntegrationId}
+                          value={productMappings[item.offerId] || ""}
+                          onValueChange={(symbol) => {
+                            handleMappingChange(item.offerId!, symbol);
+                            updateMappingMutation.mutate({ offerId: item.offerId!, erpSymbol: symbol });
+                          }}
+                        />
+                      ) : (
+                        <div className="text-xs text-muted-foreground w-full">
+                          Brak ID oferty lub integracji ERP...
+                        </div>
+                      )}
 
-                    {autoFilledMappings.has(item.offerId!) && (
-                      <Sparkles className="h-4 w-4 text-yellow-500" />
-                    )}
+                      {autoFilledMappings.has(item.offerId!) && (
+                        <Sparkles className="h-4 w-4 text-yellow-500" />
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+
               {deliveryCost && deliveryCost.amount > 0 && (
                 <div className="flex justify-between items-center pt-2">
                   <p className="font-medium">Dostawa</p>
@@ -579,29 +698,81 @@ export function SalesInvoiceDetailsColumn({
               </div>
             </div>
           </section>
-          {totalMessages > 0 && (
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="chat-history">
-                <AccordionTrigger className="text-lg font-semibold hover:no-underline">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-5 w-5 text-primary" />
-                    <span>Historia Rozmowy</span>
-                    <Badge>{totalMessages}</Badge>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="border-t max-h-[500px] overflow-y-auto">
-                    {order.buyerLogin && order.serviceIntegration && (
-                      <ChatPanel
-                        buyerLogin={order.buyerLogin}
-                        integrationId={order.serviceIntegration.id}
-                        currentOrderId={order.id}
-                        myLogin={order.serviceIntegration.external_user_id}
-                      />
-                    )}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
+          {(subiektIntegrationId || totalMessages > 0) && (
+            <Accordion type="single" collapsible defaultValue="billing-settings" className="w-full">
+              {subiektIntegrationId && (
+                <AccordionItem value="billing-settings">
+                  <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+                    <div className="flex items-center gap-2">
+                      <Sliders className="h-5 w-5 text-primary" />
+                      <span>Ustawienia nabijania</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-4 p-4 border rounded-lg bg-muted/10 mt-1">
+                      <div className="space-y-2">
+                        <Label htmlFor="reference-template" className="text-sm font-medium">
+                          Szablon referencji dokumentu sprzedaży
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="reference-template"
+                            value={referenceTemplate}
+                            onChange={(e) => setReferenceTemplate(e.target.value)}
+                            placeholder="{order_id} - {login}"
+                            className="flex-1"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={handleSaveSettings}
+                            disabled={isSavingSettings}
+                            className="shrink-0"
+                          >
+                            {isSavingSettings ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Save className="h-4 w-4 mr-1" />
+                            )}
+                            Zapisz
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Szablon używany do automatycznego wypełniania pola referencji w Subiekcie. 
+                          Dostępne tagi: <code className="bg-muted px-1 py-0.5 rounded font-mono">{`{order_id}`}</code>,{" "}
+                          <code className="bg-muted px-1 py-0.5 rounded font-mono">{`{login}`}</code>,{" "}
+                          <code className="bg-muted px-1 py-0.5 rounded font-mono">{`{name}`}</code>,{" "}
+                          <code className="bg-muted px-1 py-0.5 rounded font-mono">{`{products}`}</code>,{" "}
+                          <code className="bg-muted px-1 py-0.5 rounded font-mono">{`{source}`}</code>.
+                        </p>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {totalMessages > 0 && (
+                <AccordionItem value="chat-history">
+                  <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-5 w-5 text-primary" />
+                      <span>Historia Rozmowy</span>
+                      <Badge>{totalMessages}</Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="border-t max-h-[500px] overflow-y-auto">
+                      {order.buyerLogin && order.serviceIntegration && (
+                        <ChatPanel
+                          buyerLogin={order.buyerLogin}
+                          integrationId={order.serviceIntegration.id}
+                          currentOrderId={order.id}
+                          myLogin={order.serviceIntegration.external_user_id}
+                        />
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
             </Accordion>
           )}
         </div>

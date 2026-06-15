@@ -52,7 +52,7 @@ export default function ProductDetailsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm({
     resolver: zodResolver(formSchema),
   });
 
@@ -81,7 +81,8 @@ export default function ProductDetailsPage() {
     }
   }, [params.id]);
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (data: any) => {
+    const values = data as z.infer<typeof formSchema>;
     try {
       setIsSaving(true);
       await api.put(`/inventory/${params.id}`, values);
@@ -94,7 +95,7 @@ export default function ProductDetailsPage() {
     }
   };
 
-  const removeOffer = async (offerId: str) => {
+  const removeOffer = async (offerId: string) => {
     if (!confirm("Czy na pewno chcesz usunąć to powiązanie?")) return;
     try {
       await api.delete(`/inventory/${params.id}/channel-offers/${offerId}`);
@@ -130,7 +131,7 @@ export default function ProductDetailsPage() {
                 <FormField control={form.control} name="name" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nazwa</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormControl><Input {...field} value={(field.value as any) ?? ""} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -138,14 +139,14 @@ export default function ProductDetailsPage() {
                   <FormField control={form.control} name="stock_quantity" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Stan magazynowy</FormLabel>
-                      <FormControl><Input type="number" {...field} /></FormControl>
+                      <FormControl><Input type="number" {...field} value={(field.value as any) ?? ""} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="base_price" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Cena bazowa</FormLabel>
-                      <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                      <FormControl><Input type="number" step="0.01" {...field} value={(field.value as any) ?? ""} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />

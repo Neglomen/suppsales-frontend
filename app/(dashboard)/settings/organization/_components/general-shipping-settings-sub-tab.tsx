@@ -32,10 +32,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Tag } from "lucide-react";
 
 const settingsSchema = z.object({
   default_label_format: z.nativeEnum(LabelFormat),
+  default_reference_number_template: z.string().max(200).optional(),
 });
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;
@@ -58,6 +61,7 @@ export function GeneralShippingSettingsSubTab() {
     // Ustawiamy wartości domyślne na wypadek, gdyby API nie odpowiedziało
     defaultValues: {
       default_label_format: LabelFormat.PDF,
+      default_reference_number_template: "",
     },
   });
 
@@ -68,6 +72,7 @@ export function GeneralShippingSettingsSubTab() {
       // Aktualizuje on wartości i resetuje stan `isDirty`.
       form.reset({
         default_label_format: organization.default_label_format,
+        default_reference_number_template: organization.default_reference_number_template || "",
       });
     }
   }, [organization, form.reset]); // `form.reset` jest stabilną funkcją, ale dodajemy ją dla kompletności
@@ -91,6 +96,12 @@ export function GeneralShippingSettingsSubTab() {
   const onSubmit = (values: SettingsFormValues) => {
     // `values` są teraz gwarantowane przez `react-hook-form` i `zod`
     mutation.mutate(values);
+  };
+
+  const handleInsertTag = (tag: string) => {
+    const currentVal = form.getValues("default_reference_number_template") || "";
+    const newVal = currentVal ? `${currentVal} ${tag}` : tag;
+    form.setValue("default_reference_number_template", newVal, { shouldDirty: true });
   };
 
   return (
@@ -134,6 +145,54 @@ export function GeneralShippingSettingsSubTab() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="default_reference_number_template"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Domyślny szablon numeru referencyjnego</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="{product_names}"
+                        {...field}
+                      />
+                    </FormControl>
+                    <CardDescription className="text-xs text-muted-foreground mt-1.5 space-y-2">
+                      <span>
+                        Zdefiniuj wzorzec, który będzie wpisywany do numeru referencyjnego na etykiecie kurierskiej. Kliknij tag, aby go wstawić:
+                      </span>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {[
+                          { tag: "{order_id}", desc: "ID zamówienia" },
+                          { tag: "{login}", desc: "Login kupującego" },
+                          { tag: "{name}", desc: "Pełna nazwa odbiorcy" },
+                          { tag: "{products}", desc: "Nazwy produktów" },
+                          { tag: "{erp_symbols}", desc: "Symbole ERP" },
+                          { tag: "{source}", desc: "Nazwa źródła (sklepu)" },
+                        ].map(({ tag, desc }) => (
+                          <div key={tag} className="flex items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className="font-mono text-[10px] cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-colors"
+                              onClick={() => handleInsertTag(tag)}
+                              title={`Kliknij, aby wstawić ${tag}`}
+                            >
+                              <Tag className="h-3 w-3 mr-1 text-primary" />
+                              {tag}
+                            </Badge>
+                            <span className="text-[11px] text-muted-foreground">{desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <span className="block mt-1 italic">
+                        Np. `Zam. {`{order_id}`} - {`{login}`}` lub `{`{erp_symbols}`}`. Puste pole oznacza domyślne użycie nazw produktów.
+                      </span>
+                    </CardDescription>
                     <FormMessage />
                   </FormItem>
                 )}

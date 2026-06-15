@@ -53,6 +53,9 @@ export function PrintHubIndicator({ isCollapsed }: { isCollapsed: boolean }) {
           >
             <div className="relative flex items-center justify-center">
               <Printer className="h-5 w-5 text-muted-foreground" />
+              {status === "connected" && (
+                <span className="absolute -bottom-1 -right-1 flex h-3 w-3 rounded-full bg-green-500/60 animate-ping" />
+              )}
               <span
                 className={cn(
                   "absolute -bottom-1 -right-1 flex h-3 w-3 rounded-full border-2 border-background",

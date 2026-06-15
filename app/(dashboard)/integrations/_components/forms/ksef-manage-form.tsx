@@ -42,7 +42,7 @@ export function KsefManageForm({
 
         <FormField
           control={form.control}
-          name="ksef_environment"
+          name="environment"
           render={({ field }) => (
             <FormItem className="relative z-10">
               <FormLabel className="flex items-center gap-1.5">
@@ -50,7 +50,7 @@ export function KsefManageForm({
                 <ShieldCheck className="w-4 h-4 text-violet-600 block dark:hidden" />
                 Środowisko Serwera
               </FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value || "prod"}>
+              <Select onValueChange={field.onChange} defaultValue={(field.value as string) || "prod"}>
                 <FormControl>
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Wybierz podłączane środowisko KSeF" />
@@ -68,7 +68,7 @@ export function KsefManageForm({
 
         <FormField
           control={form.control}
-          name="ksef_nip"
+          name="nip"
           render={({ field }) => (
             <FormItem className="relative z-10">
               <FormLabel className="flex items-center gap-1.5">
@@ -77,7 +77,12 @@ export function KsefManageForm({
                 NIP Reprezentanta
               </FormLabel>
               <FormControl>
-                <Input placeholder="Wpisz ciąg liczb np. 1234567890" className="bg-background tracking-wider" {...field} />
+                <Input 
+                  placeholder="Wpisz ciąg liczb np. 1234567890" 
+                  className="bg-background tracking-wider" 
+                  {...field} 
+                  value={typeof field.value === "string" ? field.value : ""} 
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -95,7 +100,13 @@ export function KsefManageForm({
                 Token Autoryzacyjny MF
               </FormLabel>
               <FormControl>
-                <Input type="password" placeholder="Skopiuj ciąg znaków z Aplikacji Podatnika" className="bg-background font-mono text-sm" {...field} />
+                <Input 
+                  type="password" 
+                  placeholder="Skopiuj ciąg znaków z Aplikacji Podatnika" 
+                  className="bg-background font-mono text-sm" 
+                  {...field} 
+                  value={typeof field.value === "string" ? field.value : ""} 
+                />
               </FormControl>
               <FormDescription className="text-xs mt-1.5 leading-relaxed opacity-85">
                 Dla bezpieczeństwa odblokuj token dopiero przed zapisem. Otrzymany ciąg od Ministerstwa Finansów przypisany do konta dostępowego NIP.

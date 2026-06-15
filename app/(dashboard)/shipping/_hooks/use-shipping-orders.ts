@@ -29,7 +29,7 @@ const fetchShippingOrders = async ({
     }
   }
 
-  const res = await api.get("/orders", { params });
+  const res = await api.get(`/orders?${params.toString()}`);
   return res.data;
 };
 

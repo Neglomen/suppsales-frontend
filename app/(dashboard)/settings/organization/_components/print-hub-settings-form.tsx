@@ -8,7 +8,6 @@ import api, { getErrorMessage } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Organization } from "@/types/organization";
 import { usePrintHub } from "@/hooks/use-print-hub";
-import { useAuthStore } from "@/store/auth";
 
 import {
   Form,
@@ -40,6 +39,8 @@ const printHubSettingsSchema = z.object({
   print_hub_enabled: z.boolean(),
   print_hub_default_invoice_printer: z.string().optional().nullable(),
   print_hub_default_label_printer: z.string().optional().nullable(),
+  print_erp_symbol_on_label: z.boolean(),
+  label_items_per_page: z.number().int().min(1).max(5),
 });
 type PrintHubSettingsValues = z.infer<typeof printHubSettingsSchema>;
 
@@ -52,29 +53,40 @@ export function PrintHubSettingsForm({
 }: PrintHubSettingsFormProps) {
   const queryClient = useQueryClient();
   const { status: printHubStatus, printers } = usePrintHub();
-  const updateOrganizationSettings = useAuthStore(
-    (state) => state.updateOrganizationSettings
-  );
 
   const form = useForm<PrintHubSettingsValues>({
     resolver: zodResolver(printHubSettingsSchema),
     defaultValues: {
       print_hub_enabled: (organization as any).print_hub_enabled || false,
-      print_hub_default_invoice_printer: (organization as any).print_hub_default_invoice_printer || "",
-      print_hub_default_label_printer: (organization as any).print_hub_default_label_printer || "",
+      print_hub_default_invoice_printer: (organization as any).print_hub_default_invoice_printer || "__none__",
+      print_hub_default_label_printer: (organization as any).print_hub_default_label_printer || "__none__",
+      print_erp_symbol_on_label: (organization as any).print_erp_symbol_on_label || false,
+      label_items_per_page: (organization as any).label_items_per_page || 3,
     },
   });
 
   const { mutate: updateSettings, isPending } = useMutation({
-    mutationFn: (values: PrintHubSettingsValues) =>
-      api.patch("/organization/settings", values),
+    mutationFn: (values: PrintHubSettingsValues) => {
+      // Konwertuj sentinel __none__ z powrotem na null przed wysłaniem do API
+      const payload = {
+        ...values,
+        print_hub_default_invoice_printer:
+          values.print_hub_default_invoice_printer === "__none__" ? null : values.print_hub_default_invoice_printer,
+        print_hub_default_label_printer:
+          values.print_hub_default_label_printer === "__none__" ? null : values.print_hub_default_label_printer,
+      };
+      return api.patch("/organization/settings", payload);
+    },
     onSuccess: (response) => {
       toast.success("Ustawienia Print Hub zostały zaktualizowane.");
       queryClient.setQueryData(["organization"], response.data);
-      updateOrganizationSettings({
-        printHubEnabled: response.data.print_hub_enabled,
+      form.reset({
+        print_hub_enabled: response.data.print_hub_enabled,
+        print_hub_default_invoice_printer: response.data.print_hub_default_invoice_printer || "__none__",
+        print_hub_default_label_printer: response.data.print_hub_default_label_printer || "__none__",
+        print_erp_symbol_on_label: response.data.print_erp_symbol_on_label || false,
+        label_items_per_page: response.data.label_items_per_page || 3,
       });
-      form.reset({ print_hub_enabled: response.data.print_hub_enabled });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -132,9 +144,11 @@ export function PrintHubSettingsForm({
             {form.watch("print_hub_enabled") && printHubStatus === "connected" && (
               <div className="space-y-4 pt-4 border-t">
                 <FormDescription>
-                  Wybierz domyślne drukarki dla poszczególnych rodzajów dokumentów. Pozostaw puste, aby wybierać drukarkę za każdym razem lub drukować na domyślnej w systemie.
+                  Wybierz domyślne drukarki dla poszczególnych rodzajów dokumentów. Pozostaw
+                  puste, aby wybierać drukarkę za każdym razem lub drukować na domyślnej w systemie.
                 </FormDescription>
-                
+
+                {/* ─── Drukarka faktur ─── */}
                 <FormField
                   control={form.control}
                   name="print_hub_default_invoice_printer"
@@ -143,8 +157,7 @@ export function PrintHubSettingsForm({
                       <FormLabel>Domyślna drukarka dla faktur</FormLabel>
                       <Select
                         onValueChange={field.onChange}
-                        defaultValue={field.value || ""}
-                        value={field.value || ""}
+                        value={field.value || "__none__"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -152,7 +165,7 @@ export function PrintHubSettingsForm({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">-- Brak (wybór ręczny) --</SelectItem>
+                          <SelectItem value="__none__">-- Brak (wybór ręczny) --</SelectItem>
                           {printers.map((printer) => (
                             <SelectItem key={printer.name} value={printer.name}>
                               {printer.name}
@@ -164,6 +177,7 @@ export function PrintHubSettingsForm({
                   )}
                 />
 
+                {/* ─── Drukarka etykiet ─── */}
                 <FormField
                   control={form.control}
                   name="print_hub_default_label_printer"
@@ -172,8 +186,7 @@ export function PrintHubSettingsForm({
                       <FormLabel>Domyślna drukarka dla etykiet (np. Godex, Zebra)</FormLabel>
                       <Select
                         onValueChange={field.onChange}
-                        defaultValue={field.value || ""}
-                        value={field.value || ""}
+                        value={field.value || "__none__"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -181,7 +194,7 @@ export function PrintHubSettingsForm({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">-- Brak (wybór ręczny) --</SelectItem>
+                          <SelectItem value="__none__">-- Brak (wybór ręczny) --</SelectItem>
                           {printers.map((printer) => (
                             <SelectItem key={printer.name} value={printer.name}>
                               {printer.name}
@@ -189,9 +202,81 @@ export function PrintHubSettingsForm({
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormDescription className="text-xs">
+                        Drukarka etykiet (typu Godex) powinna obsługiwać format RAW. Zalecamy instalację sterowników Seagull.
+                      </FormDescription>
                     </FormItem>
                   )}
                 />
+
+                {/* ─── SEKCJA: Etykieta zawartości paczki (ERP) ─── */}
+                <div className="pt-4 border-t space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold">Etykieta zawartości paczki (symbole ERP)</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Po wydrukowaniu etykiety kurierskiej, etykieciarka automatycznie wydrukuje
+                      dodatkową naklejkę z listą produktów i symbolami ERP z Subiekt GT.
+                      Etykieta kurierska (z kodami kreskowymi) pozostaje bez zmian.
+                    </p>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="print_erp_symbol_on_label"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">
+                            Drukuj symbole ERP na etykiecie paczki
+                          </FormLabel>
+                          <FormDescription>
+                            Osobna naklejka (symbol ERP + nazwa + ilość) wydrukuje się zaraz
+                            po etykiecie kurierskiej.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {form.watch("print_erp_symbol_on_label") && (
+                    <FormField
+                      control={form.control}
+                      name="label_items_per_page"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Maks. pozycji na jednej naklejce</FormLabel>
+                          <FormDescription>
+                            Jeśli liczba produktów przekroczy ten limit, automatycznie zostaną
+                            wydrukowane kolejne naklejki (1–5 pozycji).
+                          </FormDescription>
+                          <Select
+                            onValueChange={(val) => field.onChange(parseInt(val))}
+                            value={String(field.value)}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="w-36">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <SelectItem key={n} value={String(n)}>
+                                  {n} {n === 1 ? "pozycja" : n < 5 ? "pozycje" : "pozycji"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
               </div>
             )}
 

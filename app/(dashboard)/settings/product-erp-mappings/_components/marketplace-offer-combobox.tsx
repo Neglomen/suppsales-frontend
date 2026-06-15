@@ -130,7 +130,7 @@ export function MarketplaceOfferCombobox({
                     )}
                   />
                   {offer.image_url ? (
-                    <img src={offer.image_url} alt={offer.name} className="w-8 h-8 object-cover rounded mr-2 shrink-0" />
+                    <img src={offer.image_url} alt={offer.name} className="w-8 h-8 object-contain bg-white p-0.5 rounded mr-2 shrink-0" />
                   ) : (
                     <div className="w-8 h-8 bg-muted rounded mr-2 shrink-0 flex items-center justify-center text-xs">
                       Brak

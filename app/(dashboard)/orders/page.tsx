@@ -53,6 +53,7 @@ interface LineItem {
   id: string;
   offer: { name: string };
   quantity: number;
+  imageUrl?: string | null;
 }
 
 interface Order {
@@ -68,6 +69,7 @@ interface Order {
   payment_type: "CASH_ON_DELIVERY" | "ONLINE" | null;
   tracking_numbers: string[] | null;
   line_items: LineItem[];
+  flags: string[] | null;
 }
 interface PaginatedOrdersResponse {
   total: number;
@@ -136,12 +138,12 @@ export default function OrdersPage() {
           const firstItem = row.original.line_items?.[0];
           // Próbujemy pobrać obrazek z metadanych lub używamy placeholderu
           return (
-            <div className="relative h-12 w-12 rounded-xl border border-border/10 overflow-hidden bg-muted group-hover/row:scale-105 transition-transform">
+            <div className="relative h-12 w-12 rounded-xl border border-border/10 overflow-hidden bg-white group-hover/row:scale-105 transition-transform p-0.5">
               {firstItem?.imageUrl ? (
                 <img 
                   src={firstItem.imageUrl} 
                   alt={firstItem.offer?.name || "Produkt"} 
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-contain p-0.5"
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40">
@@ -161,14 +163,22 @@ export default function OrdersPage() {
           const buyerName = `${order.buyer_first_name || ""} ${
             order.buyer_last_name || ""
           }`.trim();
+          const hasMissingStock = order.flags?.includes("BRAK_STANU");
           return (
             <div className="space-y-1">
-              <p
-                className="font-bold text-sm truncate max-w-[250px] premium-gradient-text"
-                title={firstItem?.offer.name}
-              >
-                {firstItem?.offer.name || "Zamówienie ręczne"}
-              </p>
+              <div className="flex items-center gap-2 max-w-[250px]">
+                <p
+                  className="font-bold text-sm truncate premium-gradient-text"
+                  title={firstItem?.offer.name}
+                >
+                  {firstItem?.offer.name || "Zamówienie ręczne"}
+                </p>
+                {hasMissingStock && (
+                  <Badge variant="destructive" className="text-[10px] h-4 px-1.5 whitespace-nowrap bg-red-500/10 text-red-600 border-red-500/20">
+                    BRAK TOWARU
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-medium bg-primary/5 text-primary border-primary/10">
                   {order.external_order_id.split("-").pop()}
@@ -339,19 +349,19 @@ export default function OrdersPage() {
         params: {
           page: pagination.pageIndex + 1,
           size: pagination.pageSize,
-          sort_by: sortParam,
-          sort_order: orderParam,
+          sortBy: sortParam,
+          sortOrder: orderParam,
           search: debouncedSearch || undefined,
-          integration_id:
+          integrationId:
             filters.integrationId === "all"
               ? undefined
               : filters.integrationId === "manual"
               ? 0
               : filters.integrationId,
-          date_from: filters.dateRange?.from
+          dateFrom: filters.dateRange?.from
             ? format(filters.dateRange.from, "yyyy-MM-dd")
             : undefined,
-          date_to: filters.dateRange?.to
+          dateTo: filters.dateRange?.to
             ? format(filters.dateRange.to, "yyyy-MM-dd")
             : undefined,
         },
@@ -374,7 +384,13 @@ export default function OrdersPage() {
         filters={filters}
         setFilters={setFilters}
         integrations={
-          integrations.filter(Boolean) as { id: number; name: string }[]
+          integrations.filter(
+            (integration) =>
+              integration &&
+              ["ALLEGRO", "BASELINKER", "EMPIK"].includes(
+                integration.provider_type
+              )
+          ) as { id: number; name: string }[]
         }
         onManualOrderClick={() => setManualOrderOpen(true)}
       />

@@ -26,8 +26,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Loader2 } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { Loader2, User, Building, MapPin, Hash, ShieldCheck, FileText } from "lucide-react";
 
 // Schemat walidacji danych do faktury
 const invoiceSchema = z
@@ -204,139 +203,189 @@ export function EditInvoiceDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>Edytuj dane do faktury</DialogTitle>
-          <DialogDescription>
-            Zmień dane nabywcy na fakturze. Każda zmiana zostanie zapisana w historii zamówienia.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[550px] bg-slate-900 border border-slate-800 text-white p-0 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="p-6 pb-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
+              <FileText className="h-5 w-5 text-primary" />
+              Edytuj dane do faktury (FV)
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs">
+              Modyfikacja danych płatnika faktury sprzedaży. Wpłynie to na dane generowane w systemie ERP.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-4 py-4"
+            className="flex flex-col"
           >
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Dane nabywcy
-            </p>
-            <p className="text-xs text-muted-foreground -mt-2">Wypełnij imię i nazwisko <strong>lub</strong> danę firmy &mdash; wystarczy jedno.</p>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="first_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Imię</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Jan" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="last_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nazwisko</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Kowalski" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Scrollable Form Body */}
+            <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto pr-4 scrollbar-thin">
+              {/* Nabywca Section */}
+              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+                  <User className="h-4 w-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Osoba fizyczna</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="first_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-slate-300">Imię</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                            <Input placeholder="Jan" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-xs text-red-400" />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="last_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-slate-300">Nazwisko</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                            <Input placeholder="Kowalski" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                          </div>
+                        </FormControl>
+                        <FormMessage className="text-xs text-red-400" />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Firma Section */}
+              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+                  <Building className="h-4 w-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Firma</span>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="company_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs text-slate-300">Pełna nazwa firmy</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Building className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                          <Input placeholder="Firma Sp. z o.o." {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                        </div>
+                      </FormControl>
+                      <FormMessage className="text-xs text-red-400" />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="tax_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs text-slate-300">NIP (numer identyfikacji podatkowej)</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Hash className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                          <Input placeholder="np. 5361914942" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white font-mono" />
+                        </div>
+                      </FormControl>
+                      <FormMessage className="text-xs text-red-400" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Adres Rejestracyjny Section */}
+              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+                  <MapPin className="h-4 w-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Adres rejestracyjny</span>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="street"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs text-slate-300">Ulica i numer</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                          <Input placeholder="ul. Kwiatowa 1/2" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                        </div>
+                      </FormControl>
+                      <FormMessage className="text-xs text-red-400" />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-5 gap-4">
+                  <div className="col-span-2">
+                    <FormField
+                      control={form.control}
+                      name="zip_code"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs text-slate-300">Kod pocztowy</FormLabel>
+                          <FormControl>
+                            <Input placeholder="00-000" {...field} className="bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white text-center font-mono" />
+                          </FormControl>
+                          <FormMessage className="text-xs text-red-400" />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <FormField
+                      control={form.control}
+                      name="city"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs text-slate-300">Miejscowość</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Warszawa" {...field} className="bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                          </FormControl>
+                          <FormMessage className="text-xs text-red-400" />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <Separator />
-
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Dane firmowe (opcjonalne)
-            </p>
-            <FormField
-              control={form.control}
-              name="company_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nazwa firmy</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Firma Sp. z o.o." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="tax_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>NIP</FormLabel>
-                  <FormControl>
-                    <Input placeholder="1234567890" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Separator />
-
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Adres
-            </p>
-            <FormField
-              control={form.control}
-              name="street"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Ulica i numer</FormLabel>
-                  <FormControl>
-                    <Input placeholder="ul. Kwiatowa 1/2" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="zip_code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kod pocztowy</FormLabel>
-                    <FormControl>
-                      <Input placeholder="00-000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Miejscowość</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Warszawa" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
+            {/* Dialog Footer Actions */}
+            <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={onClose} className="border-slate-800 hover:bg-slate-850 hover:text-white text-slate-300">
                 Anuluj
               </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Zapisz zmiany
+              <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md px-6">
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Zapisywanie...
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="mr-2 h-4 w-4" />
+                    Zapisz zmiany
+                  </>
+                )}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
       </DialogContent>

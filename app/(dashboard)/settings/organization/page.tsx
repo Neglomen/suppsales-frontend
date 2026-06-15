@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Book, Building, Link as LinkIcon, Mail, Package, Users, Waypoints } from "lucide-react";
+import { Book, Building, Link as LinkIcon, Mail, Package, Sliders, Users, Waypoints } from "lucide-react";
 
 import { TeamMembersTab } from "./_components/team-members-tab";
 import { GeneralSettingsTab } from "./_components/general-settings-tab";
@@ -17,6 +17,7 @@ import { AddressBookTab } from "./_components/address-book-tab";
 import { PackagesTab } from "./_components/packages-tab";
 import { DeliveryMappingsTab } from "./_components/delivery-mappings-tab";
 import { MappingsDataTable } from "../product-erp-mappings/_components/mappings-data-table";
+import { BillingSettingsTab } from "./_components/billing-settings-tab";
 
 export default function OrganizationSettingsPage() {
   const renderTabContent = (
@@ -85,6 +86,14 @@ export default function OrganizationSettingsPage() {
               <LinkIcon className="mr-3 h-4 w-4" /> Symbole ERP Aukcji
             </TabsTrigger>
 
+            <div className="px-3 py-2 mt-6 mb-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              ERP i Nabijanie
+            </div>
+
+            <TabsTrigger value="billing-settings" className="justify-start px-4 h-10 w-full data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted transition-colors rounded-xl">
+              <Sliders className="mr-3 h-4 w-4" /> Ustawienia nabijania i druku
+            </TabsTrigger>
+
           </TabsList>
         </div>
 
@@ -140,6 +149,19 @@ export default function OrganizationSettingsPage() {
             "Zarządzaj powiązaniami między ofertami z marketplace a symbolami produktów w systemie ERP (np. Subiekt GT).",
             MappingsDataTable
           )}
+        </TabsContent>
+        <TabsContent value="billing-settings" className="m-0 focus-visible:outline-none focus-visible:ring-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ustawienia nabijania i druku</CardTitle>
+              <CardDescription>
+                Konfiguruj opcje wystawiania dokumentów w systemach ERP oraz parametry etykiet i wydruku PrintHub.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <BillingSettingsTab />
+            </CardContent>
+          </Card>
         </TabsContent>
         </div>
       </Tabs>

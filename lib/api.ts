@@ -45,7 +45,13 @@ export default api;
 
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    return error.response?.data?.detail || error.response?.data?.message || error.message;
+    const detail = error.response?.data?.detail;
+    if (detail && typeof detail === "object") {
+      if ("message" in detail) {
+        return String(detail.message);
+      }
+    }
+    return typeof detail === "string" ? detail : error.response?.data?.message || error.message;
   }
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;

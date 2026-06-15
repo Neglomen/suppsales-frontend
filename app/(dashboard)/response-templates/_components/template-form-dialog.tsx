@@ -54,6 +54,7 @@ type ApiTemplatePayload = {
   content: string;
   scope: "organization" | "private";
   tags: string[];
+  parent_template_id?: string;
 };
 
 export interface Variant {
@@ -71,6 +72,7 @@ export interface Template {
   content: string;
   scope: "organization" | "private";
   tags: { id: string; name: string }[];
+  parent_template?: { id: string; title: string } | null;
   variants?: Omit<Template, "variants">[];
 }
 
@@ -107,6 +109,7 @@ export function TemplateFormDialog({
       title: "",
       content: "",
       scope: "organization",
+      parent_template_id: "none",
     },
   });
 
@@ -117,6 +120,7 @@ export function TemplateFormDialog({
           title: template.title,
           content: template.content,
           scope: template.scope,
+          parent_template_id: template.parent_template?.id || "none",
         });
         setTags(template.tags.map((t) => t.name));
       } else {
@@ -124,6 +128,7 @@ export function TemplateFormDialog({
           title: "",
           content: "",
           scope: "organization",
+          parent_template_id: "none",
         });
         setTags([]);
       }

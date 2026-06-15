@@ -7,7 +7,7 @@ import { useDebounce } from "use-debounce";
 import api from "@/lib/api";
 import { PaginatedResponse } from "@/types/pagination";
 import {
-  PurchaseOrderEnriched,
+  PurchaseOrder,
   PurchaseOrderStatus,
 } from "@/types/purchase-order";
 import { MarketplaceOrder } from "@/types/marketplace-order";
@@ -35,7 +35,7 @@ const fetchInvoiceablePurchaseOrders = async ({
 }: {
   pageParam?: number;
   queryKey: readonly [string, { search: string }];
-}): Promise<PaginatedResponse<PurchaseOrderEnriched>> => {
+}): Promise<PaginatedResponse<PurchaseOrder>> => {
   const [, { search }] = queryKey;
   const params = new URLSearchParams();
   params.append("page", String(pageParam));
@@ -52,7 +52,7 @@ const fetchInvoiceablePurchaseOrders = async ({
 const getStatusVariant = (
   status: PurchaseOrderStatus
 ): "default" | "secondary" | "outline" | "destructive" | "success" => {
-  switch (status) {
+  switch (status as any) {
     case "SENT_TO_SUPPLIER":
       return "secondary";
     case "DISPATCHED":
@@ -111,7 +111,7 @@ export function InvoiceableOrderListColumn({
       if (!order) return;
       if (!orderMap.has(order.id)) {
         orderMap.set(order.id, {
-          order: order,
+          order: order as any,
           statuses: new Set(),
         });
       }
@@ -254,7 +254,7 @@ export function InvoiceableOrderListColumn({
                       </span>
                     </span>
                     <span className="flex-shrink-0">
-                      {new Date(order.purchasedAt).toLocaleDateString("pl-PL")}
+                      {order.purchasedAt ? new Date(order.purchasedAt).toLocaleDateString("pl-PL") : "—"}
                     </span>
                   </div>
 

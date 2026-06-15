@@ -86,8 +86,8 @@ const renderPreview = (
 ): string => {
   let rendered = content;
   if (order && mapped) {
-    const customerName = `${mapped.delivery.address.firstName || ""} ${
-      mapped.delivery.address.lastName || ""
+    const customerName = `${mapped.delivery.address?.firstName || ""} ${
+      mapped.delivery.address?.lastName || ""
     }`.trim();
     const customerEmail =
       order.integration?.provider_type === "BASELINKER"

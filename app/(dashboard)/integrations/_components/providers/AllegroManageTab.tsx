@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, MessageSquareReply } from "lucide-react";
+import { StatusMappingConfig } from "../StatusMappingConfig";
 
 const SyncSwitch = ({
   name,
@@ -45,7 +46,11 @@ const SyncSwitch = ({
   />
 );
 
-export const AllegroManageTab = () => {
+interface AllegroManageTabProps {
+  integrationId: number;
+}
+
+export const AllegroManageTab = ({ integrationId }: AllegroManageTabProps) => {
   const form = useFormContext<IntegrationUpdateSchemaType>();
   return (
     <Tabs defaultValue="settings" className="w-full">
@@ -88,6 +93,7 @@ export const AllegroManageTab = () => {
             label="Zwroty"
           />
         </div>
+        <StatusMappingConfig integrationId={integrationId} />
       </TabsContent>
       <TabsContent value="autoresponder" className="space-y-4 pt-4">
         <SyncSwitch

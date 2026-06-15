@@ -64,5 +64,6 @@ export interface PurchaseOrder {
     };
     line_items?: Array<{ offer?: { name?: string }; quantity?: number }>;
     details_payload?: Record<string, any>;
+    total_to_pay?: number;
   };
 }

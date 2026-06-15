@@ -23,12 +23,13 @@ import { RefreshCw, Loader2, Trash2, Link as LinkIcon } from "lucide-react";
 import { ServiceIntegration } from "@/types/service-integration";
 
 // Importy dedykowanych komponentów
-import { AllegroManageTab } from "./providers/AllegroManageTab";
+import { AllegroManageTab } from "@/app/(dashboard)/integrations/_components/providers/AllegroManageTab";
 import { SubiektManageTab } from "./providers/SubiektManageTab";
-import { BaselinkerManageTab } from "./providers/BaselinkerManageTab";
+import { BaselinkerManageTab } from "@/app/(dashboard)/integrations/_components/providers/BaselinkerManageTab";
 import { SuusManageTab } from "./providers/SuusManageTab";
 import { ABManageTab } from "./providers/ABManageTab";
 import { ApaczkaManageTab } from "./providers/ApaczkaManageTab";
+import { EmpikManageTab } from "@/app/(dashboard)/integrations/_components/providers/EmpikManageTab";
 import {
   FormControl,
   FormField,
@@ -92,12 +93,15 @@ export function ManageIntegrationDialog({
       ab_password: "",
       subiekt_agent_url: "",
       subiekt_api_key: "",
+      subiekt_erp_sales_reference_template: "",
       nip: "",
       environment: "test",
       ksef_token: "",
       apaczka_app_id: "",
       apaczka_app_secret: "",
       apaczka_bank_account: "",
+      empik_token: "",
+      sync_config: {},
     }
   });
 
@@ -118,6 +122,7 @@ export function ManageIntegrationDialog({
         ab_password: "",
         subiekt_agent_url: integration.api_config?.agent_url || "",
         subiekt_api_key: "",
+        subiekt_erp_sales_reference_template: integration.sync_config?.erp_sales_reference_template || "",
         // KSeF
         nip: integration.sync_config?.nip || "",
         environment: integration.sync_config?.environment || "test",
@@ -126,6 +131,8 @@ export function ManageIntegrationDialog({
         apaczka_app_id: integration.api_config?.app_id || "",
         apaczka_app_secret: "",
         apaczka_bank_account: integration.api_config?.bank_account || "",
+        empik_token: "",
+        sync_config: integration.sync_config || {},
       });
     }
   }, [integration, formMethods]);
@@ -142,20 +149,30 @@ export function ManageIntegrationDialog({
       ab_password,
       subiekt_agent_url,
       subiekt_api_key,
+      subiekt_erp_sales_reference_template,
       nip,
       environment,
       ksef_token,
       apaczka_app_id,
       apaczka_app_secret,
       apaczka_bank_account,
+      empik_token,
+      sync_config,
       ...baseValues
     } = values;
 
     const payload: Record<string, any> = { ...baseValues, api_config: {} };
 
+    if (["ALLEGRO", "BASELINKER", "EMPIK"].includes(integration.provider_type)) {
+      payload.sync_config = sync_config || {};
+    }
+
     switch (integration.provider_type) {
       case "BASELINKER":
         if (api_token) payload.api_config.api_token = api_token;
+        break;
+      case "EMPIK":
+        if (empik_token) payload.api_config.api_token = empik_token;
         break;
       case "SUUS":
         if (suus_login) payload.api_config.login = suus_login;
@@ -174,6 +191,12 @@ export function ManageIntegrationDialog({
       case "SUBIEKT_GT":
         if (subiekt_agent_url) payload.api_config.agent_url = subiekt_agent_url;
         if (subiekt_api_key) payload.api_config.api_key = subiekt_api_key;
+        if (subiekt_erp_sales_reference_template !== undefined) {
+          payload.sync_config = {
+            ...integration.sync_config,
+            erp_sales_reference_template: subiekt_erp_sales_reference_template,
+          };
+        }
         break;
       case "KSEF":
         if (ksef_token) payload.api_config.token = ksef_token;
@@ -211,11 +234,13 @@ export function ManageIntegrationDialog({
   const renderProviderSpecificContent = () => {
     switch (integration.provider_type) {
       case "ALLEGRO":
-        return <AllegroManageTab />;
+        return <AllegroManageTab integrationId={integration.id} />;
       case "SUBIEKT_GT":
         return <SubiektManageTab integrationId={integration.id} />;
       case "BASELINKER":
-        return <BaselinkerManageTab />;
+        return <BaselinkerManageTab integrationId={integration.id} />;
+      case "EMPIK":
+        return <EmpikManageTab integrationId={integration.id} />;
       case "SUUS":
         return <SuusManageTab />;
       case "AB":

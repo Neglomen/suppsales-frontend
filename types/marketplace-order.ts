@@ -18,6 +18,7 @@ interface Address {
   countryCode?: string;
   phoneNumber?: string;
   taxId?: string;
+  tax_id?: string;
   // snake_case aliases present in some responses
   first_name?: string;
   last_name?: string;
@@ -47,8 +48,10 @@ export interface MarketplaceOrder {
   invoiceAddress?: Address | null;
   detailsPayload?: any;
   erpSalesDocumentNumber?: string | null;
+  erpSalesDocumentSyncedAt?: string | null;
   pickupPoint?: any | null;
   pickup_point?: any | null;
+  flags?: string[];
 
   // snake_case (z backupu / starszego kodu)
   external_order_id?: string;
@@ -66,6 +69,8 @@ export interface MarketplaceOrder {
   service_integration?: ServiceIntegration | null;
   details_payload?: any;
   line_items?: LineItem[];
+  delivery_address?: Address | null;
+  payment_type?: string | null;
   invoice_address?: {
     first_name?: string | null;
     last_name?: string | null;
@@ -76,4 +81,5 @@ export interface MarketplaceOrder {
     city?: string | null;
   } | null;
   erp_sales_document_number?: string | null;
+  erp_sales_document_synced_at?: string | null;
 }

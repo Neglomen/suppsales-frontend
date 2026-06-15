@@ -4,13 +4,14 @@ import { useEffect, useState, useMemo } from "react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { ColumnDef, PaginationState } from "@tanstack/react-table";
+import { ColumnDef, PaginationState, SortingState } from "@tanstack/react-table";
 import {
   MoreHorizontal,
   PlusCircle,
   Trash2,
   Edit,
   RefreshCw,
+  ArrowUpDown,
 } from "lucide-react";
 
 import { DeliveryMethodMapping } from "@/types/delivery-method-mapping";
@@ -40,6 +41,7 @@ import {
   AllegroIcon,
   BaseLinkerIcon,
   SuusIcon,
+  EmpikIcon,
 } from "@/components/shared/icons";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -59,6 +61,7 @@ export function MappingsSubTab() {
     pageIndex: 0,
     pageSize: 10,
   });
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   const queryClient = useQueryClient();
 
@@ -68,6 +71,11 @@ export function MappingsSubTab() {
       const params = new URLSearchParams();
       params.append("page", String(pagination.pageIndex + 1));
       params.append("size", String(pagination.pageSize));
+
+      if (sorting.length > 0) {
+        params.append("sortBy", sorting[0].id);
+        params.append("sortOrder", sorting[0].desc ? "desc" : "asc");
+      }
 
       const [mappingsRes, couriersRes, packagesRes] = await Promise.all([
         api.get<PaginatedResponse<DeliveryMethodMapping>>(
@@ -91,7 +99,7 @@ export function MappingsSubTab() {
 
   useEffect(() => {
     fetchData();
-  }, [pagination]); // Odświeżaj dane przy zmianie paginacji
+  }, [pagination, sorting]); // Odświeżaj dane przy zmianie paginacji lub sortowania
 
   const handleDiscover = async () => {
     setIsDiscovering(true);
@@ -130,7 +138,16 @@ export function MappingsSubTab() {
   const columns: ColumnDef<DeliveryMethodMapping>[] = useMemo(
     () => [
       {
-        header: "Metoda dostawy (Marketplace)",
+        accessorKey: "marketplace_delivery_method",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="px-2"
+          >
+            Metoda dostawy (Marketplace) <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+          </Button>
+        ),
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
             {row.original.source_integration?.provider_type === "ALLEGRO" && (
@@ -138,6 +155,9 @@ export function MappingsSubTab() {
             )}
             {row.original.source_integration?.provider_type ===
               "BASELINKER" && <BaseLinkerIcon className="h-5 w-5 rounded-sm" />}
+            {row.original.source_integration?.provider_type === "EMPIK" && (
+              <EmpikIcon className="h-5 w-5 rounded-sm" />
+            )}
             <div className="flex flex-col">
               <span className="font-medium">
                 {row.original.marketplace_delivery_method}
@@ -150,7 +170,16 @@ export function MappingsSubTab() {
         ),
       },
       {
-        header: "Mapowanie kuriera",
+        accessorKey: "courier",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="px-2"
+          >
+            Mapowanie kuriera <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+          </Button>
+        ),
         cell: ({ row }) => {
           const courier = couriers.find(
             (c) => c.id === row.original.service_integration_id
@@ -177,7 +206,16 @@ export function MappingsSubTab() {
         },
       },
       {
-        header: "Domyślne opakowanie",
+        accessorKey: "default_package",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="px-2"
+          >
+            Domyślne opakowanie <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+          </Button>
+        ),
         cell: ({ row }) =>
           packages.find(
             (p) => p.id === row.original.default_package_definition_id
@@ -243,6 +281,8 @@ export function MappingsSubTab() {
         pageCount={data?.pages ?? -1}
         pagination={pagination}
         setPagination={setPagination}
+        sorting={sorting}
+        setSorting={setSorting}
       />
 
       <DeliveryMappingFormDialog

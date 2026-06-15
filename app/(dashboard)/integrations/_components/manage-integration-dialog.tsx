@@ -29,6 +29,7 @@ import { BaselinkerManageTab } from "./providers/BaselinkerManageTab";
 import { SuusManageTab } from "./providers/SuusManageTab";
 import { ABManageTab } from "./providers/ABManageTab";
 import { ApaczkaManageTab } from "./providers/ApaczkaManageTab";
+import { EmpikManageTab } from "./providers/EmpikManageTab";
 import {
   FormControl,
   FormField,
@@ -126,6 +127,8 @@ export function ManageIntegrationDialog({
         apaczka_app_id: integration.api_config?.app_id || "",
         apaczka_app_secret: "",
         apaczka_bank_account: integration.api_config?.bank_account || "",
+        empik_token: "",
+        sync_config: integration.sync_config || {},
       });
     }
   }, [integration, formMethods]);
@@ -148,14 +151,23 @@ export function ManageIntegrationDialog({
       apaczka_app_id,
       apaczka_app_secret,
       apaczka_bank_account,
+      empik_token,
+      sync_config,
       ...baseValues
     } = values;
 
     const payload: Record<string, any> = { ...baseValues, api_config: {} };
 
+    if (["ALLEGRO", "BASELINKER", "EMPIK"].includes(integration.provider_type)) {
+      payload.sync_config = sync_config || {};
+    }
+
     switch (integration.provider_type) {
       case "BASELINKER":
         if (api_token) payload.api_config.api_token = api_token;
+        break;
+      case "EMPIK":
+        if (empik_token) payload.api_config.api_token = empik_token;
         break;
       case "SUUS":
         if (suus_login) payload.api_config.login = suus_login;
@@ -211,11 +223,13 @@ export function ManageIntegrationDialog({
   const renderProviderSpecificContent = () => {
     switch (integration.provider_type) {
       case "ALLEGRO":
-        return <AllegroManageTab />;
+        return <AllegroManageTab integrationId={integration.id} />;
       case "SUBIEKT_GT":
         return <SubiektManageTab integrationId={integration.id} />;
       case "BASELINKER":
-        return <BaselinkerManageTab />;
+        return <BaselinkerManageTab integrationId={integration.id} />;
+      case "EMPIK":
+        return <EmpikManageTab integrationId={integration.id} />;
       case "SUUS":
         return <SuusManageTab />;
       case "AB":

@@ -113,7 +113,7 @@ export function MappingsDataTable() {
               <img
                 src={row.original.image_url}
                 alt={row.original.name}
-                className="h-10 w-10 min-w-10 rounded-md object-cover border border-border/50"
+                className="h-10 w-10 min-w-10 rounded-md object-contain bg-white p-0.5 border border-border/50"
               />
             ) : (
               <div className="flex bg-muted/50 h-10 w-10 min-w-10 rounded-md items-center justify-center border border-border/50 text-muted-foreground">

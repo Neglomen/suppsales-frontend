@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { StatusMappingConfig } from "../StatusMappingConfig";
 
 const SyncSwitch = ({ name, label }: { name: any; label: string }) => (
   <FormField
@@ -30,7 +31,11 @@ const SyncSwitch = ({ name, label }: { name: any; label: string }) => (
   />
 );
 
-export const BaselinkerManageTab = () => {
+interface BaselinkerManageTabProps {
+  integrationId: number;
+}
+
+export const BaselinkerManageTab = ({ integrationId }: BaselinkerManageTabProps) => {
   const form = useFormContext<IntegrationUpdateSchemaType>();
   return (
     <div className="space-y-4">
@@ -76,6 +81,7 @@ export const BaselinkerManageTab = () => {
           label="Zamówienia"
         />
       </div>
+      <StatusMappingConfig integrationId={integrationId} />
     </div>
   );
 };

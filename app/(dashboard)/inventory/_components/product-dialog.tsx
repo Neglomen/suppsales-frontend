@@ -30,7 +30,7 @@ const formSchema = z.object({
   sku: z.string().min(1, "SKU jest wymagane"),
   name: z.string().min(1, "Nazwa jest wymagana"),
   stock_quantity: z.coerce.number().min(0, "Ilość nie może być ujemna"),
-  base_price: z.coerce.number().min(0, "Cena nie może być ujemna").optional(),
+  base_price: z.coerce.number().min(0, "Cena nie może być ujemna"),
 });
 
 interface ProductDialogProps {
@@ -42,7 +42,7 @@ interface ProductDialogProps {
 export function ProductDialog({ open, onOpenChange, onSuccess }: ProductDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       sku: "",
@@ -52,7 +52,8 @@ export function ProductDialog({ open, onOpenChange, onSuccess }: ProductDialogPr
     },
   });
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(data: any) {
+    const values = data as z.infer<typeof formSchema>;
     try {
       setIsLoading(true);
       await api.post("/inventory/", values);
@@ -112,7 +113,7 @@ export function ProductDialog({ open, onOpenChange, onSuccess }: ProductDialogPr
                   <FormItem>
                     <FormLabel>Stan magazynowy</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} value={(field.value as any) ?? ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -125,7 +126,7 @@ export function ProductDialog({ open, onOpenChange, onSuccess }: ProductDialogPr
                   <FormItem>
                     <FormLabel>Cena bazowa (PLN)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} />
+                      <Input type="number" step="0.01" {...field} value={(field.value as any) ?? ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

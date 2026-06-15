@@ -31,6 +31,9 @@ import {
   AlertCircle,
   Check,
   X,
+  Download,
+  FileDown,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { ChatPanel } from "./_components/chat-panel";
-import { AllegroIcon, BaseLinkerIcon } from "@/components/shared/icons";
+import { AllegroIcon, BaseLinkerIcon, EmpikIcon } from "@/components/shared/icons";
 import { SendEmailDialog } from "../../../../components/shared/send-email-dialog";
 import { OrderDetailsApiResponse, MappedOrderDetails } from "@/types/order";
 import { ServiceIntegration } from "@/types/service-integration";
@@ -67,6 +70,82 @@ const mapOrderPayloadToDetails = (
   order: OrderDetailsApiResponse
 ): MappedOrderDetails => {
   const payload = order.details_payload;
+
+  if (order.integration?.provider_type === "EMPIK") {
+    const currency = payload?.currency_iso_code || "PLN";
+    const billing = payload?.customer?.billing_address;
+    const shipping = payload?.customer?.shipping_address;
+
+    return {
+      delivery: {
+        methodName: payload?.shipping_type_label || "Brak informacji",
+        isPickupPoint: !!payload?.shipping_pudo_id,
+        pickupPointName: payload?.shipping_pudo_id || undefined,
+        address: shipping ? {
+          firstName: shipping.firstname || payload.customer?.firstname || undefined,
+          lastName: shipping.lastname || payload.customer?.lastname || undefined,
+          street: ((shipping.street_1 || "") + (shipping.street_2 ? " " + shipping.street_2 : "")).trim() || undefined,
+          zipCode: shipping.zip_code || undefined,
+          city: shipping.city || undefined,
+          countryCode: shipping.country_iso_code || undefined,
+          phoneNumber: shipping.phone || payload.customer?.phone || undefined,
+        } : (order.delivery_address ? {
+          firstName: order.delivery_address.first_name || undefined,
+          lastName: order.delivery_address.last_name || undefined,
+          street: order.delivery_address.street || undefined,
+          zipCode: order.delivery_address.zip_code || undefined,
+          city: order.delivery_address.city || undefined,
+          countryCode: order.delivery_address.country_code || undefined,
+          phoneNumber: order.delivery_address.phone_number || undefined,
+        } : undefined),
+      },
+      payment: {
+        type: payload?.payment_type?.toLowerCase().includes("pobran") ? "CASH_ON_DELIVERY" : "ONLINE",
+        provider: payload?.payment_type || "Brak informacji",
+        status: order.payment_status || (payload?.order_state === "WAITING_DEBIT_PAYMENT" ? "PENDING" : "COMPLETED"),
+        total: `${payload?.total_price || payload?.price || "0.00"} ${currency}`,
+      },
+      invoice: {
+        required: !!billing || !!order.invoice_address,
+        address: billing ? {
+          firstName: billing.firstname || undefined,
+          lastName: billing.lastname || undefined,
+          street: ((billing.street_1 || "") + (billing.street_2 ? " " + billing.street_2 : "")).trim() || undefined,
+          zipCode: billing.zip_code || undefined,
+          city: billing.city || undefined,
+          countryCode: billing.country_iso_code || undefined,
+          companyName: billing.company || undefined,
+          taxId: billing.tax_number || billing.company_vat || undefined,
+        } : (order.invoice_address ? {
+          firstName: order.invoice_address.first_name || undefined,
+          lastName: order.invoice_address.last_name || undefined,
+          street: order.invoice_address.street || undefined,
+          zipCode: order.invoice_address.zip_code || undefined,
+          city: order.invoice_address.city || undefined,
+          countryCode: order.invoice_address.country_code || undefined,
+          companyName: order.invoice_address.company_name || undefined,
+          taxId: order.invoice_address.tax_id || undefined,
+        } : undefined),
+      },
+      line_items: (payload?.order_lines || []).map((line: any) => {
+        const mediumMedia = line.product_medias?.find((m: any) => m.type === "MEDIUM") || line.product_medias?.[0];
+        let imageUrl = mediumMedia?.media_url || null;
+        if (imageUrl && imageUrl.startsWith("/")) {
+          imageUrl = "https://marketplace.empik.com/mmp" + imageUrl;
+        }
+        return {
+          id: line.order_line_id,
+          name: line.product_title,
+          quantity: line.quantity,
+          price: `${line.price_unit || line.price || "0.00"} ${currency}`,
+          sku: line.offer_sku || line.product_sku || line.offer_id?.toString(),
+          imageUrl: imageUrl,
+          offerId: line.offer_id?.toString() || line.offer_sku,
+        };
+      }),
+      buyerComments: payload?.delivery_comments || payload?.customer_message || undefined,
+    };
+  }
 
   if (order.integration?.provider_type === "BASELINKER") {
     const deliveryFullName = payload.delivery_fullname || "";
@@ -117,6 +196,7 @@ const mapOrderPayloadToDetails = (
         sku: product.sku || product.product_id,
         ean: product.ean,
       })),
+      buyerComments: payload.user_comments || undefined,
     };
   }
 
@@ -148,6 +228,7 @@ const mapOrderPayloadToDetails = (
       imageUrl: item.imageUrl,
       sku: item.offer?.external?.id || item.offer?.id,
     })),
+    buyerComments: payload.messageToSeller || undefined,
   };
 };
 
@@ -363,6 +444,119 @@ function LogEntry({ log }: { log: OrderDetailsApiResponse["event_logs"][0] }) {
   );
 }
 
+// --- ERP Sales Invoice Section ---
+function ErpSalesInvoiceSection({
+  order,
+  onSaved,
+}: {
+  order: OrderDetailsApiResponse;
+  onSaved: (v: string) => void;
+}) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!order.erp_sales_document_number) return;
+    setDownloading(true);
+    try {
+      // Pobieramy token z instancji axios (interceptory ustawiają Authorization header)
+      const response = await api.get(`/orders/${order.id}/sales-invoice/pdf`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeName = (order.erp_sales_document_number || "faktura")
+        .replace(/\//g, "-")
+        .replace(/\s+/g, "_");
+      link.href = url;
+      link.download = `FS_${safeName}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      const detail =
+        err.response?.data instanceof Blob
+          ? await err.response.data.text().then((t: string) => {
+              try { return JSON.parse(t).detail; } catch { return t; }
+            })
+          : err.response?.data?.detail || err.message;
+      toast.error(`Nie udało się pobrać PDF faktury: ${detail}`);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const syncStatus = (order as any).erp_sales_document_sync_status as string | undefined;
+  const syncedAt = (order as any).erp_sales_document_synced_at as string | undefined;
+
+  const statusBadge = () => {
+    if (!order.erp_sales_document_number) return null;
+    if (syncStatus === "SYNCED" || !syncStatus) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400 bg-emerald-500/10 rounded-full px-2 py-0.5">
+          <CheckCircle2 className="h-2.5 w-2.5" /> Zsynchronizowana
+        </span>
+      );
+    }
+    if (syncStatus === "ERROR") {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-400 bg-red-500/10 rounded-full px-2 py-0.5">
+          <XCircle className="h-2.5 w-2.5" /> Błąd synchronizacji
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-400 bg-amber-500/10 rounded-full px-2 py-0.5">
+        <AlertCircle className="h-2.5 w-2.5" /> {syncStatus}
+      </span>
+    );
+  };
+
+  return (
+    <div>
+      <div className="flex items-start justify-between mb-1">
+        <SectionLabel>Faktura sprzedaży (ERP)</SectionLabel>
+        {statusBadge()}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-muted-foreground mb-0.5">Numer dokumentu FS</p>
+          <ErpSymbolEdit
+            orderId={order.id}
+            initial={order.erp_sales_document_number}
+            onSaved={onSaved}
+          />
+        </div>
+
+        {order.erp_sales_document_number && (
+          <Button
+            id="download-sales-invoice-pdf"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 text-xs h-8"
+            onClick={handleDownloadPdf}
+            disabled={downloading}
+            title={`Pobierz PDF: ${order.erp_sales_document_number}`}
+          >
+            {downloading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            {downloading ? "Pobieranie..." : "Pobierz PDF"}
+          </Button>
+        )}
+      </div>
+
+      {syncedAt && (
+        <p className="text-[10px] text-muted-foreground mt-1.5">
+          Zsynchronizowano: {new Date(syncedAt).toLocaleString("pl-PL")}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ============================
 // MAIN COMPONENT
 // ============================
@@ -375,6 +569,37 @@ function OrderDetailsContent() {
   const [isSendTemplateOpen, setSendTemplateOpen] = useState(false);
   const [isEditAddressOpen, setIsEditAddressOpen] = useState(false);
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const handleDownloadInvoicePdf = async (orderId: string, docNumber: string) => {
+    setIsDownloadingPdf(true);
+    try {
+      const response = await api.get(`/orders/${orderId}/sales-invoice/pdf`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeName = docNumber.replace(/\//g, "-").replace(/\s+/g, "_");
+      link.href = url;
+      link.download = `FS_${safeName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(`Pobrano fakturę: ${docNumber}`);
+    } catch (err: any) {
+      const detail =
+        err.response?.data instanceof Blob
+          ? await err.response.data.text().then((t: string) => {
+              try { return JSON.parse(t).detail; } catch { return t; }
+            })
+          : err.response?.data?.detail || err.message;
+      toast.error(`Nie udało się pobrać PDF: ${detail}`);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   const { data: integrations } = useQuery<ServiceIntegration[]>({
     queryKey: ["serviceIntegrations"],
@@ -384,7 +609,11 @@ function OrderDetailsContent() {
 
   const offerIds = useMemo(() => {
     if (!order) return [];
-    const items = order.details_payload?.lineItems || order.details_payload?.products || [];
+    if (order.integration?.provider_type === "EMPIK") {
+      const items = order.details_payload?.order_lines || [];
+      return items.map((item: any) => item.offer_id?.toString() || item.offer_sku).filter(Boolean);
+    }
+    const items = order.line_items || order.details_payload?.lineItems || order.details_payload?.products || [];
     return items.map((item: any) => item.offer?.id || item.product_id).filter(Boolean);
   }, [order]);
 
@@ -460,14 +689,20 @@ function OrderDetailsContent() {
                 {!providerType && <Package className="h-7 w-7 text-white/70" />}
                 {providerType === "ALLEGRO" && <AllegroIcon className="h-9 w-9" />}
                 {providerType === "BASELINKER" && <BaseLinkerIcon className="h-9 w-9 rounded" />}
+                {providerType === "EMPIK" && <EmpikIcon className="h-9 w-9 rounded" />}
               </div>
               <div>
                 <p className="text-[11px] text-white/40 uppercase tracking-widest">
                   {order.integration?.name || "Zamówienie ręczne"}
                 </p>
-                <h1 className="text-xl font-bold text-white leading-tight">
-                  #{order.external_order_id}
-                </h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-xl font-bold text-white leading-tight">
+                    #{order.external_order_id}
+                  </h1>
+                  {order.flags?.includes("BRAK_STANU") && (
+                    <Badge variant="destructive" className="bg-red-500/20 text-red-400 border-red-500/30 uppercase text-[10px] tracking-wider px-2 h-5">Brak Towaru</Badge>
+                  )}
+                </div>
                 <p className="text-[11px] text-white/30 font-mono mt-0.5">{order.id}</p>
               </div>
             </div>
@@ -510,7 +745,24 @@ function OrderDetailsContent() {
               initial={order.erp_sales_document_number}
               onSaved={(v) => setOrder((o) => o ? { ...o, erp_sales_document_number: v } : o)}
             />
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex gap-2 flex-wrap">
+              {order.erp_sales_document_number && (
+                <Button
+                  id="header-download-invoice-pdf"
+                  variant="outline"
+                  size="sm"
+                  className="border-emerald-500/40 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 bg-transparent gap-1.5"
+                  onClick={() => handleDownloadInvoicePdf(order.id, order.erp_sales_document_number!)}
+                  disabled={isDownloadingPdf}
+                >
+                  {isDownloadingPdf ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  {isDownloadingPdf ? "Pobieranie..." : `Faktura ${order.erp_sales_document_number}`}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -547,7 +799,20 @@ function OrderDetailsContent() {
         </TabsList>
 
         {/* ── TAB: Details ── */}
-        <TabsContent value="details" className="mt-4">
+        <TabsContent value="details" className="mt-4 space-y-4">
+          {/* Customer Comments */}
+          {mappedDetails.buyerComments && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex gap-3">
+              <MessageSquare className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold text-yellow-500 mb-1">Uwagi od kupującego</h3>
+                <p className="text-sm text-yellow-500/90 whitespace-pre-wrap">
+                  {mappedDetails.buyerComments}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* ── Products — full width, at the top ── */}
           <Card className="border-border/60">
             <CardHeader className="pb-3">
@@ -572,7 +837,7 @@ function OrderDetailsContent() {
                   </thead>
                   <tbody className="divide-y divide-border/40">
                     {mappedDetails.line_items.map((item) => {
-                      const offerId = item.sku; // in mapped items sku usually holds the offer id, or we need to pass item.id if different
+                      const offerId = (item as any).offerId || item.sku; // in mapped items sku usually holds the offer id, or we need to pass item.id if different
                       // But let's actually use the offer payload ID if available. For now item.sku is offerId in mappedDetails mapping
                       const mapping = productMappings?.[offerId] || productMappings?.[item.id];
                       return (
@@ -580,7 +845,7 @@ function OrderDetailsContent() {
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-3">
                             {(item as any).imageUrl ? (
-                              <img src={(item as any).imageUrl} alt={item.name} className="w-10 h-10 rounded-md object-cover border border-border/60 shrink-0" />
+                              <img src={(item as any).imageUrl} alt={item.name} className="w-10 h-10 rounded-md object-contain bg-white p-0.5 border border-border/60 shrink-0" />
                             ) : (
                               <div className="w-10 h-10 rounded-md border border-border/60 bg-muted/30 flex items-center justify-center shrink-0">
                                 <Package className="h-4 w-4 text-muted-foreground" />
@@ -741,7 +1006,7 @@ function OrderDetailsContent() {
                       <img
                         src={(item as any).imageUrl}
                         alt={item.name}
-                        className="w-14 h-14 rounded-lg object-cover border border-border/60 shrink-0"
+                        className="w-14 h-14 rounded-lg object-contain bg-white p-0.5 border border-border/60 shrink-0"
                       />
                     ) : (
                       <div className="w-14 h-14 rounded-lg border border-border/60 bg-muted/30 flex items-center justify-center shrink-0">
@@ -780,20 +1045,13 @@ function OrderDetailsContent() {
             </CardContent>
           </Card>
 
-          {/* ERP document on products tab */}
+          {/* ERP sales invoice section on products tab */}
           <Card className="border-border/60 mt-4">
             <CardContent className="pt-5 pb-4 px-5">
-              <SectionLabel>Powiązanie z ERP</SectionLabel>
-              <div className="flex items-center gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Numer dokumentu sprzedaży (ERP)</p>
-                  <ErpSymbolEdit
-                    orderId={order.id}
-                    initial={order.erp_sales_document_number}
-                    onSaved={(v) => setOrder((o) => o ? { ...o, erp_sales_document_number: v } : o)}
-                  />
-                </div>
-              </div>
+              <ErpSalesInvoiceSection
+                order={order}
+                onSaved={(v) => setOrder((o) => o ? { ...o, erp_sales_document_number: v } : o)}
+              />
             </CardContent>
           </Card>
         </TabsContent>

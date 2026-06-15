@@ -23,12 +23,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -83,13 +77,14 @@ interface ValuationItem {
 }
 import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChatPanel } from "../../orders/[id]/_components/chat-panel";
 import { Thread } from "@/types/thread";
 import { Shipment } from "@/types/shipment";
 import { AdditionalServiceMapping } from "@/types/additional-service-mapping";
 import { useOrderShipments } from "../_hooks/use-order-shipments";
 import { ShipmentHistory } from "./ShipmentHistory";
-import { downloadFileFromBase64 } from "@/lib/utils";
+import { cn, downloadFileFromBase64 } from "@/lib/utils";
 import { SUUS_PACKAGE_CODES } from "@/lib/courier-data";
 import {
   FormControl,
@@ -111,6 +106,7 @@ import { EditAddressDialog } from "./EditAddressDialog";
 import { EditInvoiceDialog } from "./EditInvoiceDialog";
 import { usePrintHub } from "@/hooks/use-print-hub";
 import { printHubService } from "@/lib/print-hub-service";
+import { AllegroIcon, BaseLinkerIcon, EmpikIcon } from "@/components/shared/icons";
 
 interface OrderInfoProps {
   order: MarketplaceOrder;
@@ -119,229 +115,610 @@ interface OrderInfoProps {
   refetchMappings?: () => void;
   courierProvider?: string;
   onOrderUpdate?: (updatedOrder: MarketplaceOrder) => void;
+  refetchOrder?: () => void;
+  isFetchingOrder?: boolean;
+  hideHeader?: boolean;
+  onlyHeader?: boolean;
+  showPickupPoint?: boolean;
+  overridePointId?: string;
+  setOverridePointId?: (id: string) => void;
+  subiektStock?: any;
 }
 
-const OrderInfoCard = ({ order, productMappings, erpIntegration, refetchMappings, courierProvider, onOrderUpdate }: OrderInfoProps) => {
+const OrderInfoCard = ({
+  order,
+  productMappings,
+  erpIntegration,
+  refetchMappings,
+  courierProvider,
+  onOrderUpdate,
+  refetchOrder,
+  isFetchingOrder,
+  hideHeader = false,
+  onlyHeader = false,
+  showPickupPoint = false,
+  overridePointId = "",
+  setOverridePointId,
+  subiektStock,
+}: OrderInfoProps) => {
   const [isEditAddressOpen, setIsEditAddressOpen] = useState(false);
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
-  const payload = order.details_payload || {};
-  const deliveryAddress = payload.delivery?.address || payload;
-  const pickupPoint = payload.delivery?.pickupPoint || (payload.delivery_point_id ? payload : null);
-  
-  const recipientName = `${deliveryAddress.firstName || ""} ${deliveryAddress.lastName || ""}`.trim() || payload.delivery_fullname;
-  const lineItems = payload.lineItems || payload.products || [];
-  
-  const paymentInfo = useMemo(() => {
-    if (payload.payment?.type === "CASH_ON_DELIVERY" || String(payload.payment_method_cod) === "1") {
-      const amount = payload.cashOnDelivery?.amount || payload.payment_done || order.total_to_pay;
-      return { type: "cod", label: "Pobranie", amount, variant: "warning" as const, icon: <CreditCard className="h-3.5 w-3.5" />, color: "text-amber-400" };
-    }
-    const amount = payload.summary?.totalToPay?.amount || payload.payment_done || order.total_to_pay;
-    return { type: "paid", label: "Opłacone", amount, variant: "success" as const, icon: <CheckCircle className="h-3.5 w-3.5" />, color: "text-emerald-400" };
-  }, [payload, order.total_to_pay]);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
 
-  const invoice = payload.invoice || (payload.want_invoice === "1" ? payload : null);
-  const hasInvoice = !!(invoice?.required || invoice?.invoice_company);
-  const invoiceAddress = hasInvoice ? invoice.address || invoice : {};
-  const invoiceName = invoiceAddress?.company?.name || invoiceAddress?.invoice_company || `${invoiceAddress?.naturalPerson?.firstName || invoiceAddress?.firstName || ""} ${invoiceAddress?.naturalPerson?.lastName || invoiceAddress?.lastName || ""}`.trim();
-  const taxId = invoiceAddress?.company?.taxId || invoiceAddress?.taxId || invoiceAddress?.invoice_nip;
-  const message = payload.messageToSeller?.text || payload.user_comments;
-  
+  const handleCreateInvoice = async () => {
+    try {
+      setIsCreatingInvoice(true);
+      const mappings: Record<string, string> = {};
+      let missingMapping = false;
+
+      for (const item of lineItems) {
+        const offerId = item.offer?.id || item.product_id;
+        if (!offerId) continue;
+        const mappedSymbol = productMappings?.[offerId]?.erp_product_symbol;
+        if (!mappedSymbol) {
+          missingMapping = true;
+          toast.error(`Brak mapowania dla produktu: ${item.offer?.name || item.name}`);
+        } else {
+          mappings[offerId] = mappedSymbol;
+        }
+      }
+
+      if (missingMapping) {
+        setIsCreatingInvoice(false);
+        return;
+      }
+
+      const pollTaskStatus = (taskId: string): Promise<{ document_number: string }> => {
+        return new Promise((resolve, reject) => {
+          const startTime = Date.now();
+          const timeout = 5 * 60 * 1000; // 5 minutes timeout
+          const interval = setInterval(async () => {
+            try {
+              if (Date.now() - startTime > timeout) {
+                clearInterval(interval);
+                reject(new Error("Przekroczono limit czasu oczekiwania na wystawienie faktury."));
+                return;
+              }
+              const statusRes = await api.get(`/tasks/${taskId}/status`);
+              const data = statusRes.data;
+              if (data.status === "SUCCESS") {
+                clearInterval(interval);
+                resolve({
+                  document_number: data.result?.document_number || "Dokument sprzedaży",
+                });
+              } else if (data.status === "FAILURE" || data.status === "FAILED") {
+                clearInterval(interval);
+                reject(new Error(data.result?.error || "Nieznany błąd podczas tworzenia faktury w Subiekcie GT."));
+              }
+            } catch (err: any) {
+              clearInterval(interval);
+              const errMsg = err.response?.data?.detail || err.message || "Błąd połączenia z serwerem";
+              reject(new Error(errMsg));
+            }
+          }, 2000);
+        });
+      };
+
+      const triggerPromise = async () => {
+        const res = await api.post(`/sales-invoices/orders/${order.id}/create-sales-invoice`, {
+          product_mappings: mappings,
+        });
+        const taskId = res.data.task_id;
+        if (!taskId) {
+          throw new Error("Nie otrzymano identyfikatora zadania z serwera.");
+        }
+        const pollResult = await pollTaskStatus(taskId);
+        
+        let updatedOrder = order;
+        if (refetchOrder) {
+          await refetchOrder();
+        }
+        try {
+          const freshRes = await api.get(`/orders/${order.id}`);
+          if (freshRes.data) {
+            updatedOrder = freshRes.data;
+          }
+        } catch (e) {
+          console.error("Failed to fetch fresh order details directly", e);
+        }
+        if (onOrderUpdate && updatedOrder) {
+          onOrderUpdate(updatedOrder);
+        }
+
+        return pollResult;
+      };
+
+      await toast.promise(
+        triggerPromise(),
+        {
+          loading: "Wystawianie faktury w Subiekt GT...",
+          success: (res: any) => (
+            <div className="flex flex-col gap-1 text-left">
+              <span className="font-semibold text-emerald-400">Faktura wystawiona pomyślnie!</span>
+              <span className="text-xs text-slate-300">Numer: <strong className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-white ml-1">{res.document_number}</strong></span>
+            </div>
+          ),
+          error: (err: any) => {
+            const detail = err.response?.data?.detail;
+            const errMsg = detail
+              ? (typeof detail === "object" && detail.message ? detail.message : (typeof detail === "string" ? detail : err.message))
+              : (err.message || "Nieznany błąd");
+            return (
+              <div className="flex flex-col gap-1 text-left">
+                <span className="font-semibold text-rose-400">Błąd wystawiania faktury</span>
+                <span className="text-xs text-slate-300">{errMsg}</span>
+              </div>
+            );
+          },
+        },
+        {
+          style: {
+            minWidth: "340px",
+            background: "#0f172a",
+            color: "#fff",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            borderRadius: "12px",
+            boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5)",
+          },
+          success: {
+            duration: 6000,
+            icon: "✅",
+          },
+          error: {
+            duration: 8000,
+            icon: "❌",
+          },
+        }
+      );
+
+    } catch (err: any) {
+      // Errors handled inside toast.promise do not need extra toasts, 
+      // but just in case triggering itself fails outside triggerPromise:
+      if (err.message && !err.message.includes("Błąd wystawiania faktury")) {
+        toast.error(err.message || "Błąd podczas tworzenia faktury.");
+      }
+    } finally {
+      setIsCreatingInvoice(false);
+    }
+  };
+  const payload = order.details_payload || {};
   const providerType = order.service_integration?.provider_type;
 
-  return (
-    <div className="space-y-6">
-      {/* ── HERO HEADER (Premium Design) ── */}
-      <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800/90 to-slate-900 shadow-xl shrink-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent pointer-events-none" />
-        <div className="relative p-5">
-          <div className="flex flex-col md:flex-row md:items-start gap-5">
-            {/* Icon + integration */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-lg">
-                {!providerType && <Package className="h-6 w-6 text-white/70" />}
-                {providerType === "ALLEGRO" && <span className="text-white font-bold text-xs uppercase">ALL</span>}
-                {providerType === "BASELINKER" && <span className="text-white font-bold text-xs uppercase">BL</span>}
-              </div>
-              <div>
-                <p className="text-[10px] text-white/40 uppercase tracking-widest">
-                  {order.service_integration?.name || "Zamówienie ręczne"}
-                </p>
-                <h1 className="text-lg font-bold text-white leading-tight">
-                  #{order.external_order_id}
-                </h1>
-                <p className="text-[10px] text-white/30 font-mono mt-0.5">{order.buyer_login}</p>
-              </div>
-            </div>
+  const deliveryInfo = useMemo(() => {
+    // Prefer normalized delivery_address if it exists
+    if (order.delivery_address) {
+      const da = order.delivery_address;
+      const street = da.street;
+      const zipCode = da.zip_code || (da as any).zipCode;
+      const city = da.city;
+      const firstName = da.first_name || (da as any).firstName || "";
+      const lastName = da.last_name || (da as any).lastName || "";
+      const name = `${firstName} ${lastName}`.trim() || da.company_name || "";
+      return { name, street, zipCode, city, phone: da.phone_number };
+    }
+    // Fallback to legacy mapping
+    const da = payload.delivery?.address || payload;
+    const firstName = da.firstName || "";
+    const lastName = da.lastName || "";
+    const name = `${firstName} ${lastName}`.trim() || payload.delivery_fullname || "";
+    const street = da.street || payload.delivery_address;
+    const zipCode = da.zipCode || payload.delivery_postcode;
+    const city = da.city || payload.delivery_city;
+    return { name, street, zipCode, city, phone: da.phoneNumber || payload.phone };
+  }, [order.delivery_address, payload]);
 
-            {/* Stats pills */}
-            <div className="flex flex-wrap gap-2 md:ml-auto">
-              <div className="flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10">
-                <span className="text-white/50"><CreditCard className="h-3 w-3" /></span>
-                <div className="min-w-0">
-                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Kwota</p>
-                  <p className="text-xs font-semibold text-white truncate">{paymentInfo.amount} {payload.currency || "PLN"}</p>
+  const pickupPointInfo = useMemo(() => {
+    if (order.pickup_point) {
+      return order.pickup_point;
+    }
+    const legacyPickup = payload.delivery?.pickupPoint || (payload.delivery_point_id ? payload : null);
+    if (legacyPickup) {
+      return {
+        name: legacyPickup.name || legacyPickup.delivery_point_name,
+        address: {
+          street: legacyPickup.address?.street || legacyPickup.delivery_point_address,
+          zipCode: legacyPickup.address?.zipCode || legacyPickup.delivery_point_postcode,
+          city: legacyPickup.address?.city || legacyPickup.delivery_point_city,
+        }
+      };
+    }
+    return null;
+  }, [order.pickup_point, payload]);
+
+  const invoiceInfo = useMemo(() => {
+    // Check if invoice is required
+    const inv = order.invoice_address;
+    const legacyInv = payload.invoice || (payload.want_invoice === "1" ? payload : null);
+    const hasInvoice = !!(inv || legacyInv?.required || legacyInv?.invoice_company);
+
+    if (!hasInvoice) {
+      return { hasInvoice: false };
+    }
+
+    if (inv) {
+      const firstName = inv.first_name || (inv as any).firstName || "";
+      const lastName = inv.last_name || (inv as any).lastName || "";
+      const companyName = inv.company_name || (inv as any).companyName || "";
+      const name = companyName.trim() || `${firstName} ${lastName}`.trim();
+      const taxId = inv.tax_id || (inv as any).taxId;
+      const street = inv.street;
+      const zipCode = inv.zip_code || (inv as any).zipCode;
+      const city = inv.city;
+      return { hasInvoice: true, name, taxId, street, zipCode, city };
+    }
+
+    const legacyInvAddress = legacyInv.address || legacyInv;
+    const firstName = legacyInvAddress?.naturalPerson?.firstName || legacyInvAddress?.firstName || "";
+    const lastName = legacyInvAddress?.naturalPerson?.lastName || legacyInvAddress?.lastName || "";
+    const companyName = legacyInvAddress?.company?.name || legacyInv?.invoice_company || "";
+    const name = companyName.trim() || `${firstName} ${lastName}`.trim();
+    const taxId = legacyInvAddress?.company?.taxId || legacyInvAddress?.taxId || legacyInv?.invoice_nip;
+    const street = legacyInvAddress.street || legacyInv.invoice_address;
+    const zipCode = legacyInvAddress.zipCode || legacyInv.invoice_postcode;
+    const city = legacyInvAddress.city || legacyInv.invoice_city;
+
+    return { hasInvoice: true, name, taxId, street, zipCode, city };
+  }, [order.invoice_address, payload]);
+
+  const paymentInfo = useMemo(() => {
+    const isCod = order.payment_type === "CASH_ON_DELIVERY" ||
+                  payload.payment?.type === "CASH_ON_DELIVERY" || 
+                  String(payload.payment_method_cod) === "1" ||
+                  payload.payment_type?.toLowerCase().includes("pobran");
+
+    if (isCod) {
+      const amount = order.total_to_pay || payload.cashOnDelivery?.amount || payload.payment_done;
+      return { type: "cod", label: "Pobranie", amount, variant: "warning" as const, icon: <CreditCard className="h-3.5 w-3.5" />, color: "text-amber-400" };
+    }
+    const amount = order.total_to_pay || payload.summary?.totalToPay?.amount || payload.payment_done;
+    return { type: "paid", label: "Opłacone", amount, variant: "success" as const, icon: <CheckCircle className="h-3.5 w-3.5" />, color: "text-emerald-400" };
+  }, [order.payment_type, order.total_to_pay, payload]);
+
+  const lineItems = useMemo(() => {
+    if (providerType === "EMPIK") {
+      const currency = payload.currency_iso_code || "PLN";
+      return (payload.order_lines || []).map((line: any) => {
+        const mediumMedia = line.product_medias?.find((m: any) => m.type === "MEDIUM") || line.product_medias?.[0];
+        let imageUrl = mediumMedia?.media_url || null;
+        if (imageUrl && imageUrl.startsWith("/")) {
+          imageUrl = "https://marketplace.empik.com/mmp" + imageUrl;
+        }
+        return {
+          id: line.order_line_id,
+          name: line.product_title,
+          quantity: line.quantity,
+          price: `${line.price_unit || line.price || "0.00"} ${currency}`,
+          offer: {
+            id: line.offer_id?.toString() || line.offer_sku,
+            name: line.product_title,
+          },
+          imageUrl: imageUrl,
+          sku: line.offer_sku,
+        };
+      });
+    }
+    return order.line_items || payload.lineItems || payload.products || [];
+  }, [order.line_items, payload, providerType]);
+
+  const message = payload.messageToSeller?.text || payload.user_comments || payload.message_to_seller;
+
+  return (
+    <div className={cn(!onlyHeader && "space-y-6")}>
+      {/* ── HERO HEADER (Premium Design) ── */}
+      {!hideHeader && (
+        <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800/90 to-slate-900 shadow-xl shrink-0">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent pointer-events-none" />
+          <div className="relative p-5">
+            <div className="flex flex-col md:flex-row md:items-start gap-5">
+              {/* Icon + integration */}
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-lg">
+                  {!providerType && <Package className="h-6 w-6 text-white/70" />}
+                  {providerType === "ALLEGRO" && <AllegroIcon className="h-9 w-9" />}
+                  {providerType === "BASELINKER" && <BaseLinkerIcon className="h-9 w-9 rounded" />}
+                  {providerType === "EMPIK" && <EmpikIcon className="h-9 w-9 rounded" />}
+                </div>
+                <div>
+                  <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                    {order.service_integration?.name || "Zamówienie ręczne"}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-bold text-white leading-tight">
+                      #{order.external_order_id}
+                    </h1>
+                    {refetchOrder && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
+                        onClick={() => refetchOrder()}
+                        disabled={isFetchingOrder}
+                        title="Odśwież zamówienie"
+                      >
+                        <RefreshCcw className={cn("h-3.5 w-3.5", isFetchingOrder && "animate-spin")} />
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-white/30 font-mono mt-0.5">{order.buyer_login}</p>
                 </div>
               </div>
-              <div className={`flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10 ${paymentInfo.color}`}>
-                <span className={paymentInfo.color}>{paymentInfo.icon}</span>
-                <div>
-                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Status</p>
-                  <p className="text-xs font-semibold truncate">{paymentInfo.label}</p>
+
+              {/* Stats pills */}
+              <div className="flex flex-wrap gap-2 md:ml-auto">
+                <div className="flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10">
+                  <span className="text-white/50"><CreditCard className="h-3 w-3" /></span>
+                  <div className="min-w-0">
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Kwota</p>
+                    <p className="text-xs font-semibold text-white truncate">{paymentInfo.amount} {payload.currency || "PLN"}</p>
+                  </div>
+                </div>
+                <div className={`flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10 ${paymentInfo.color}`}>
+                  <span className={paymentInfo.color}>{paymentInfo.icon}</span>
+                  <div>
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Status</p>
+                    <p className="text-xs font-semibold truncate">{paymentInfo.label}</p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* ── ADDRESSES & INFO ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Dostawa */}
-        <Card className="border-border/60 shadow-sm bg-card/40">
-          <CardContent className="p-4 relative">
-            <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                <Home className="h-3.5 w-3.5" /> Adres Dostawy
-              </p>
-              {!pickupPoint && (
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditAddressOpen(true)}>
-                  <Edit className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-            <div className="text-sm">
-              {pickupPoint ? (
-                <>
-                  <p className="font-semibold text-primary">{pickupPoint.name || pickupPoint.delivery_point_name}</p>
-                  <p className="text-muted-foreground">{pickupPoint.address?.street || pickupPoint.delivery_point_address}</p>
-                  <p className="text-muted-foreground">{pickupPoint.address?.zipCode || pickupPoint.delivery_point_postcode} {pickupPoint.address?.city || pickupPoint.delivery_point_city}</p>
-                  <Badge variant="outline" className="mt-2 text-[10px]">Odbiór w punkcie</Badge>
-                </>
-              ) : (
-                <>
-                  <p className="font-semibold">{recipientName}</p>
-                  <p className="text-muted-foreground">{deliveryAddress.street || payload.delivery_address}</p>
-                  <p className="text-muted-foreground">{deliveryAddress.zipCode || payload.delivery_postcode} {deliveryAddress.city || payload.delivery_city}</p>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Faktura */}
-        <Card className="border-border/60 shadow-sm bg-card/40">
-          <CardContent className="p-4 relative">
-            <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5" /> Dane do Faktury
-              </p>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditInvoiceOpen(true)}>
-                <Edit className="h-3 w-3" />
-              </Button>
-            </div>
-            <div className="text-sm">
-              {hasInvoice ? (
-                <>
-                  <p className="font-semibold">{invoiceName}</p>
-                  {taxId && <p className="text-xs text-muted-foreground font-mono mb-0.5">NIP: {taxId}</p>}
-                  <p className="text-muted-foreground">{invoiceAddress.street || invoiceAddress.invoice_address}</p>
-                  <p className="text-muted-foreground">{invoiceAddress.zipCode || invoiceAddress.invoice_postcode} {invoiceAddress.city || invoiceAddress.invoice_city}</p>
-                </>
-              ) : (
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-muted-foreground">{recipientName}</p>
-                  <p className="text-muted-foreground">{deliveryAddress.street || payload.delivery_address}</p>
-                  <p className="text-muted-foreground">{deliveryAddress.zipCode || payload.delivery_postcode} {deliveryAddress.city || payload.delivery_city}</p>
-                  <p className="text-[10px] italic text-muted-foreground mt-2">(Wysłanie domyślne - klient nie prosił o fakturę)</p>
+      {!onlyHeader && (
+        <div className="space-y-6">
+          {/* ── ADDRESSES & INFO ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Dostawa */}
+            <Card className="border-border/60 shadow-sm bg-card/40">
+              <CardContent className="p-4 relative">
+                <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                    <Home className="h-3.5 w-3.5" /> Adres Dostawy
+                  </p>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditAddressOpen(true)}>
+                    <Edit className="h-3 w-3" />
+                  </Button>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── PRODUCTS LIST (Premium) ── */}
-      {lineItems.length > 0 && (
-        <Card className="border-border/60 shadow-sm overflow-hidden">
-          <div className="bg-muted/30 px-4 py-2 flex items-center justify-between border-b border-border/40">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-              <Package className="h-3.5 w-3.5" /> Produkty ({lineItems.length})
-            </p>
-          </div>
-          <div className="divide-y divide-border/40">
-            {lineItems.map((item: any, index: number) => {
-              const offerId = item.offer?.id || item.product_id;
-              const mapping = productMappings?.[offerId];
-              return (
-                <div key={`${item.id || item.order_product_id}-${index}`} className="p-3 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.offer?.name || item.name} className="w-10 h-10 rounded-md object-cover border border-border/60 shrink-0" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-md border border-border/60 bg-muted/30 flex items-center justify-center shrink-0">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                      </div>
+                <div className="text-sm space-y-3">
+                  {/* Dane odbiorcy - zawsze widoczne i czytelne */}
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-slate-200">{deliveryInfo.name || "Brak odbiorcy"}</p>
+                    {deliveryInfo.phone && (
+                      <p className="text-xs text-muted-foreground font-mono">Tel: {deliveryInfo.phone}</p>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-snug line-clamp-1">{item.offer?.name || item.name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-muted-foreground font-mono">SKU: {offerId || 'Brak'}</span>
-                        {mapping ? (
-                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-                            ERP: {mapping.erp_product_symbol}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-destructive/10 text-destructive border-destructive/20">
-                            Brak mapowania
-                          </Badge>
-                        )}
+                  </div>
+
+                  {pickupPointInfo || overridePointId ? (
+                    <div className="pt-2.5 border-t border-white/5 space-y-1.5 bg-primary/5 rounded-lg p-2.5 border border-primary/10">
+                      <div className="flex items-center gap-1.5 text-primary">
+                        <MapPin className="h-3.5 w-3.5" />
+                        <span className="font-bold text-[10px] uppercase tracking-wider">Punkt Odbioru / Paczkomat</span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm text-primary-foreground">
+                          {pickupPointInfo?.name || `Paczkomat ${overridePointId}`}
+                        </p>
+                        {pickupPointInfo?.address?.street ? (
+                          <p className="text-xs text-muted-foreground mt-0.5">{pickupPointInfo.address.street}</p>
+                        ) : deliveryInfo.street ? (
+                          <p className="text-xs text-muted-foreground mt-0.5">{deliveryInfo.street}</p>
+                        ) : null}
+                        {pickupPointInfo?.address?.zipCode || pickupPointInfo?.address?.city ? (
+                          <p className="text-xs text-muted-foreground">
+                            {pickupPointInfo.address.zipCode} {pickupPointInfo.address.city}
+                          </p>
+                        ) : deliveryInfo.zipCode || deliveryInfo.city ? (
+                          <p className="text-xs text-muted-foreground">
+                            {deliveryInfo.zipCode} {deliveryInfo.city}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <ProductMappingDialog 
-                      offerId={offerId} 
-                      offerName={item.offer?.name || item.name}
-                      currentMapping={mapping}
-                      sourceIntegrationId={order.service_integration?.id}
-                      erpIntegrationId={erpIntegration?.id}
-                      onMappingUpdated={refetchMappings || (() => {})}
-                    />
-                    <Badge variant="secondary" className="font-mono bg-background shadow-sm border border-border/60">
-                      x{item.quantity}
-                    </Badge>
-                  </div>
+                  ) : (
+                    <div className="pt-2.5 border-t border-white/5 space-y-0.5">
+                      <p className="text-muted-foreground">{deliveryInfo.street || "Brak ulicy"}</p>
+                      <p className="text-muted-foreground">
+                        {deliveryInfo.zipCode} {deliveryInfo.city}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ID Punktu Paczkomatu wejściowe bezpośrednio w okienku adresu */}
+                  {showPickupPoint && setOverridePointId && (
+                    <div className="mt-3 pt-2.5 border-t border-white/5 space-y-1.5">
+                      <Label htmlFor="address-point-id" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-primary" /> Szybka zmiana ID punktu
+                      </Label>
+                      <Input
+                        id="address-point-id"
+                        value={overridePointId || ""}
+                        onChange={(e) => setOverridePointId(e.target.value)}
+                        placeholder="Wpisz ID punktu (np. WAW53AP)..."
+                        className="h-8 text-xs bg-background/50 font-mono uppercase border-primary/20 focus:border-primary/50 focus:ring-0"
+                      />
+                    </div>
+                  )}
                 </div>
-              );
-            })}
+              </CardContent>
+            </Card>
+
+            {/* Faktura */}
+            <Card className="border-border/60 shadow-sm bg-card/40">
+              <CardContent className="p-4 relative">
+                <div className="flex items-center justify-between mb-3 border-b border-border/40 pb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" /> Dane do Faktury
+                  </p>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditInvoiceOpen(true)}>
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="text-sm">
+                  {invoiceInfo.hasInvoice ? (
+                    <>
+                      <p className="font-semibold">{invoiceInfo.name}</p>
+                      {invoiceInfo.taxId && <p className="text-xs text-muted-foreground font-mono mb-0.5">NIP: {invoiceInfo.taxId}</p>}
+                      <p className="text-muted-foreground">{invoiceInfo.street}</p>
+                      <p className="text-muted-foreground">{invoiceInfo.zipCode} {invoiceInfo.city}</p>
+                    </>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <p className="font-semibold text-muted-foreground">{deliveryInfo.name}</p>
+                      <p className="text-muted-foreground">{deliveryInfo.street}</p>
+                      <p className="text-muted-foreground">{deliveryInfo.zipCode} {deliveryInfo.city}</p>
+                      <p className="text-[10px] italic text-muted-foreground mt-2">(Wysłanie domyślne - klient nie prosił o fakturę)</p>
+                    </div>
+                  )}
+
+                  {/* Status Faktury i Przycisk Tworzenia */}
+                  {order.erp_sales_document_number ? (
+                    <div className="mt-3 pt-3 border-t border-emerald-500/20 flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-400">
+                      <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold">Wystawiono fakturę:</p>
+                        <p className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-white mt-1 truncate inline-block">
+                          {order.erp_sales_document_number}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 pt-3 border-t border-border/40">
+                      <Button
+                        className="w-full h-8 text-xs font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg transition-all duration-300 gap-1.5"
+                        onClick={handleCreateInvoice}
+                        disabled={isCreatingInvoice}
+                      >
+                        {isCreatingInvoice ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Wystawianie...
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="h-3.5 w-3.5" />
+                            Wystaw fakturę w Subiekt GT
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </Card>
-      )}
 
-      {/* ── MESSAGE ── */}
-      {message && (
-        <Alert className="border-border/60 shadow-sm bg-muted/10">
-          <StickyNote className="h-4 w-4 text-muted-foreground" />
-          <AlertTitle className="text-xs font-semibold text-muted-foreground">Wiadomość od kupującego</AlertTitle>
-          <AlertDescription className="mt-2 text-sm italic font-medium">"{message}"</AlertDescription>
-        </Alert>
-      )}
+          {/* ── PRODUCTS LIST (Premium) ── */}
+          {subiektStock && !subiektStock.is_connected && (
+            <Alert variant="destructive" className="mb-3 bg-red-950/20 border-red-500/20 text-red-400 py-2 px-3">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle className="text-xs font-semibold">Brak połączenia z ERP</AlertTitle>
+              <AlertDescription className="text-[11px] leading-snug">
+                {subiektStock.reason || "Nie można sprawdzić stanów magazynowych w Subiekcie."}
+              </AlertDescription>
+            </Alert>
+          )}
 
-      {/* Dialogs */}
-      <EditAddressDialog
-        order={order}
-        courierProvider={courierProvider}
-        isOpen={isEditAddressOpen}
-        onClose={() => setIsEditAddressOpen(false)}
-        onSuccess={(updatedOrder) => { setIsEditAddressOpen(false); onOrderUpdate?.(updatedOrder); }}
-      />
-      <EditInvoiceDialog
-        order={order}
-        isOpen={isEditInvoiceOpen}
-        onClose={() => setIsEditInvoiceOpen(false)}
-        onSuccess={(updatedOrder) => { setIsEditInvoiceOpen(false); onOrderUpdate?.(updatedOrder); }}
-      />
+          {lineItems.length > 0 && (
+            <Card className="border-border/60 shadow-sm overflow-hidden">
+              <div className="bg-muted/30 px-4 py-2 flex items-center justify-between border-b border-border/40">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                  <Package className="h-3.5 w-3.5" /> Produkty ({lineItems.length})
+                </p>
+              </div>
+              <div className="divide-y divide-border/40">
+                {lineItems.map((item: any, index: number) => {
+                  const offerId = item.offer?.id || item.product_id;
+                  const mapping = productMappings?.[offerId];
+                  const stockInfo = subiektStock?.items?.find((s: any) => s.offer_id === offerId);
+                  return (
+                    <div key={`${item.id || item.order_product_id}-${index}`} className="p-3 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.offer?.name || item.name} className="w-10 h-10 rounded-md object-contain bg-white p-0.5 border border-border/60 shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-md border border-border/60 bg-muted/30 flex items-center justify-center shrink-0">
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium leading-snug line-clamp-1">{item.offer?.name || item.name}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="text-[10px] text-muted-foreground font-mono">SKU: {item.sku || offerId || 'Brak'}</span>
+                            {mapping ? (
+                              <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                                ERP: {mapping.erp_product_symbol}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-destructive/10 text-destructive border-destructive/20">
+                                Brak mapowania
+                              </Badge>
+                            )}
+                            {subiektStock?.is_connected && stockInfo && stockInfo.has_mapping && (
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  "text-[9px] h-4 px-1.5",
+                                  stockInfo.is_service
+                                    ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                    : stockInfo.has_sufficient_stock
+                                    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                    : "bg-rose-500/10 text-rose-500 border border-rose-500/20 font-medium"
+                                )}
+                              >
+                                {stockInfo.is_service 
+                                  ? "Usługa" 
+                                  : `W ERP: ${stockInfo.quantity_available ?? 0} szt.`}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <ProductMappingDialog 
+                          offerId={offerId} 
+                          offerName={item.offer?.name || item.name}
+                          currentMapping={mapping}
+                          sourceIntegrationId={order.service_integration?.id}
+                          erpIntegrationId={erpIntegration?.id}
+                          onMappingUpdated={refetchMappings || (() => {})}
+                        />
+                        <Badge variant="secondary" className="font-mono bg-background shadow-sm border border-border/60">
+                          x{item.quantity}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* ── MESSAGE ── */}
+          {message && (
+            <Alert className="border-border/60 shadow-sm bg-muted/10">
+              <StickyNote className="h-4 w-4 text-muted-foreground" />
+              <AlertTitle className="text-xs font-semibold text-muted-foreground">Wiadomość od kupującego</AlertTitle>
+              <AlertDescription className="mt-2 text-sm italic font-medium">"{message}"</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Dialogs */}
+          <EditAddressDialog
+            order={order}
+            courierProvider={courierProvider}
+            isOpen={isEditAddressOpen}
+            onClose={() => setIsEditAddressOpen(false)}
+            onSuccess={(updatedOrder) => { setIsEditAddressOpen(false); onOrderUpdate?.(updatedOrder); }}
+          />
+          <EditInvoiceDialog
+            order={order}
+            isOpen={isEditInvoiceOpen}
+            onClose={() => setIsEditInvoiceOpen(false)}
+            onSuccess={(updatedOrder) => { setIsEditInvoiceOpen(false); onOrderUpdate?.(updatedOrder); }}
+          />
+        </div>
+      )}
     </div>  );
 };
 
@@ -387,24 +764,44 @@ interface PackageState {
 interface OrderDetailsColumnProps {
   order: MarketplaceOrder | null;
   onShipmentCreated: (orderId: string) => void;
+  onOrderUpdate?: (order: MarketplaceOrder | null) => void;
 }
 
 export function OrderDetailsColumn({
-  order,
+  order: propOrder,
   onShipmentCreated,
+  onOrderUpdate,
 }: OrderDetailsColumnProps) {
   const queryClient = useQueryClient();
+
+  const { data: freshOrder, refetch: refetchOrder, isFetching: isFetchingOrder } = useQuery<MarketplaceOrder | null>({
+    queryKey: ["orderDetails", propOrder?.id],
+    queryFn: async () => {
+      if (!propOrder?.id) return null;
+      const res = await api.get(`/orders/${propOrder.id}`);
+      return res.data;
+    },
+    enabled: !!propOrder?.id,
+    initialData: propOrder || undefined,
+  });
+
+  const order = freshOrder || propOrder;
+
   const { data: integrations } = useQuery<ServiceIntegration[]>({
     queryKey: ["serviceIntegrations"],
     queryFn: async () => (await api.get("/service-integrations")).data,
   });
   const erpIntegration = integrations?.find(i => i.provider_type === "SUBIEKT_GT");
 
-  const { isEnabled: printHubEnabled, status: printHubStatus, defaultLabelPrinter } = usePrintHub();
+  const { isEnabled: printHubEnabled, status: printHubStatus, defaultLabelPrinter, printErpSymbolOnLabel, labelItemsPerPage } = usePrintHub();
 
   const offerIds = useMemo(() => {
     if (!order) return [];
-    const items = order.details_payload?.lineItems || order.details_payload?.products || [];
+    if (order.service_integration?.provider_type === "EMPIK") {
+      const items = order.details_payload?.order_lines || [];
+      return items.map((item: any) => item.offer_id?.toString() || item.offer_sku).filter(Boolean);
+    }
+    const items = order.line_items || order.details_payload?.lineItems || order.details_payload?.products || [];
     return items.map((item: any) => item.offer?.id || item.product_id).filter(Boolean);
   }, [order]);
 
@@ -422,6 +819,71 @@ export function OrderDetailsColumn({
     enabled: !!order?.service_integration?.id && !!erpIntegration?.id && offerIds.length > 0
   });
 
+  const { data: subiektStock, refetch: refetchSubiektStock } = useQuery<any>({
+    queryKey: ["subiektStock", order?.id],
+    queryFn: async () => {
+      if (!order?.id) return null;
+      const res = await api.get(`/orders/${order.id}/subiekt-stock`);
+      return res.data;
+    },
+    enabled: !!order?.id && !!erpIntegration?.id,
+  });
+
+  const { data: organization } = useQuery<any>({
+    queryKey: ["organization"],
+    queryFn: async () => (await api.get("/organization")).data,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const handleMappingUpdated = () => {
+    refetchMappings();
+    refetchSubiektStock();
+  };
+
+  // --- Stany ręcznego wyboru kuriera (przeniesione wyżej, by zapobiec błędom kompilacji) ---
+  const [isManualCourier, setIsManualCourier] = useState(false);
+  const [selectedCourierId, setSelectedCourierId] = useState<number | null>(null);
+  const [selectedServiceCode, setSelectedServiceCode] = useState<string>("");
+  const [apaczkaServices, setApaczkaServices] = useState<ApaczkaService[]>([]);
+  const [isFetchingServices, setIsFetchingServices] = useState(false);
+  const [valuationItems, setValuationItems] = useState<ValuationItem[]>([]);
+  const [isValuating, setIsValuating] = useState(false);
+  const [overridePointId, setOverridePointId] = useState<string>("");
+  const [pickupType, setPickupType] = useState("COURIER");
+  const [pickupDate, setPickupDate] = useState("");
+  const [pickupHoursFrom, setPickupHoursFrom] = useState("09:00");
+  const [pickupHoursTo, setPickupHoursTo] = useState("17:00");
+
+  const lineItems = useMemo(() => {
+    if (!order) return [];
+    if (order.service_integration?.provider_type === "EMPIK") {
+      const payload = order.details_payload || {};
+      const currency = payload.currency_iso_code || "PLN";
+      return (payload.order_lines || []).map((line: any) => {
+        const mediumMedia = line.product_medias?.find((m: any) => m.type === "MEDIUM") || line.product_medias?.[0];
+        let imageUrl = mediumMedia?.media_url || null;
+        if (imageUrl && imageUrl.startsWith("/")) {
+          imageUrl = "https://marketplace.empik.com/mmp" + imageUrl;
+        }
+        return {
+          id: line.order_line_id,
+          name: line.product_title,
+          quantity: line.quantity,
+          price: `${line.price_unit || line.price || "0.00"} ${currency}`,
+          offer: {
+            id: line.offer_id?.toString() || line.offer_sku,
+            name: line.product_title,
+          },
+          imageUrl: imageUrl,
+          sku: line.offer_sku,
+        };
+      });
+    }
+    const payload = order.details_payload || {};
+    return order.line_items || payload.lineItems || payload.products || [];
+  }, [order]);
+
+
   const {
     data: config,
     isLoading: isConfigLoading,
@@ -430,43 +892,113 @@ export function OrderDetailsColumn({
   const [packages, setPackages] = useState<PackageState[]>([]);
   const getProductSummary = (orderInfo?: MarketplaceOrder | null) => {
     if (!orderInfo) return "";
-    const items = orderInfo.details_payload?.lineItems || orderInfo.details_payload?.products || [];
+    const providerType = orderInfo.service_integration?.provider_type;
+    const payload = orderInfo.details_payload || {};
+    let items = [];
+    if (providerType === "EMPIK") {
+      items = (payload.order_lines || []).map((line: any) => ({
+        name: line.product_title || "Produkt",
+        quantity: line.quantity || 1
+      }));
+    } else {
+      const origItems = orderInfo.line_items || payload.lineItems || payload.products || [];
+      items = origItems.map((item: any) => ({
+        name: item.offer?.name || item.name || "Produkt",
+        quantity: item.quantity || 1
+      }));
+    }
     return items
-      .map((item: any) => {
-        const name = item.offer?.name || item.name || "Produkt";
-        return `${name} x${item.quantity}`;
-      })
-      .join(", ")
-      .substring(0, 50); // Ograniczenie długości referencji InPost
+      .map((item: any) => `${item.name} x${item.quantity}`)
+      .join(", ");
   };
 
-  const [referenceNumber, setReferenceNumber] = useState(getProductSummary(order));
+  const [referenceNumber, setReferenceNumber] = useState("");
+
+  const receiverFullName = useMemo(() => {
+    if (!order) return "Brak";
+    if (order.service_integration?.provider_type === "ALLEGRO") {
+      return `${order.details_payload?.delivery?.address?.firstName || ""} ${
+        order.details_payload?.delivery?.address?.lastName || ""
+      }`.trim();
+    }
+    return order.details_payload?.delivery_fullname || "Brak";
+  }, [order]);
+
+  const maxRefLength = useMemo(() => {
+    const selectedCourier = config?.couriers?.find((c) => c.id === selectedCourierId);
+    if (!selectedCourier) return 35;
+
+    if (selectedCourier.provider_type === "ALLEGRO") {
+      return 35;
+    }
+    if (selectedCourier.provider_type === "SUUS") {
+      return 43;
+    }
+    if (selectedCourier.provider_type === "APACZKA") {
+      const activeService = apaczkaServices.find((s) => String(s.id) === String(selectedServiceCode));
+      const serviceName = activeService?.name?.toLowerCase() || "";
+      if (serviceName.includes("inpost") || serviceName.includes("paczkomat")) {
+        return 50;
+      }
+      return 35;
+    }
+    return 35;
+  }, [selectedCourierId, selectedServiceCode, apaczkaServices, config]);
 
   useEffect(() => {
-    setReferenceNumber(getProductSummary(order));
-  }, [order]);
+    if (order && lineItems.length > 0) {
+      const template = organization?.default_reference_number_template;
+      let summary = "";
+      
+      if (template) {
+        let resolved = template;
+        
+        // 1. {order_id}
+        resolved = resolved.replace(/{order_id}/g, order.external_order_id || order.id || "");
+        
+        // 2. {buyer_login} / {login}
+        resolved = resolved.replace(/{buyer_login}/g, order.buyer_login || "");
+        resolved = resolved.replace(/{login}/g, order.buyer_login || "");
+        
+        // 3. {buyer_name} / {name}
+        resolved = resolved.replace(/{buyer_name}/g, receiverFullName);
+        resolved = resolved.replace(/{name}/g, receiverFullName);
+        
+        // 4. {product_names} / {products}
+        const productNames = lineItems.map((item: any) => `${item.name} x${item.quantity}`).join(", ");
+        resolved = resolved.replace(/{product_names}/g, productNames);
+        resolved = resolved.replace(/{products}/g, productNames);
+        
+        // 5. {erp_symbols}
+        const erpSymbolsList = lineItems
+          .map((item: any) => {
+            const offerId = item.offer?.id || item.product_id;
+            return productMappings?.[offerId]?.erp_product_symbol;
+          })
+          .filter(Boolean);
+        const erpSymbols = erpSymbolsList.join(", ");
+        resolved = resolved.replace(/{erp_symbols}/g, erpSymbols);
+        
+        // 6. {source}
+        const sourceName = order.service_integration?.provider_type || "";
+        resolved = resolved.replace(/{source}/g, sourceName);
+        
+        summary = resolved.substring(0, maxRefLength);
+      } else {
+        summary = getProductSummary(order).substring(0, maxRefLength);
+      }
+      setReferenceNumber(summary);
+    } else {
+      setReferenceNumber("");
+    }
+  }, [order, lineItems, maxRefLength, organization, productMappings, receiverFullName]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selectedServices, setSelectedServices] = useState<Set<string>>(
     new Set()
   );
 
-  // --- Stany ręcznego wyboru kuriera ---
-  const [isManualCourier, setIsManualCourier] = useState(false);
-  const [selectedCourierId, setSelectedCourierId] = useState<number | null>(null);
-  const [selectedServiceCode, setSelectedServiceCode] = useState<string>("");
-  const [apaczkaServices, setApaczkaServices] = useState<ApaczkaService[]>([]);
-  const [isFetchingServices, setIsFetchingServices] = useState(false);
-  const [valuationItems, setValuationItems] = useState<ValuationItem[]>([]);
-  const [isValuating, setIsValuating] = useState(false);
 
-  const [overridePointId, setOverridePointId] = useState<string>("");
-
-  // --- Pickup override states ---
-  const [pickupType, setPickupType] = useState("COURIER");
-  const [pickupDate, setPickupDate] = useState("");
-  const [pickupHoursFrom, setPickupHoursFrom] = useState("09:00");
-  const [pickupHoursTo, setPickupHoursTo] = useState("17:00");
 
   // Reset trybu ręcznego przy każdej zmianie zamówienia
   useEffect(() => {
@@ -478,9 +1010,9 @@ export function OrderDetailsColumn({
     
     // Inicjalizacja punktu odbioru
     const deliv = order?.details_payload?.delivery || {};
-    const pointId = deliv?.pickupPoint?.id || order?.details_payload?.delivery_point_id || "";
+    const pointId = order?.pickup_point?.id || deliv?.pickupPoint?.id || order?.details_payload?.delivery_point_id || "";
     setOverridePointId(pointId);
-  }, [order?.id]);
+  }, [order?.id, order?.pickup_point?.id]);
 
   const apaczkaIntegrations = integrations?.filter(i => i.provider_type === "APACZKA") ?? [];
 
@@ -522,7 +1054,8 @@ export function OrderDetailsColumn({
       };
     const deliveryMethodName =
       order.details_payload?.delivery?.method?.name ||
-      order.details_payload?.delivery_method;
+      order.details_payload?.delivery_method ||
+      (order.service_integration?.provider_type === "EMPIK" ? order.details_payload?.shipping_type_label : null);
     if (!deliveryMethodName)
       return { mappingWarning: "W zamówieniu brakuje nazwy metody dostawy." };
     const mapping = config.mappings.find(
@@ -570,10 +1103,8 @@ export function OrderDetailsColumn({
           is_nstd: false,
         },
       ]);
-      setReferenceNumber(getProductSummary(order));
     } else {
       setPackages([]);
-      setReferenceNumber("");
     }
   }, [order, mappedPackageId, isCodOrder, totalCodAmount]);
 
@@ -860,6 +1391,24 @@ export function OrderDetailsColumn({
       toast.success(
         `Pomyślnie utworzono ${createdShipments.length} etykiet. Rozpoczynanie pobierania...`
       );
+
+      // Zbieramy pozycje które mają mapowanie ERP (raz dla całego zamówienia/paczek)
+      const lineItems: any[] = order.details_payload?.lineItems || order.details_payload?.products || [];
+      const erpItems = (productMappings
+        ? lineItems
+            .map((item: any) => {
+              const offerId = item.offer?.id || item.product_id;
+              const mapping = productMappings[offerId];
+              if (!mapping) return null;
+              return {
+                erpSymbol: mapping.erp_product_symbol as string,
+                name: (item.offer?.name || item.name || "Produkt") as string,
+                quantity: item.quantity as number,
+              };
+            })
+            .filter(Boolean)
+        : []) as { erpSymbol: string; name: string; quantity: number }[];
+
       for (const shipment of createdShipments) {
         try {
           const labelResponse = await api.get(
@@ -880,6 +1429,9 @@ export function OrderDetailsColumn({
             } else {
               printHubService.printPdf(label_data, fileName, {
                 printerName: defaultLabelPrinter || undefined,
+                printErpSymbols: printErpSymbolOnLabel,
+                labelItemsPerPage: labelItemsPerPage,
+                erpItems: erpItems,
               });
               toast.success(`Wysłano etykietę ${shipment.id} do Print Hub`);
             }
@@ -943,7 +1495,10 @@ export function OrderDetailsColumn({
       }
     } else {
       if (config && order && mappedCourier) {
-        const deliveryMethodName = order.details_payload?.delivery?.method?.name || order.details_payload?.delivery_method;
+        const deliveryMethodName =
+          order.details_payload?.delivery?.method?.name ||
+          order.details_payload?.delivery_method ||
+          (order.service_integration?.provider_type === "EMPIK" ? order.details_payload?.shipping_type_label : null);
         const mapping = config.mappings.find(m => m.marketplace_delivery_method === deliveryMethodName && m.source_integration?.id === order.service_integration?.id);
         if (mapping) {
            serviceNameOrCode = `${mapping.courier_service_code} ${deliveryMethodName}`.toLowerCase();
@@ -959,25 +1514,91 @@ export function OrderDetailsColumn({
 
   const showPickupPoint = isApaczkaSelected ? isPickupPointService : hasPickupPoint;
 
+  const buyerMessage = order.details_payload?.messageToSeller?.text || 
+                       order.details_payload?.user_comments || 
+                       order.details_payload?.message_to_seller;
+
   return (
-    <div className="p-6 space-y-6 h-full overflow-y-auto glass border-none rounded-2xl">
+    <div className="h-full flex flex-col overflow-hidden glass border-none rounded-2xl p-6 gap-4 bg-slate-900/40 backdrop-blur-md shadow-2xl">
       <OrderInfoCard 
         order={order} 
         productMappings={productMappings}
         erpIntegration={erpIntegration}
-        refetchMappings={refetchMappings}
+        refetchMappings={handleMappingUpdated}
         courierProvider={isManualCourier ? undefined : mappedCourier?.provider_type}
-        onOrderUpdate={() => {
+        onOrderUpdate={(updatedOrder) => {
           queryClient.invalidateQueries({ queryKey: ["shippingOrders"] });
+          if (onOrderUpdate) {
+            onOrderUpdate(updatedOrder);
+          }
         }}
+        refetchOrder={refetchOrder}
+        isFetchingOrder={isFetchingOrder}
+        onlyHeader={true}
+        subiektStock={subiektStock}
       />
-      {order && (
-        <ShipmentHistory
-          shipments={shipments || []}
-          isLoading={areShipmentsLoading}
-          error={shipmentsError}
-        />
+
+      {buyerMessage && (
+        <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-200 shrink-0">
+          <AlertCircle className="h-4 w-4 text-amber-400" />
+          <AlertTitle className="text-xs font-semibold flex items-center gap-1.5">
+            <StickyNote className="h-3.5 w-3.5 text-amber-400" /> Uwaga! Wiadomość od kupującego
+          </AlertTitle>
+          <AlertDescription className="mt-1 text-sm font-semibold italic">
+            "{buyerMessage}"
+          </AlertDescription>
+        </Alert>
       )}
+
+      <Tabs defaultValue="main" className="flex-1 flex flex-col overflow-hidden">
+        <TabsList className="grid w-full grid-cols-3 bg-slate-950/40 p-1 border border-white/5 rounded-xl shrink-0">
+          <TabsTrigger value="main" className="flex items-center justify-center gap-2 rounded-lg py-2 data-[state=active]:bg-primary/20 data-[state=active]:text-white">
+            <Info className="h-4 w-4" />
+            <span className="text-xs font-medium">Główna</span>
+          </TabsTrigger>
+          
+          <TabsTrigger value="chat" className="flex items-center justify-center gap-1.5 rounded-lg py-2 data-[state=active]:bg-primary/20 data-[state=active]:text-white relative">
+            <MessageSquare className="h-4 w-4" />
+            <span className="text-xs font-medium">Rozmowa</span>
+            {totalMessages > 0 && (
+              <Badge variant="destructive" className="ml-1 px-1.5 py-0.5 text-[9px] font-bold bg-rose-500 hover:bg-rose-600 text-white animate-pulse">
+                {totalMessages}
+              </Badge>
+            )}
+          </TabsTrigger>
+          
+          <TabsTrigger value="shipments" className="flex items-center justify-center gap-1.5 rounded-lg py-2 data-[state=active]:bg-primary/20 data-[state=active]:text-white">
+            <Truck className="h-4 w-4" />
+            <span className="text-xs font-medium">Przesyłki</span>
+            {shipments && shipments.length > 0 && (
+              <Badge className="ml-1 px-1.5 py-0.5 text-[9px] font-bold bg-indigo-500 hover:bg-indigo-600 text-white">
+                {shipments.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="main" className="flex-1 overflow-y-auto mt-3 space-y-4 pr-1 scrollbar-thin outline-none">
+          <OrderInfoCard 
+            order={order} 
+            productMappings={productMappings}
+            erpIntegration={erpIntegration}
+            refetchMappings={handleMappingUpdated}
+            courierProvider={isManualCourier ? undefined : mappedCourier?.provider_type}
+            onOrderUpdate={(updatedOrder) => {
+              queryClient.invalidateQueries({ queryKey: ["shippingOrders"] });
+              if (onOrderUpdate) {
+                onOrderUpdate(updatedOrder);
+              }
+            }}
+            refetchOrder={refetchOrder}
+            isFetchingOrder={isFetchingOrder}
+            hideHeader={true}
+            showPickupPoint={showPickupPoint}
+            overridePointId={overridePointId}
+            setOverridePointId={setOverridePointId}
+            subiektStock={subiektStock}
+          />
 
       {/* ── METODA WYSYŁKI ── */}
       <div className="rounded-xl border border-border/60 bg-card/40 shadow-sm overflow-hidden">
@@ -1132,46 +1753,18 @@ export function OrderDetailsColumn({
           )}
         </div>
       </div>
-      <Accordion
-        type="single"
-        collapsible
-        className="w-full border border-border/60 rounded-xl bg-card/40 shadow-sm overflow-hidden"
-        defaultValue={totalMessages > 0 ? "chat-history" : undefined}
-      >
-        <AccordionItem value="chat-history" className="border-0">
-          <AccordionTrigger className="text-base font-semibold px-5 py-4 hover:no-underline hover:bg-muted/30 transition-colors">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-muted-foreground" />
-              <span>Historia Rozmowy</span>
-              {totalMessages > 0 && <Badge variant="secondary" className="ml-2">{totalMessages}</Badge>}
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pb-0">
-            <div className="border-t border-border/40 h-[400px] overflow-y-auto">
-              {order.buyer_login && order.service_integration ? (
-                <ChatPanel
-                  buyerLogin={order.buyer_login}
-                  integrationId={order.service_integration.id}
-                  currentOrderId={order.id}
-                  myLogin={order.service_integration.external_user_id}
-                />
-              ) : (
-                <div className="p-4 text-sm text-muted-foreground text-center">
-                  Brak danych do załadowania rozmowy.
-                </div>
-              )}
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-      <Card className="border-border/60 shadow-sm bg-card/40 mt-4">
-        <CardHeader className="pb-3 border-b border-border/40 mb-3 bg-muted/10">
-          <CardTitle className="text-base">Przygotuj Przesyłkę</CardTitle>
-          <CardDescription className="text-xs">
+        {/* Metoda wysyłki continues above, main tab remains open here */}
+      {/* ── PRZYGOTUJ PRZESYŁKĘ (Sleek Compact Glass Layout) ── */}
+      <div className="rounded-xl border border-white/5 bg-slate-900/20 shadow-lg mt-4 overflow-hidden">
+        <div className="flex flex-col px-4 py-3 bg-white/5 border-b border-white/5 gap-0.5">
+          <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+            <Package className="h-4 w-4 text-primary" /> Przygotuj Przesyłkę
+          </h3>
+          <p className="text-[10px] text-muted-foreground">
             Skonfiguruj paczki i wygeneruj etykiety.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 p-4 pt-0">
+          </p>
+        </div>
+        <div className="space-y-3 p-3">
           {isConfigLoading && (
             <div className="flex items-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1188,367 +1781,409 @@ export function OrderDetailsColumn({
             </Alert>
           )}
           {mappingWarning && !isConfigLoading && (
-            <Alert variant="warning">
+            <Alert variant="warning" className="py-2">
               <Info className="h-4 w-4" />
-              <AlertTitle>Wymagana Konfiguracja</AlertTitle>
-              <AlertDescription>{mappingWarning}</AlertDescription>
+              <AlertDescription className="text-xs">{mappingWarning}</AlertDescription>
             </Alert>
           )}
 
           {packages.map((pkg, index) => (
             <div
               key={pkg.id}
-              className="p-3 border rounded-lg space-y-3 relative bg-card shadow-sm"
+              className="p-3 border border-white/5 rounded-xl space-y-2.5 relative bg-slate-950/40 shadow-inner"
             >
-              <div className="flex justify-between items-center mb-1">
-                <p className="text-xs font-semibold text-muted-foreground">Paczka #{index + 1}</p>
+              <div className="flex justify-between items-center h-5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Paczka #{index + 1}</span>
                 {packages.length > 1 && (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-5 w-5 absolute top-1.5 right-1.5 hover:bg-destructive/10 hover:text-destructive"
+                    className="h-5 w-5 rounded-md hover:bg-rose-500/10 hover:text-rose-500"
                     onClick={() => removePackage(pkg.id)}
                   >
                     <X className="h-3 w-3" />
                   </Button>
                 )}
               </div>
-              <RadioGroup
-                value={pkg.mode}
-                onValueChange={(value) =>
-                  handlePackageChange(index, "mode", value as any)
-                }
-                className="flex gap-4 mb-1"
-              >
-                <div className="flex items-center space-x-1.5">
-                  <RadioGroupItem value="predefined" id={`predefined-${pkg.id}`} className="h-3.5 w-3.5" />
-                  <Label htmlFor={`predefined-${pkg.id}`} className="cursor-pointer text-xs">Predefiniowane</Label>
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  <RadioGroupItem value="custom" id={`custom-${pkg.id}`} className="h-3.5 w-3.5" />
-                  <Label htmlFor={`custom-${pkg.id}`} className="cursor-pointer text-xs">Własne wymiary</Label>
-                </div>
-              </RadioGroup>
+              
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex bg-slate-900/80 rounded-lg p-0.5 border border-white/5 w-fit">
+                    <button
+                      type="button"
+                      onClick={() => handlePackageChange(index, "mode", "predefined")}
+                      className={`text-[9px] font-medium py-1 px-2.5 rounded-md transition-all ${
+                        pkg.mode === "predefined"
+                          ? "bg-primary text-primary-foreground shadow font-semibold"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Predefiniowane
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePackageChange(index, "mode", "custom")}
+                      className={`text-[9px] font-medium py-1 px-2.5 rounded-md transition-all ${
+                        pkg.mode === "custom"
+                          ? "bg-primary text-primary-foreground shadow font-semibold"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Własne wymiary
+                    </button>
+                  </div>
 
-              {pkg.mode === "predefined" ? (
-                <div>
-                  <Select
-                    value={pkg.selectedPackageId}
-                    onValueChange={(value) =>
-                      handlePackageChange(index, "selectedPackageId", value)
-                    }
-                    disabled={isConfigLoading}
-                  >
-                    <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Wybierz opakowanie..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {config?.packages.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name} ({p.length_cm}x{p.width_cm}x{p.height_cm}cm,
-                          {p.weight_kg}kg)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="pt-2 border-t">
-                  <div className="flex flex-wrap gap-4">
-                    <div className="flex-1 min-w-[100px]">
-                      <Label htmlFor={`length_cm-${pkg.id}`} className="text-xs text-muted-foreground">Dł. (cm)</Label>
-                      <Input id={`length_cm-${pkg.id}`} name="length_cm" value={pkg.customPackage.length_cm} onChange={(e) => handleCustomDimensionChange(index, e)} className="h-8 mt-1" />
-                    </div>
-                    <div className="flex-1 min-w-[100px]">
-                      <Label htmlFor={`width_cm-${pkg.id}`} className="text-xs text-muted-foreground">Szer. (cm)</Label>
-                      <Input id={`width_cm-${pkg.id}`} name="width_cm" value={pkg.customPackage.width_cm} onChange={(e) => handleCustomDimensionChange(index, e)} className="h-8 mt-1" />
-                    </div>
-                    <div className="flex-1 min-w-[100px]">
-                      <Label htmlFor={`height_cm-${pkg.id}`} className="text-xs text-muted-foreground">Wys. (cm)</Label>
-                      <Input id={`height_cm-${pkg.id}`} name="height_cm" value={pkg.customPackage.height_cm} onChange={(e) => handleCustomDimensionChange(index, e)} className="h-8 mt-1" />
-                    </div>
-                    <div className="flex-1 min-w-[100px]">
-                      <Label htmlFor={`weight_kg-${pkg.id}`} className="text-xs text-muted-foreground">Waga (kg)</Label>
-                      <Input id={`weight_kg-${pkg.id}`} name="weight_kg" value={pkg.customPackage.weight_kg} onChange={(e) => handleCustomDimensionChange(index, e)} className="h-8 mt-1" />
-                    </div>
-                  </div>
-                  {mappedCourier?.provider_type === "SUUS" && (
-                    <div className="col-span-2">
-                      <Label>Typ opakowania SUUS</Label>
-                      <Select
-                        onValueChange={(value) =>
-                          handlePackageChange(index, "courier_code", value)
-                        }
-                        value={pkg.courier_code}
-                      >
-                        <SelectTrigger className="mt-2">
-                          <SelectValue placeholder="Wybierz typ opakowania..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(SUUS_PACKAGE_CODES).map(
-                            ([code, name]) => (
-                              <SelectItem key={code} value={code}>
-                                {code} - {name}
-                              </SelectItem>
-                            )
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  {/* Palet presets */}
-                  <div className="mt-3 pt-3 border-t border-border/40">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Szybki wybór — Palety</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {PALLET_PRESETS.map((preset) => (
-                        <Button
-                          key={preset.label}
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-[10px] gap-1"
-                          onClick={() => {
-                            setPackages((pkgs) =>
-                              pkgs.map((p, i) =>
-                                i === index
-                                  ? {
-                                      ...p,
-                                      customPackage: {
-                                        length_cm: preset.length,
-                                        width_cm: preset.width,
-                                        height_cm: preset.height,
-                                        weight_kg: preset.weight,
-                                      },
-                                      is_nstd: true,
-                                    }
-                                  : p
-                              )
-                            );
-                          }}
-                        >
-                          <Box className="h-3 w-3" />
-                          {preset.label} ({preset.length}×{preset.width})
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Niestandardowa checkbox */}
-                  <div className="flex items-center space-x-2 mt-2">
-                    <Checkbox
-                      id={`nstd-${pkg.id}`}
-                      checked={pkg.is_nstd}
-                      onCheckedChange={(checked) =>
+                  {pkg.mode === "custom" && (
+                    <button
+                      type="button"
+                      onClick={() =>
                         setPackages((pkgs) =>
                           pkgs.map((p, i) =>
-                            i === index ? { ...p, is_nstd: !!checked } : p
+                            i === index ? { ...p, is_nstd: !p.is_nstd } : p
                           )
                         )
                       }
-                    />
-                    <label htmlFor={`nstd-${pkg.id}`} className="text-xs font-medium cursor-pointer">
-                      Przesyłka niestandardowa (paleta / gabaryt)
-                    </label>
-                  </div>
+                      className={`h-[22px] px-2 rounded-md border text-[9px] font-semibold transition-all flex items-center justify-center ${
+                        pkg.is_nstd
+                          ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                          : "bg-slate-900/40 text-slate-400 border-white/5 hover:text-slate-300"
+                      }`}
+                    >
+                      Niestandardowa (Gabaryt)
+                    </button>
+                  )}
                 </div>
-              )}
 
-              {isCodOrder && (
-                <div className="pt-4 border-t">
-                  <Label
-                    htmlFor={`cod-amount-${pkg.id}`}
-                    className="text-sm font-medium"
-                  >
-                    Kwota pobrania dla tej paczki (PLN)
-                  </Label>
-                  <Input
-                    id={`cod-amount-${pkg.id}`}
-                    value={pkg.codAmount}
-                    onChange={(e) =>
-                      handleCodAmountChange(index, e.target.value)
-                    }
-                    placeholder="np. 123.45"
-                    className="mt-2"
-                    type="number"
-                    step="0.01"
-                  />
-                </div>
-              )}
+                {pkg.mode === "predefined" ? (
+                  <div className="mt-0.5">
+                    <Select
+                      value={pkg.selectedPackageId}
+                      onValueChange={(value) =>
+                        handlePackageChange(index, "selectedPackageId", value)
+                      }
+                      disabled={isConfigLoading}
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-lg">
+                        <SelectValue placeholder="Wybierz opakowanie..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {config?.packages.map((p) => (
+                          <SelectItem key={p.id} value={p.id} className="text-xs">
+                            {p.name} ({p.length_cm}x{p.width_cm}x{p.height_cm}cm, {p.weight_kg}kg)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div className="space-y-2 pt-0.5">
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Dł</span>
+                        <input
+                          id={`length_cm-${pkg.id}`}
+                          name="length_cm"
+                          value={pkg.customPackage.length_cm}
+                          onChange={(e) => handleCustomDimensionChange(index, e)}
+                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                        />
+                        <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                      </div>
+
+                      <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Sz</span>
+                        <input
+                          id={`width_cm-${pkg.id}`}
+                          name="width_cm"
+                          value={pkg.customPackage.width_cm}
+                          onChange={(e) => handleCustomDimensionChange(index, e)}
+                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                        />
+                        <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                      </div>
+
+                      <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Wy</span>
+                        <input
+                          id={`height_cm-${pkg.id}`}
+                          name="height_cm"
+                          value={pkg.customPackage.height_cm}
+                          onChange={(e) => handleCustomDimensionChange(index, e)}
+                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                        />
+                        <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                      </div>
+
+                      <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Wg</span>
+                        <input
+                          id={`weight_kg-${pkg.id}`}
+                          name="weight_kg"
+                          value={pkg.customPackage.weight_kg}
+                          onChange={(e) => handleCustomDimensionChange(index, e)}
+                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                        />
+                        <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">kg</span>
+                      </div>
+                    </div>
+
+                    {mappedCourier?.provider_type === "SUUS" && (
+                      <div className="space-y-1 mt-1">
+                        <Label className="text-[10px] text-muted-foreground">Typ opakowania SUUS</Label>
+                        <Select
+                          onValueChange={(value) =>
+                            handlePackageChange(index, "courier_code", value)
+                          }
+                          value={pkg.courier_code}
+                        >
+                          <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-lg">
+                            <SelectValue placeholder="Wybierz typ opakowania..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(SUUS_PACKAGE_CODES).map(([code, name]) => (
+                              <SelectItem key={code} value={code} className="text-xs">
+                                {code} - {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Palet presets compact */}
+                    <div className="pt-1.5 flex items-center justify-between gap-2 flex-wrap border-t border-white/5">
+                      <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider select-none">Palety:</span>
+                      <div className="flex gap-1">
+                        {PALLET_PRESETS.map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            className="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-slate-300 text-[8px] font-medium border border-white/5 transition-all flex items-center gap-0.5"
+                            onClick={() => {
+                              setPackages((pkgs) =>
+                                pkgs.map((p, i) =>
+                                  i === index
+                                    ? {
+                                        ...p,
+                                        customPackage: {
+                                          length_cm: preset.length,
+                                          width_cm: preset.width,
+                                          height_cm: preset.height,
+                                          weight_kg: preset.weight,
+                                        },
+                                        is_nstd: true,
+                                      }
+                                    : p
+                                )
+                              );
+                            }}
+                          >
+                            <Box className="h-2 w-2 text-primary" />
+                            {preset.label.replace("paleta", "")} ({preset.length}×{preset.width})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isCodOrder && (
+                  <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-3 h-7 mt-1">
+                    <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider select-none flex items-center gap-1">
+                      <CreditCard className="h-3 w-3 text-emerald-500" /> Kwota Pobrania
+                    </span>
+                    <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-2 focus-within:border-primary/50 transition-all max-w-[140px]">
+                      <input
+                        id={`cod-amount-${pkg.id}`}
+                        value={pkg.codAmount}
+                        onChange={(e) =>
+                          handleCodAmountChange(index, e.target.value)
+                        }
+                        placeholder="0.00"
+                        className="w-full bg-transparent border-none shadow-none outline-none p-0 h-6 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200"
+                        type="number"
+                        step="0.01"
+                      />
+                      <span className="text-[9px] text-slate-500 ml-1.5 shrink-0 select-none font-medium">PLN</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="w-full"
+              className="w-full h-8 text-[11px] bg-slate-950/20 hover:bg-slate-950/40 border-white/5 rounded-lg transition-all"
               onClick={addPackage}
             >
-              <PlusCircle className="mr-2 h-4 w-4" /> Dodaj kolejną paczkę
+              <PlusCircle className="mr-1.5 h-3.5 w-3.5 text-primary" /> Dodaj paczkę
             </Button>
             {isCodOrder && packages.length > 1 && (
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full"
+                className="w-full h-8 text-[11px] bg-slate-950/20 hover:bg-slate-950/40 border-white/5 rounded-lg transition-all"
                 onClick={handleSplitCodClick}
               >
-                <DivideCircle className="mr-2 h-4 w-4" /> Podziel pobranie równo
+                <DivideCircle className="mr-1.5 h-3.5 w-3.5 text-primary" /> Podziel pobranie
               </Button>
             )}
           </div>
 
           {availableServicesForCourier.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <Label>Usługi dodatkowe</Label>
-                <div className="space-y-2 pt-2">
-                  {availableServicesForCourier.map((serviceMap) => (
-                    <div
-                      key={serviceMap.id}
-                      className="flex items-center space-x-2"
+            <div className="pt-2 border-t border-white/5 space-y-1.5">
+              <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Usługi dodatkowe</Label>
+              <div className="grid grid-cols-2 gap-2 pt-0.5">
+                {availableServicesForCourier.map((serviceMap) => (
+                  <div
+                    key={serviceMap.id}
+                    className="flex items-center space-x-1.5 bg-slate-950/20 border border-white/5 rounded-lg px-2 py-1.5 hover:bg-slate-950/40 transition-colors"
+                  >
+                    <Checkbox
+                      id={serviceMap.id}
+                      checked={selectedServices.has(
+                        serviceMap.courier_service_code
+                      )}
+                      onCheckedChange={() =>
+                        handleServiceToggle(serviceMap.courier_service_code)
+                      }
+                      className="h-3.5 w-3.5 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                    />
+                    <label
+                      htmlFor={serviceMap.id}
+                      className="text-[11px] text-slate-300 font-medium cursor-pointer truncate select-none leading-none"
+                      title={`${serviceMap.marketplace_service_name} (${serviceMap.courier_service_code})`}
                     >
-                      <Checkbox
-                        id={serviceMap.id}
-                        checked={selectedServices.has(
-                          serviceMap.courier_service_code
-                        )}
-                        onCheckedChange={() =>
-                          handleServiceToggle(serviceMap.courier_service_code)
-                        }
-                      />
-                      <label
-                        htmlFor={serviceMap.id}
-                        className="text-sm font-medium"
-                      >
-                        {serviceMap.marketplace_service_name}
-                        <span className="text-muted-foreground">
-                          ({serviceMap.courier_service_code})
-                        </span>
-                      </label>
-                    </div>
-                  ))}
-                </div>
+                      {serviceMap.marketplace_service_name}
+                    </label>
+                  </div>
+                ))}
               </div>
-            </>
+            </div>
           )}
 
-          {/* ── PICKUP / PODJAZD ── */}
+          {/* ── PICKUP / COLLAPSIBLE DETAILS ── */}
           {isApaczkaSelected && (
-            <div className="bg-muted/30 p-3 rounded-lg border border-border/40 space-y-3 mt-4">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Truck className="w-4 h-4 text-muted-foreground" />
-                Podjazd kuriera
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            <details className="group border border-white/5 bg-slate-950/20 rounded-xl overflow-hidden transition-all duration-300 [&::-webkit-details-marker]:hidden">
+              <summary className="flex items-center justify-between px-3 py-2 text-xs font-semibold cursor-pointer select-none hover:bg-white/5 list-none">
+                <div className="flex items-center gap-1.5 text-slate-300">
+                  <Truck className="w-3.5 h-3.5 text-primary" />
+                  <span>Zlecenie podjazdu kuriera</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-normal truncate max-w-[150px]">
+                    {pickupType === "COURIER" ? "Kurier" : pickupType === "SELF" ? "Własne" : pickupType === "BOX_MACHINE" ? "Paczkomat" : "Poczta"}{pickupDate ? `, ${pickupDate}` : ""}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-open:rotate-180 transition-transform duration-200" />
+                </div>
+              </summary>
+              <div className="p-3 pt-2 border-t border-white/5 grid grid-cols-2 gap-2.5 bg-slate-950/40">
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Typ nadania</Label>
+                  <Label className="text-[10px] text-muted-foreground font-medium">Typ nadania</Label>
                   <Select value={pickupType} onValueChange={setPickupType}>
-                    <SelectTrigger className="h-8 text-xs">
+                    <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-md">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {PICKUP_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                        <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Data podjazdu</Label>
+                  <Label className="text-[10px] text-muted-foreground font-medium">Data podjazdu</Label>
                   <Input
                     type="date"
                     value={pickupDate}
                     onChange={(e) => setPickupDate(e.target.value)}
-                    className="h-8 text-xs"
-                    placeholder="Auto"
+                    className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-md py-0 px-2 text-slate-200"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Od godziny</Label>
+                  <Label className="text-[10px] text-muted-foreground font-medium">Od godziny</Label>
                   <Input
                     type="time"
                     value={pickupHoursFrom}
                     onChange={(e) => setPickupHoursFrom(e.target.value)}
-                    className="h-8 text-xs"
+                    className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-md text-center py-0 px-2 text-slate-200"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Do godziny</Label>
+                  <Label className="text-[10px] text-muted-foreground font-medium">Do godziny</Label>
                   <Input
                     type="time"
                     value={pickupHoursTo}
                     onChange={(e) => setPickupHoursTo(e.target.value)}
-                    className="h-8 text-xs"
+                    className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-md text-center py-0 px-2 text-slate-200"
                   />
                 </div>
               </div>
-            </div>
+            </details>
           )}
 
-          {/* ── PUNKT ODBIORU ── */}
-          {showPickupPoint && (
-            <div className="bg-muted/30 p-3 rounded-lg border border-primary/20 space-y-3 mt-4">
-              <div className="flex items-center gap-2 text-primary font-semibold text-sm">
-                <MapPin className="w-4 h-4" />
-                Punkt Odbioru / Paczkomat
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="point-id" className="text-xs flex items-center gap-2">
-                  ID Punktu (np. WAW53AP, PL12345)
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="w-3 h-3 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs text-xs">
-                          Wprowadź kod punktu odbioru (np. InPost, DHL POP, DPD Pickup). 
-                          Jeśli pole jest puste, system spróbuje pobrać dane z zamówienia.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </Label>
-                <Input
-                  id="point-id"
-                  value={overridePointId}
-                  onChange={(e) => setOverridePointId(e.target.value)}
-                  placeholder="Wpisz ID punktu..."
-                  className="bg-background font-mono uppercase"
-                />
-              </div>
+          <div className="pt-2 border-t border-white/5 space-y-2.5">
+            <div className="flex items-center justify-between gap-3 bg-slate-950/20 border border-white/5 rounded-lg px-2.5 py-1.5">
+              <Label htmlFor="reference-number" className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider shrink-0 select-none">
+                Nr referencyjny etykiety
+              </Label>
+              <Input
+                id="reference-number"
+                value={referenceNumber}
+                onChange={(e) => setReferenceNumber(e.target.value)}
+                placeholder="Domyślnie: nr zamówienia"
+                className="h-7 text-xs bg-slate-900/50 border-white/10 max-w-[160px] text-right text-slate-200"
+              />
             </div>
-          )}
+            
+            <Button
+              onClick={handleGenerateLabels}
+              className="w-full h-10 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-bold text-xs shadow-lg hover:shadow-primary/10 transition-all duration-300 rounded-xl gap-2 mt-2"
+              disabled={isGenerateButtonDisabled}
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              {isGenerating
+                ? "Generowanie etykiet..."
+                : `Generuj Etykiety (${packages.length})`}
+            </Button>
+          </div>
+        </div>
+      </div>
+      </TabsContent>
 
-          <Separator />
-          <div>
-            <Label htmlFor="reference-number">
-              Numer referencyjny (na etykiecie)
-            </Label>
-            <Input
-              id="reference-number"
-              value={referenceNumber}
-              onChange={(e) => setReferenceNumber(e.target.value)}
-              placeholder="Domyślnie: nr zamówienia"
-              className="mt-2"
+      <TabsContent value="chat" className="flex-1 overflow-hidden mt-3 outline-none flex flex-col h-full bg-slate-950/20 border border-white/5 rounded-xl p-4">
+        {order.buyer_login && order.service_integration ? (
+          <div className="flex-1 flex flex-col min-h-[450px]">
+            <ChatPanel
+              buyerLogin={order.buyer_login}
+              integrationId={order.service_integration.id}
+              currentOrderId={order.id}
+              myLogin={order.service_integration.external_user_id}
             />
           </div>
-          <Button
-            onClick={handleGenerateLabels}
-            className="w-full"
-            disabled={isGenerateButtonDisabled}
-          >
-            {isGenerating ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <FileText className="mr-2 h-4 w-4" />
-            )}
-            {isGenerating
-              ? "Generowanie..."
-              : `Generuj Etykiety (${packages.length})`}
-          </Button>
-        </CardContent>
-      </Card>
+        ) : (
+          <div className="p-8 text-sm text-muted-foreground text-center flex flex-col items-center justify-center h-full">
+            <MessageSquare className="h-12 w-12 text-muted-foreground/30 mb-2" />
+            Brak danych do załadowania rozmowy.
+          </div>
+        )}
+      </TabsContent>
+
+      <TabsContent value="shipments" className="flex-1 overflow-y-auto mt-3 space-y-4 pr-1 outline-none">
+        <ShipmentHistory
+          shipments={shipments || []}
+          isLoading={areShipmentsLoading}
+          error={shipmentsError}
+        />
+      </TabsContent>
+      </Tabs>
     </div>
   );
 }

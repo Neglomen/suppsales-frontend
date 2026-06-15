@@ -22,4 +22,5 @@ export interface Organization {
   default_sender_phone: string | null;
   default_iban: string | null;
   default_label_format: LabelFormat;
+  default_reference_number_template?: string;
 }
