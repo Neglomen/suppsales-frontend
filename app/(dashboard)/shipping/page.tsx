@@ -16,9 +16,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Flame } from "lucide-react";
+import { useMobile } from "@/hooks/use-mobile";
+import { MobileLock } from "@/components/shared/mobile-lock";
 
 export default function ShippingPage() {
   const router = useRouter();
+  const isMobile = useMobile(768);
   const [selectedOrder, setSelectedOrder] = useState<MarketplaceOrder | null>(
     null
   );
@@ -32,6 +35,15 @@ export default function ShippingPage() {
     // Wyczyść zaznaczenie, aby pokazać widok powitalny w lewej kolumnie
     setSelectedOrder(null);
   };
+
+  if (isMobile) {
+    return (
+      <MobileLock
+        title="Wysyłki"
+        description="Zarządzanie wysyłkami dostępne jest wyłącznie na komputerze lub tablecie. Ta sekcja wymaga pełnego interfejsu desktopowego."
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">

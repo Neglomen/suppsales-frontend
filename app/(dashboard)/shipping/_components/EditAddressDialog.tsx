@@ -139,14 +139,14 @@ export function EditAddressDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[550px] bg-slate-900 border border-slate-800 text-white p-0 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="p-6 pb-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md">
+      <DialogContent className="sm:max-w-[550px] bg-background border border-border text-foreground p-0 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="p-6 pb-4 border-b border-border/60 bg-muted/40 backdrop-blur-md">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
               <Home className="h-5 w-5 text-primary" />
               Edytuj adres dostawy
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-muted-foreground text-xs">
               Modyfikacja adresu dostarczenia przesyłki. Zmiany wpływają na generowanie etykiet kurierskich.
             </DialogDescription>
           </DialogHeader>
@@ -160,8 +160,8 @@ export function EditAddressDialog({
             {/* Scrollable Form Body */}
             <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto pr-4 scrollbar-thin">
               {/* Odbiorca Section */}
-              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
-                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+              <div className="bg-slate-950/10 dark:bg-slate-950/40 border border-border/60 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-border/20 pb-2">
                   <User className="h-4 w-4" />
                   <span className="text-xs font-bold uppercase tracking-wider">Odbiorca przesyłki</span>
                 </div>
@@ -172,14 +172,14 @@ export function EditAddressDialog({
                     name="firstName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs text-slate-300">Imię</FormLabel>
+                        <FormLabel className="text-xs text-muted-foreground">Imię</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                            <Input placeholder="Jan" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                            <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                            <Input placeholder="Jan" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                           </div>
                         </FormControl>
-                        <FormMessage className="text-xs text-red-400" />
+                        <FormMessage className="text-xs text-red-500" />
                       </FormItem>
                     )}
                   />
@@ -188,14 +188,14 @@ export function EditAddressDialog({
                     name="lastName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs text-slate-300">Nazwisko</FormLabel>
+                        <FormLabel className="text-xs text-muted-foreground">Nazwisko</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                            <Input placeholder="Kowalski" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                            <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                            <Input placeholder="Kowalski" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                           </div>
                         </FormControl>
-                        <FormMessage className="text-xs text-red-400" />
+                        <FormMessage className="text-xs text-red-500" />
                       </FormItem>
                     )}
                   />
@@ -206,22 +206,22 @@ export function EditAddressDialog({
                   name="companyName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs text-slate-300">Nazwa firmy (opcjonalnie)</FormLabel>
+                      <FormLabel className="text-xs text-muted-foreground">Nazwa firmy (opcjonalnie)</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Building className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                          <Input placeholder="Firma Sp. z o.o." {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                          <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                          <Input placeholder="Firma Sp. z o.o." {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                         </div>
                       </FormControl>
-                      <FormMessage className="text-xs text-red-400" />
+                      <FormMessage className="text-xs text-red-500" />
                     </FormItem>
                   )}
                 />
               </div>
 
               {/* Adres Section */}
-              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
-                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+              <div className="bg-slate-950/10 dark:bg-slate-950/40 border border-border/60 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-border/20 pb-2">
                   <MapPin className="h-4 w-4" />
                   <span className="text-xs font-bold uppercase tracking-wider">Adres doręczenia</span>
                 </div>
@@ -231,14 +231,14 @@ export function EditAddressDialog({
                   name="street"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs text-slate-300">Ulica i numer domu/lokalu</FormLabel>
+                      <FormLabel className="text-xs text-muted-foreground">Ulica i numer domu/lokalu</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                          <Input placeholder="ul. Kwiatowa 1/2" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                          <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                          <Input placeholder="ul. Kwiatowa 1/2" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                         </div>
                       </FormControl>
-                      <FormMessage className="text-xs text-red-400" />
+                      <FormMessage className="text-xs text-red-500" />
                     </FormItem>
                   )}
                 />
@@ -250,11 +250,11 @@ export function EditAddressDialog({
                       name="postalCode"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs text-slate-300">Kod pocztowy</FormLabel>
+                          <FormLabel className="text-xs text-muted-foreground">Kod pocztowy</FormLabel>
                           <FormControl>
-                            <Input placeholder="00-000" {...field} className="bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white text-center font-mono" />
+                            <Input placeholder="00-000" {...field} className="bg-background border-border text-sm h-10 rounded-lg text-foreground text-center font-mono" />
                           </FormControl>
-                          <FormMessage className="text-xs text-red-400" />
+                          <FormMessage className="text-xs text-red-500" />
                         </FormItem>
                       )}
                     />
@@ -265,11 +265,11 @@ export function EditAddressDialog({
                       name="city"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs text-slate-300">Miejscowość</FormLabel>
+                          <FormLabel className="text-xs text-muted-foreground">Miejscowość</FormLabel>
                           <FormControl>
-                            <Input placeholder="Warszawa" {...field} className="bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                            <Input placeholder="Warszawa" {...field} className="bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                           </FormControl>
-                          <FormMessage className="text-xs text-red-400" />
+                          <FormMessage className="text-xs text-red-500" />
                         </FormItem>
                       )}
                     />
@@ -281,25 +281,25 @@ export function EditAddressDialog({
                   name="deliveryPointId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs text-slate-300 flex items-center gap-1.5">
+                      <FormLabel className="text-xs text-muted-foreground flex items-center gap-1.5">
                         ID Punktu odbioru (opcjonalnie)
-                        <span className="text-[10px] text-slate-500 font-normal normal-case">(np. Paczkomat)</span>
+                        <span className="text-[10px] text-muted-foreground/60 font-normal normal-case">(np. Paczkomat)</span>
                       </FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Box className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                          <Input placeholder="np. ROT01M, DPD-1234" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white font-mono uppercase" />
+                          <Box className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                          <Input placeholder="np. ROT01M, DPD-1234" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground font-mono uppercase" />
                         </div>
                       </FormControl>
-                      <FormMessage className="text-xs text-red-400" />
+                      <FormMessage className="text-xs text-red-500" />
                     </FormItem>
                   )}
                 />
               </div>
 
               {/* Kontakt Section */}
-              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
-                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+              <div className="bg-slate-950/10 dark:bg-slate-950/40 border border-border/60 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-border/20 pb-2">
                   <Phone className="h-4 w-4" />
                   <span className="text-xs font-bold uppercase tracking-wider">Dane kontaktowe</span>
                 </div>
@@ -310,14 +310,14 @@ export function EditAddressDialog({
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs text-slate-300">Telefon kontaktowy</FormLabel>
+                        <FormLabel className="text-xs text-muted-foreground">Telefon kontaktowy</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Phone className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                            <Input placeholder="123-456-789" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white font-mono" />
+                            <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                            <Input placeholder="123-456-789" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground font-mono" />
                           </div>
                         </FormControl>
-                        <FormMessage className="text-xs text-red-400" />
+                        <FormMessage className="text-xs text-red-500" />
                       </FormItem>
                     )}
                   />
@@ -326,14 +326,14 @@ export function EditAddressDialog({
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs text-slate-300">Adres e-mail</FormLabel>
+                        <FormLabel className="text-xs text-muted-foreground">Adres e-mail</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                            <Input placeholder="kontakt@example.com" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                            <Input placeholder="kontakt@example.com" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                           </div>
                         </FormControl>
-                        <FormMessage className="text-xs text-red-400" />
+                        <FormMessage className="text-xs text-red-500" />
                       </FormItem>
                     )}
                   />
@@ -342,8 +342,8 @@ export function EditAddressDialog({
             </div>
 
             {/* Dialog Footer Actions */}
-            <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={onClose} className="border-slate-800 hover:bg-slate-850 hover:text-white text-slate-300">
+            <div className="p-6 border-t border-border bg-muted/40 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={onClose} className="border-border hover:bg-accent/10 hover:text-foreground text-muted-foreground">
                 Anuluj
               </Button>
               <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md px-6">

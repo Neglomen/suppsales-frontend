@@ -43,6 +43,8 @@ interface DataTableProps<TData, TValue> {
   isLoading?: boolean; // Nowy, opcjonalny props
   rowSelection?: RowSelectionState;
   setRowSelection?: React.Dispatch<React.SetStateAction<RowSelectionState>>;
+  viewMode?: "compact" | "expanded";
+  getRowId?: (originalRow: TData, relativeIndex: number, parent?: Row<TData>) => string;
 }
 
 export function DataTable<TData, TValue>({
@@ -58,6 +60,8 @@ export function DataTable<TData, TValue>({
   isLoading, // Odbierz nowy props
   rowSelection,
   setRowSelection,
+  viewMode = "expanded",
+  getRowId,
 }: DataTableProps<TData, TValue>) {
   const isServerSide = pageCount !== undefined;
 
@@ -70,22 +74,25 @@ export function DataTable<TData, TValue>({
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
   );
+  const [clientRowSelection, setClientRowSelection] = React.useState<RowSelectionState>({});
 
   const table = useReactTable({
     data,
     columns,
     pageCount: pageCount ?? -1,
+    getRowId: getRowId ?? ((row: any, index: number) => row.id?.toString() ?? row._id?.toString() ?? String(index)),
     state: {
       sorting: isServerSide ? serverSorting : clientSorting,
       pagination: isServerSide ? serverPagination : clientPagination,
       columnFilters,
+      rowSelection: rowSelection ?? clientRowSelection,
     },
     onPaginationChange: isServerSide
       ? setServerPagination
       : setClientPagination,
     onSortingChange: isServerSide ? setServerSorting : setClientSorting,
     onColumnFiltersChange: setColumnFilters,
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: setRowSelection ?? setClientRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -107,7 +114,10 @@ export function DataTable<TData, TValue>({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className="bg-primary/5 text-primary font-bold uppercase tracking-wider text-[10px] py-4"
+                    className={cn(
+                      "bg-primary/5 text-primary font-bold uppercase tracking-wider text-[10px] transition-all duration-200",
+                      viewMode === "compact" ? "py-2" : "py-4"
+                    )}
                     style={{
                       width:
                         header.getSize() !== 150 ? header.getSize() : undefined,
@@ -153,7 +163,13 @@ export function DataTable<TData, TValue>({
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-4">
+                    <TableCell 
+                      key={cell.id} 
+                      className={cn(
+                        "transition-all duration-200",
+                        viewMode === "compact" ? "py-2.5" : "py-4"
+                      )}
+                    >
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -176,8 +192,8 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      {/* Paginacja jest wyświetlana tylko, jeśli jest potrzebna i dane nie są ładowane */}
-      {table.getPageCount() > 1 && !isLoading && (
+      {/* Paginacja jest wyświetlana, jeśli są dane i dane nie są ładowane */}
+      {data.length > 0 && !isLoading && (
         <DataTablePagination table={table} />
       )}
     </div>

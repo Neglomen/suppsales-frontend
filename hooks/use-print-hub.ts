@@ -23,7 +23,10 @@ export function usePrintHub() {
   const defaultInvoicePrinter = organization?.print_hub_default_invoice_printer;
   const defaultLabelPrinter = organization?.print_hub_default_label_printer;
   const printErpSymbolOnLabel = organization?.print_erp_symbol_on_label ?? false;
+  const printFullNameOnLabel = organization?.print_full_name_on_label ?? false;
   const labelItemsPerPage = organization?.label_items_per_page ?? 3;
+  const printHubExcludeNip = organization?.print_hub_exclude_nip ?? false;
+  const printHubExcludeB2c = organization?.print_hub_exclude_b2c ?? false;
 
   const status = usePrintHubStore((state) => state.status);
   const printers = usePrintHubStore((state) => state.printers);
@@ -43,6 +46,9 @@ export function usePrintHub() {
     defaultInvoicePrinter, 
     defaultLabelPrinter,
     printErpSymbolOnLabel,
+    printFullNameOnLabel,
     labelItemsPerPage,
+    printHubExcludeNip,
+    printHubExcludeB2c,
   };
 }

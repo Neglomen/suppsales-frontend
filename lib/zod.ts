@@ -8,6 +8,7 @@ export const LoginSchema = z.object({
   password: z.string().min(6, {
     message: "Hasło musi mieć co najmniej 6 znaków.",
   }),
+  rememberMe: z.boolean().optional(),
 });
 export type LoginSchemaType = z.infer<typeof LoginSchema>;
 
@@ -60,13 +61,14 @@ export type FullRegisterSchemaType = z.infer<typeof FullRegisterSchema>;
 
 export type ServiceIntegrationFormValues = {
   name: string;
-  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "KSEF" | "AB" | "SUBIEKT_GT" | "APACZKA" | "EMPIK";
+  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "KSEF" | "AB" | "SUBIEKT_GT" | "APACZKA" | "EMPIK" | "GEIS" | "GEODIS" | "INPOST_BUY" | "RABEN";
   sync_orders?: boolean; // Zmieniamy na opcjonalne, bo `reset` czasami go nie ma
   sync_messages?: boolean;
   sync_returns?: boolean;
   api_token?: string;
   suus_login?: string;
   suus_password?: string;
+  suus_order_type?: string;
   ksef_token?: string;
   ab_client_code?: string;
   ab_login?: string;
@@ -79,13 +81,39 @@ export type ServiceIntegrationFormValues = {
   nip?: string;
   environment?: string;
   empik_token?: string;
+  ksef_auto_sync_enabled?: boolean;
+  invoice_sync_interval?: number;
+  ksef_sync_interval?: number;
+  geis_customer_code?: string;
+  geis_password?: string;
+  geis_is_test?: boolean;
+  geis_iban?: string;
+  geis_pdf_format?: string;
+  geodis_client_id?: string;
+  geodis_client_secret?: string;
+  geodis_customer_id?: string;
+  geodis_warehouse_id?: string;
+  geodis_is_test?: boolean;
+  inpost_buy_client_id?: string;
+  inpost_buy_client_secret?: string;
+  inpost_buy_organization_id?: string;
+  inpost_buy_sandbox?: boolean;
+  raben_username?: string;
+  raben_password?: string;
+  raben_edi_sender?: string;
+  raben_edi_receiver?: string;
+  raben_department?: string;
+  raben_payer_identifier?: string;
+  raben_is_test?: boolean;
+  raben_product_type?: string;
+  raben_service_level?: string;
 };
 
 // === KROK 2: Upraszczamy schemat, aby produkował zgodny typ ===
 export const serviceIntegrationFormSchema = z
   .object({
     name: z.string().min(2, "Nazwa musi mieć co najmniej 2 znaki."),
-    provider_type: z.enum(["ALLEGRO", "BASELINKER", "SUUS", "KSEF", "AB", "SUBIEKT_GT", "APACZKA", "EMPIK"]),
+    provider_type: z.enum(["ALLEGRO", "BASELINKER", "SUUS", "KSEF", "AB", "SUBIEKT_GT", "APACZKA", "EMPIK", "GEIS", "GEODIS", "INPOST_BUY", "RABEN"]),
 
     sync_orders: z.boolean().optional(),
     sync_messages: z.boolean().optional(),
@@ -94,6 +122,7 @@ export const serviceIntegrationFormSchema = z
     api_token: z.string().optional(),
     suus_login: z.string().optional(),
     suus_password: z.string().optional(),
+    suus_order_type: z.string().optional(),
     ksef_token: z.string().optional(),
     ab_client_code: z.string().optional(),
     ab_login: z.string().optional(),
@@ -106,6 +135,39 @@ export const serviceIntegrationFormSchema = z
     nip: z.string().optional(),
     environment: z.string().optional(),
     empik_token: z.string().optional(),
+    ksef_auto_sync_enabled: z.boolean().optional(),
+    invoice_sync_interval: z.number().optional(),
+    ksef_sync_interval: z.number().optional(),
+
+    geis_customer_code: z.string().optional(),
+    geis_password: z.string().optional(),
+    geis_is_test: z.boolean().optional(),
+    geis_iban: z.string().optional(),
+    geis_pdf_format: z.string().optional(),
+    geodis_client_id: z.string().optional(),
+    geodis_client_secret: z.string().optional(),
+    geodis_customer_id: z.string().optional(),
+    geodis_warehouse_id: z.string().optional(),
+    geodis_is_test: z.boolean().optional(),
+    inpost_buy_client_id: z.string().optional(),
+    inpost_buy_client_secret: z.string().optional(),
+    inpost_buy_organization_id: z.string().optional(),
+    inpost_buy_sandbox: z.boolean().optional(),
+    raben_username: z.string().optional(),
+    raben_password: z.string().optional(),
+    raben_edi_sender: z.string().optional(),
+    raben_edi_receiver: z.string().optional(),
+    raben_department: z.string().optional(),
+    raben_payer_identifier: z.string().optional(),
+    raben_is_test: z.boolean().optional(),
+    raben_product_type: z.string().optional(),
+    raben_service_level: z.string().optional(),
+    geodis_warehouse_id: z.string().optional(),
+    geodis_is_test: z.boolean().optional(),
+    inpost_buy_client_id: z.string().optional(),
+    inpost_buy_client_secret: z.string().optional(),
+    inpost_buy_organization_id: z.string().optional(),
+    inpost_buy_sandbox: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.provider_type === "BASELINKER") {
@@ -202,6 +264,92 @@ export const serviceIntegrationFormSchema = z
         });
       }
     }
+
+    if (data.provider_type === "GEIS") {
+      if (!data.geis_customer_code) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Kod klienta jest wymagany.",
+          path: ["geis_customer_code"],
+        });
+      }
+      if (!data.geis_password) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Hasło API jest wymagane.",
+          path: ["geis_password"],
+        });
+      }
+    }
+
+    if (data.provider_type === "GEODIS") {
+      if (!data.geodis_client_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Client ID jest wymagany.",
+          path: ["geodis_client_id"],
+        });
+      }
+      if (!data.geodis_client_secret) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Client Secret jest wymagany.",
+          path: ["geodis_client_secret"],
+        });
+      }
+      if (!data.geodis_customer_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Customer ID jest wymagany.",
+          path: ["geodis_customer_id"],
+        });
+      }
+    }
+
+    if (data.provider_type === "RABEN") {
+      if (!data.raben_username) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Nazwa użytkownika API jest wymagana.",
+          path: ["raben_username"],
+        });
+      }
+      if (!data.raben_password) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Hasło API jest wymagane.",
+          path: ["raben_password"],
+        });
+      }
+      if (!data.raben_edi_sender) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Nadawca EDI jest wymagany.",
+          path: ["raben_edi_sender"],
+        });
+      }
+      if (!data.raben_edi_receiver) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Odbiorca EDI jest wymagany.",
+          path: ["raben_edi_receiver"],
+        });
+      }
+      if (!data.raben_department) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Numer oddziału jest wymagany.",
+          path: ["raben_department"],
+        });
+      }
+      if (!data.raben_payer_identifier) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Identyfikator płatnika jest wymagany.",
+          path: ["raben_payer_identifier"],
+        });
+      }
+    }
   });
 
 // === KONIEC NOWYCH SCHEMATÓW INTEGRACJI ===
@@ -209,6 +357,7 @@ export const serviceIntegrationFormSchema = z
 // Schemat aktualizacji jest prostszy i nie zawiera 'type' ani 'api_token'
 export const IntegrationUpdateSchema = z.object({
   name: z.string().min(2, { message: "Nazwa musi mieć co najmniej 2 znaki." }),
+  is_active: z.boolean().optional(),
 
   // Pola dla Marketplace (wszystkie opcjonalne)
   sync_orders: z.boolean().optional(),
@@ -223,6 +372,29 @@ export const IntegrationUpdateSchema = z.object({
   // NOWE Pola dla SUUS (opcjonalne)
   suus_login: z.string().optional(),
   suus_password: z.string().optional(),
+  suus_order_type: z.string().optional(),
+
+  geis_customer_code: z.string().optional(),
+  geis_password: z.string().optional(),
+  geis_is_test: z.boolean().optional(),
+  geis_iban: z.string().optional(),
+  geis_pdf_format: z.string().optional(),
+
+  geodis_client_id: z.string().optional(),
+  geodis_client_secret: z.string().optional(),
+  geodis_customer_id: z.string().optional(),
+  geodis_warehouse_id: z.string().optional(),
+  geodis_is_test: z.boolean().optional(),
+
+  raben_username: z.string().optional(),
+  raben_password: z.string().optional(),
+  raben_edi_sender: z.string().optional(),
+  raben_edi_receiver: z.string().optional(),
+  raben_department: z.string().optional(),
+  raben_payer_identifier: z.string().optional(),
+  raben_is_test: z.boolean().optional(),
+  raben_product_type: z.string().optional(),
+  raben_service_level: z.string().optional(),
 
   nip: z.string().optional(),
   ksef_token: z.string().optional(),
@@ -239,7 +411,14 @@ export const IntegrationUpdateSchema = z.object({
   subiekt_api_key: z.string().optional(),
   subiekt_erp_sales_reference_template: z.string().optional(),
   empik_token: z.string().optional(),
+  ksef_auto_sync_enabled: z.boolean().optional(),
+  invoice_sync_interval: z.number().optional(),
+  ksef_sync_interval: z.number().optional(),
   sync_config: z.any().optional(),
+  inpost_buy_client_id: z.string().optional(),
+  inpost_buy_client_secret: z.string().optional(),
+  inpost_buy_organization_id: z.string().optional(),
+  inpost_buy_sandbox: z.boolean().optional(),
 });
 
 export type IntegrationUpdateSchemaType = z.infer<

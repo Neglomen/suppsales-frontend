@@ -101,14 +101,14 @@ export function ProductMappingDialog({
           {currentMapping ? "Zmień powiązanie" : "Powiąż z ERP"}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[550px] bg-slate-900 border border-slate-800 text-white overflow-hidden p-0 rounded-2xl shadow-2xl">
-        <div className="p-6 pb-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md">
+      <DialogContent className="sm:max-w-[550px] bg-background border border-border text-foreground overflow-hidden p-0 rounded-2xl shadow-2xl">
+        <div className="p-6 pb-4 border-b border-border/60 bg-muted/40 backdrop-blur-md">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
               <Link2 className="h-5 w-5 text-primary" />
               Mapowanie produktu do ERP (Subiekt GT)
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-muted-foreground text-xs">
               Połącz ofertę z serwisu marketplace z fizycznym kartotekowym towarem w systemie ERP.
             </DialogDescription>
           </DialogHeader>
@@ -116,23 +116,23 @@ export function ProductMappingDialog({
 
         <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
           {/* Marketplace Item Card */}
-          <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 relative overflow-hidden group">
+          <div className="bg-slate-950/5 dark:bg-slate-950/80 border border-border rounded-xl p-4 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-all duration-300" />
             <div className="flex items-start gap-3 relative z-10">
-              <div className="w-10 h-10 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 text-primary">
+              <div className="w-10 h-10 rounded-lg bg-slate-900/10 dark:bg-slate-900 border border-border flex items-center justify-center shrink-0 text-primary">
                 <Package className="h-5 w-5" />
               </div>
               <div className="space-y-1 flex-1 min-w-0">
                 <p className="text-[10px] font-bold text-primary uppercase tracking-widest">OFERTA MARKETPLACE</p>
-                <h4 className="text-sm font-semibold text-slate-100 leading-snug truncate" title={offerName}>
+                <h4 className="text-sm font-semibold text-foreground leading-snug truncate" title={offerName}>
                   {offerName}
                 </h4>
                 <div className="flex items-center gap-2 pt-0.5">
-                  <Badge variant="secondary" className="bg-slate-900 text-slate-400 border-slate-800 text-[10px] py-0 px-1.5 font-mono">
+                  <Badge variant="secondary" className="bg-slate-900/10 dark:bg-slate-900 text-muted-foreground border-border text-[10px] py-0 px-1.5 font-mono">
                     ID: {offerId}
                   </Badge>
                   {currentMapping && (
-                    <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/5 text-emerald-400 text-[10px] py-0 px-1.5">
+                    <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/5 text-emerald-550 dark:text-emerald-400 text-[10px] py-0 px-1.5">
                       Obecny symbol: {currentMapping.erp_product_symbol}
                     </Badge>
                   )}
@@ -143,14 +143,14 @@ export function ProductMappingDialog({
 
           {/* Search section */}
           <div className="space-y-3">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
               Szukaj w kartotece Subiekta
             </label>
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4.5 w-4.5 text-slate-500" />
+              <Search className="absolute left-3 top-3 h-4.5 w-4.5 text-muted-foreground/60" />
               <Input
                 placeholder="Wpisz symbol, kod EAN lub nazwę towaru..."
-                className="pl-10 h-11 bg-slate-950/60 border-slate-800 text-white placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-sm transition-all"
+                className="pl-10 h-11 bg-background border-border text-foreground placeholder-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-sm transition-all"
                 autoFocus
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -158,39 +158,39 @@ export function ProductMappingDialog({
             </div>
             
             {/* Search results box */}
-            <div className="border border-slate-800/80 rounded-xl bg-slate-950/40 overflow-hidden min-h-[200px] max-h-[280px] flex flex-col">
+            <div className="border border-border rounded-xl bg-muted/30 overflow-hidden min-h-[200px] max-h-[280px] flex flex-col">
               {searchTerm.length < 2 ? (
-                <div className="flex flex-col items-center justify-center flex-1 text-center p-6 text-slate-500">
-                  <Info className="h-8 w-8 mb-2 text-slate-600" />
+                <div className="flex flex-col items-center justify-center flex-1 text-center p-6 text-muted-foreground">
+                  <Info className="h-8 w-8 mb-2 text-muted-foreground/60" />
                   <p className="text-xs font-medium max-w-[280px] leading-relaxed">
                     Wpisz przynajmniej 2 znaki, aby przeszukać kartotekę towarów w systemie ERP.
                   </p>
                 </div>
               ) : isSearching ? (
-                <div className="flex flex-col items-center justify-center flex-1 p-6 text-slate-400">
+                <div className="flex flex-col items-center justify-center flex-1 p-6 text-muted-foreground">
                   <Loader2 className="animate-spin h-7 w-7 text-primary mb-2" />
                   <span className="text-xs">Wyszukiwanie w Subiekcie...</span>
                 </div>
               ) : searchResults?.length === 0 ? (
-                <div className="flex flex-col items-center justify-center flex-1 text-center p-6 text-slate-500">
+                <div className="flex flex-col items-center justify-center flex-1 text-center p-6 text-muted-foreground">
                   <p className="text-xs">Brak wyników spełniających podane kryteria.</p>
                 </div>
               ) : (
-                <div className="overflow-y-auto p-2 space-y-1 flex-1 divide-y divide-slate-900/60">
+                <div className="overflow-y-auto p-2 space-y-1 flex-1 divide-y divide-border/10">
                   {searchResults?.map((item) => (
                     <div 
                       key={item.id} 
-                      className="flex items-center justify-between p-2.5 hover:bg-slate-850/80 active:bg-slate-850/90 rounded-lg group cursor-pointer border border-transparent hover:border-slate-800 transition-all"
+                      className="flex items-center justify-between p-2.5 hover:bg-accent/10 active:bg-accent/20 rounded-lg group cursor-pointer border border-transparent hover:border-border transition-all"
                       onClick={() => !isUpdating && updateMapping(item.symbol)}
                     >
                       <div className="flex-1 min-w-0 pr-4">
-                        <div className="font-medium text-xs text-slate-200 truncate group-hover:text-white transition-colors">
+                        <div className="font-medium text-xs text-foreground/90 truncate group-hover:text-foreground transition-colors">
                           {item.name || item.symbol}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <Tag className="h-3 w-3 text-slate-600" />
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            Symbol: <strong className="text-slate-400 font-semibold">{item.symbol}</strong>
+                          <Tag className="h-3 w-3 text-muted-foreground/60" />
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            Symbol: <strong className="text-foreground/80 font-semibold">{item.symbol}</strong>
                           </span>
                         </div>
                       </div>

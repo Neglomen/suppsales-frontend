@@ -34,3 +34,45 @@ export const downloadFileFromBase64 = (
     // Można tutaj dodać toast.error, jeśli błąd jest krytyczny
   }
 };
+
+export interface ErpItem {
+  erpSymbol: string;
+  name: string;
+  quantity: number;
+}
+
+export function explodeBundleItems(
+  items: any[], 
+  productMappings: Record<string, any>, 
+  bundleComponents: Record<string, Array<{ symbol: string; quantity: number }>> | null | undefined
+): ErpItem[] {
+  const exploded: ErpItem[] = [];
+
+  for (const item of items) {
+    const offerId = item.offer?.id || item.product_id;
+    const mapping = productMappings?.[offerId] || productMappings?.[item.id];
+    if (!mapping) continue;
+
+    const erpSymbol = mapping.erp_product_symbol;
+    const components = bundleComponents?.[erpSymbol];
+
+    if (components && components.length > 0) {
+      for (const comp of components) {
+        exploded.push({
+          erpSymbol: comp.symbol,
+          name: `[SKŁADNIK] ${comp.symbol}`,
+          quantity: item.quantity * comp.quantity,
+        });
+      }
+    } else {
+      exploded.push({
+        erpSymbol: erpSymbol,
+        name: item.offer?.name || item.name || "Produkt",
+        quantity: item.quantity,
+      });
+    }
+  }
+
+  return exploded;
+}
+

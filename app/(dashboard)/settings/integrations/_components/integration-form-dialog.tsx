@@ -11,6 +11,8 @@ import {
 } from "@/lib/zod";
 import { ServiceIntegration } from "@/types/service-integration";
 import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 import {
   Dialog,
@@ -21,13 +23,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Search, Grid, ShoppingBag, Truck, Database, Boxes, FileText } from "lucide-react";
 import {
   AllegroIcon,
   BaseLinkerIcon,
   SuusIcon,
   ABIcon,
   SubiektIcon,
+  GeisIcon,
+  RabenIcon,
 } from "@/components/shared/icons";
 import { KsefIcon } from "@/components/shared/ksef-icon";
 import {
@@ -44,6 +48,8 @@ import { SuusFormFields } from "./providers/SuusFormFields";
 import { SubiektFormFields } from "./providers/SubiektFormFields";
 import { KsefFormFields } from "./providers/KsefFormFields";
 import { ApaczkaFormFields } from "./providers/ApaczkaFormFields";
+import { GeisFormFields } from "../../../integrations/_components/providers/GeisFormFields";
+import { RabenFormFields } from "../../../integrations/_components/providers/RabenFormFields";
 import { Package } from "lucide-react";
 
 interface IntegrationFormDialogProps {
@@ -52,7 +58,16 @@ interface IntegrationFormDialogProps {
   onSuccess: (newIntegration: ServiceIntegration) => void;
 }
 
-type ProviderType = "ALLEGRO" | "BASELINKER" | "SUUS" | "AB" | "SUBIEKT_GT" | "KSEF" | "APACZKA";
+type ProviderType = "ALLEGRO" | "BASELINKER" | "SUUS" | "AB" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "GEIS" | "RABEN";
+
+const CATEGORIES = [
+  { id: "ALL", name: "Wszystkie", icon: <Grid className="h-4 w-4 mr-2.5" /> },
+  { id: "MARKETPLACE", name: "Marketplaces", icon: <ShoppingBag className="h-4 w-4 mr-2.5" /> },
+  { id: "COURIER", name: "Kurierzy", icon: <Truck className="h-4 w-4 mr-2.5" /> },
+  { id: "ERP", name: "Systemy ERP", icon: <Database className="h-4 w-4 mr-2.5" /> },
+  { id: "WHOLESALE", name: "Hurtownie", icon: <Boxes className="h-4 w-4 mr-2.5" /> },
+  { id: "GOVERNMENT", name: "Administracja", icon: <FileText className="h-4 w-4 mr-2.5" /> },
+];
 
 const ProviderTile = ({
   onClick,
@@ -65,16 +80,20 @@ const ProviderTile = ({
   title: string;
   description: string;
 }) => (
-  <div
+  <button
+    type="button"
     onClick={onClick}
-    className="flex items-center gap-4 rounded-lg border bg-card p-4 hover:border-primary/50 hover:bg-card/40 cursor-pointer transition-all shadow-sm"
+    className="group relative flex flex-col items-start text-left gap-4 rounded-2xl border border-border/15 bg-background/20 p-5 hover:border-primary/40 hover:bg-background/30 hover:shadow-[0_12px_30px_rgba(0,0,0,0.15)] cursor-pointer transition-all duration-300 hover:-translate-y-1 overflow-hidden w-full h-[185px]"
   >
-    {icon}
-    <div>
-      <p className="font-semibold">{title}</p>
-      <p className="text-sm text-muted-foreground">{description}</p>
+    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+    <div className="flex items-center justify-center p-3 rounded-xl bg-background/60 border border-border/10 shadow-inner h-14 w-full group-hover:scale-[1.03] transition-transform duration-300">
+      {icon}
     </div>
-  </div>
+    <div className="space-y-1 w-full mt-auto">
+      <p className="font-bold text-sm tracking-tight text-foreground">{title}</p>
+      <p className="text-xs text-muted-foreground/80 leading-normal line-clamp-2">{description}</p>
+    </div>
+  </button>
 );
 
 const SyncSwitch = ({ name, label }: { name: any; label: string }) => (
@@ -95,108 +114,263 @@ const Step1SelectType = ({
   onSelect,
 }: {
   onSelect: (type: ProviderType) => void;
-}) => (
-  <div className="space-y-4">
-    <p className="text-sm text-muted-foreground">
-      Wybierz serwis, który chcesz zintegrować.
-    </p>
+}) => {
+  const [activeCategory, setActiveCategory] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
 
-    <h4 className="font-semibold text-sm pt-2 text-muted-foreground">
-      Marketplace
-    </h4>
-    <ProviderTile
-      onClick={() => onSelect("ALLEGRO")}
-      icon={<AllegroIcon className="w-24 h-auto" />}
-      title="Allegro"
-      description="Zamówienia, wiadomości, zwroty."
-    />
-    <ProviderTile
-      onClick={() => onSelect("BASELINKER")}
-      icon={<BaseLinkerIcon className="w-24 h-auto" />}
-      title="BaseLinker"
-      description="Synchronizuj zamówienia."
-    />
+  const providers = [
+    {
+      type: "ALLEGRO" as ProviderType,
+      category: "MARKETPLACE",
+      title: "Allegro",
+      description: "Zamówienia, wiadomości, zwroty.",
+      icon: <AllegroIcon className="w-24 h-auto" />,
+    },
+    {
+      type: "BASELINKER" as ProviderType,
+      category: "MARKETPLACE",
+      title: "BaseLinker",
+      description: "Synchronizuj zamówienia.",
+      icon: <BaseLinkerIcon className="w-24 h-auto" />,
+    },
+    {
+      type: "SUUS" as ProviderType,
+      category: "COURIER",
+      title: "RÖHLIG SUUS",
+      description: "Nadawaj przesyłki, etykiety.",
+      icon: <SuusIcon className="w-30 h-auto" />,
+    },
+    {
+      type: "GEIS" as ProviderType,
+      category: "COURIER",
+      title: "Geis GService",
+      description: "Przesyłki przez GService API.",
+      icon: <GeisIcon className="w-28 h-auto" />,
+    },
+    {
+      type: "RABEN" as ProviderType,
+      category: "COURIER",
+      title: "Raben Group",
+      description: "Obsługa wysyłek przez TMS Raben.",
+      icon: <RabenIcon className="w-28 h-auto" />,
+    },
+    {
+      type: "APACZKA" as ProviderType,
+      category: "COURIER",
+      title: "Apaczka",
+      description: "Tanie przesyłki kurierskie (DPD, UPS, itp.).",
+      icon: <Package className="h-10 w-10 text-primary" />,
+    },
+    {
+      type: "AB" as ProviderType,
+      category: "WHOLESALE",
+      title: "AB S.A.",
+      description: "Zlecenia hurtowe, faktury, adresy.",
+      icon: <ABIcon className="h-6 w-auto" />,
+    },
+    {
+      type: "SUBIEKT_GT" as ProviderType,
+      category: "ERP",
+      title: "Subiekt GT",
+      description: "Synchronizuj statusy faktur.",
+      icon: <SubiektIcon className="w-20 h-auto" />,
+    },
+    {
+      type: "KSEF" as ProviderType,
+      category: "GOVERNMENT",
+      title: "KSeF",
+      description: "Pobieraj faktury zakupowe.",
+      icon: <KsefIcon className="w-20 h-auto" />,
+    },
+  ];
 
-    <h4 className="font-semibold text-sm pt-4 text-muted-foreground">
-      Hurtownie
-    </h4>
-    <ProviderTile
-      onClick={() => onSelect("AB")}
-      icon={<ABIcon className="h-6 w-auto" />}
-      title="AB S.A."
-      description="Zlecenia, faktury, adresy."
-    />
+  const filteredProviders = providers.filter((p) => {
+    const matchesCategory = activeCategory === "ALL" || p.category === activeCategory;
+    const matchesSearch =
+      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
-    <h4 className="font-semibold text-sm pt-4 text-muted-foreground">
-      Systemy ERP
-    </h4>
-    <ProviderTile
-      onClick={() => onSelect("SUBIEKT_GT")}
-      icon={<SubiektIcon className="w-20 h-auto" />}
-      title="Subiekt GT"
-      description="Synchronizuj statusy faktur."
-    />
+  const getCountForCategory = (catId: string) => {
+    return providers.filter(
+      (p) =>
+        (catId === "ALL" || p.category === catId) &&
+        (p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          p.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    ).length;
+  };
 
-    <h4 className="font-semibold text-sm pt-4 text-muted-foreground">
-      Kurierzy
-    </h4>
-    <ProviderTile
-      onClick={() => onSelect("SUUS")}
-      icon={<SuusIcon className="w-30 h-auto" />}
-      title="RÖHLIG SUUS"
-      description="Nadawaj przesyłki, etykiety."
-    />
-    <ProviderTile
-      onClick={() => onSelect("APACZKA")}
-      icon={<Package className="h-10 w-10 text-primary" />}
-      title="Apaczka"
-      description="Tanie przesyłki kurierskie (DPD, UPS, itp.)."
-    />
+  return (
+    <div className="space-y-4">
+      {/* SEARCH BAR */}
+      <div className="relative">
+        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Wyszukaj integrację..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10 h-11 bg-background/50 border-border/40 focus-visible:ring-primary rounded-xl"
+        />
+      </div>
 
-    <h4 className="font-semibold text-sm pt-4 text-muted-foreground">
-      Administracja
-    </h4>
-    <ProviderTile
-      onClick={() => onSelect("KSEF")}
-      icon={<KsefIcon className="w-20 h-auto" />}
-      title="KSeF"
-      description="Pobieraj faktury zakupowe."
-    />
-  </div>
-);
+      <div className="flex gap-6 h-[480px]">
+        {/* SIDEBAR */}
+        <div className="w-[210px] flex-shrink-0 flex flex-col gap-1 border-r border-border/10 pr-4 overflow-y-auto">
+          {CATEGORIES.map((cat) => {
+            const count = getCountForCategory(cat.id);
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setActiveCategory(cat.id)}
+                className={cn(
+                  "flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all text-left",
+                  activeCategory === cat.id
+                    ? "bg-primary/10 text-primary shadow-sm"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                )}
+              >
+                <div className="flex items-center truncate">
+                  {cat.icon}
+                  <span className="truncate">{cat.name}</span>
+                </div>
+                <span
+                  className={cn(
+                    "text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0 ml-2",
+                    activeCategory === cat.id
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-// Ten komponent pozostaje pusty, bo cała logika jest w dedykowanych plikach
+        {/* TILES GRID */}
+        <div className="flex-grow overflow-y-auto pr-1">
+          {filteredProviders.length > 0 ? (
+            <div className="grid grid-cols-3 gap-4 pb-4">
+              {filteredProviders.map((p) => (
+                <ProviderTile
+                  key={p.type}
+                  onClick={() => onSelect(p.type)}
+                  icon={p.icon}
+                  title={p.title}
+                  description={p.description}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+              <p className="text-sm font-medium">Brak pasujących integracji.</p>
+              <p className="text-xs text-muted-foreground/60">Spróbuj wpisać inną frazę.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Step2EnterDetails = ({
   providerType,
 }: {
   providerType: ProviderType;
 }) => {
-  return (
-    <div className="space-y-4">
-      {/* Dynamiczne renderowanie odpowiedniego zestawu pól, KTÓRY ZAWIERA JUŻ POLE 'NAME' */}
-      {providerType === "ALLEGRO" && <AllegroFormFields />}
-      {providerType === "BASELINKER" && <BaselinkerFormFields />}
-      {providerType === "SUUS" && <SuusFormFields />}
-      {providerType === "APACZKA" && <ApaczkaFormFields />}
-      {providerType === "AB" && <ABFormFields />}
-      {providerType === "SUBIEKT_GT" && <SubiektFormFields />}
-      {providerType === "KSEF" && <KsefFormFields />}
+  const providers = [
+    {
+      type: "ALLEGRO" as ProviderType,
+      title: "Allegro",
+      icon: <AllegroIcon className="w-24 h-auto" />,
+    },
+    {
+      type: "BASELINKER" as ProviderType,
+      title: "BaseLinker",
+      icon: <BaseLinkerIcon className="w-24 h-auto" />,
+    },
+    {
+      type: "SUUS" as ProviderType,
+      title: "RÖHLIG SUUS",
+      icon: <SuusIcon className="w-30 h-auto" />,
+    },
+    {
+      type: "GEIS" as ProviderType,
+      title: "Geis GService",
+      icon: <GeisIcon className="w-28 h-auto" />,
+    },
+    {
+      type: "APACZKA" as ProviderType,
+      title: "Apaczka",
+      icon: <Package className="h-10 w-10 text-primary" />,
+    },
+    {
+      type: "AB" as ProviderType,
+      title: "AB S.A.",
+      icon: <ABIcon className="h-6 w-auto" />,
+    },
+    {
+      type: "SUBIEKT_GT" as ProviderType,
+      title: "Subiekt GT",
+      icon: <SubiektIcon className="w-20 h-auto" />,
+    },
+    {
+      type: "KSEF" as ProviderType,
+      title: "KSeF",
+      icon: <KsefIcon className="w-20 h-auto" />,
+    },
+  ];
 
+  const provider = providers.find((p) => p.type === providerType);
+
+  return (
+    <div className="space-y-6">
+      {/* HEADER BANNER */}
+      <div className="flex items-center gap-4 p-4 rounded-2xl border border-border/10 bg-gradient-to-r from-primary/5 via-transparent to-transparent shadow-sm">
+        <div className="flex items-center justify-center p-3 rounded-xl bg-background border border-border/10 shadow-sm h-14 w-28 flex-shrink-0">
+          {provider?.icon}
+        </div>
+        <div>
+          <h3 className="font-bold text-lg text-foreground">
+            Konfiguracja połączenia
+          </h3>
+          <p className="text-sm text-muted-foreground leading-normal">
+            Wprowadź dane dostępowe dla integracji z <strong>{provider?.title}</strong>.
+          </p>
+        </div>
+      </div>
+
+      {/* FORM WRAPPER */}
+      <div className="space-y-4 rounded-2xl border border-border/15 bg-card/10 p-6 shadow-sm backdrop-blur-sm">
+        {providerType === "ALLEGRO" && <AllegroFormFields />}
+        {providerType === "BASELINKER" && <BaselinkerFormFields />}
+        {providerType === "SUUS" && <SuusFormFields />}
+        {providerType === "GEIS" && <GeisFormFields />}
+        {providerType === "APACZKA" && <ApaczkaFormFields />}
+        {providerType === "AB" && <ABFormFields />}
+        {providerType === "SUBIEKT_GT" && <SubiektFormFields />}
+        {providerType === "KSEF" && <KsefFormFields />}
+        {providerType === "RABEN" && <RabenFormFields />}
+      </div>
+
+      {/* SYNC SETTINGS */}
       {["ALLEGRO", "BASELINKER"].includes(providerType) && (
-        <div className="space-y-3 pt-2">
-          <h4 className="text-sm font-medium text-muted-foreground">
-            Opcje synchronizacji
+        <div className="space-y-3 rounded-2xl border border-border/15 bg-card/10 p-6 shadow-sm backdrop-blur-sm">
+          <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">
+            Synchronizacja danych
           </h4>
-          <SyncSwitch name="sync_orders" label="Synchronizuj zamówienia" />
-          {providerType === "ALLEGRO" && (
-            <>
-              <SyncSwitch
-                name="sync_messages"
-                label="Synchronizuj wiadomości"
-              />
-              <SyncSwitch name="sync_returns" label="Synchronizuj zwroty" />
-            </>
-          )}
+          <div className="space-y-2">
+            <SyncSwitch name="sync_orders" label="Automatyczna synchronizacja zamówień" />
+            {providerType === "ALLEGRO" && (
+              <>
+                <SyncSwitch name="sync_messages" label="Automatyczna synchronizacja wiadomości" />
+                <SyncSwitch name="sync_returns" label="Automatyczna synchronizacja zwrotów" />
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -221,6 +395,11 @@ export function IntegrationFormDialog({
       api_token: "",
       suus_login: "",
       suus_password: "",
+      suus_order_type: "B2B",
+      geis_customer_code: "",
+      geis_password: "",
+      geis_is_test: true,
+      geis_iban: "",
       ab_client_code: "",
       ab_login: "",
       ab_password: "",
@@ -228,8 +407,19 @@ export function IntegrationFormDialog({
       subiekt_api_key: "",
       nip: "",
       ksef_token: "",
+      ksef_auto_sync_enabled: false,
+      ksef_sync_interval: 30,
       apaczka_app_id: "",
       apaczka_app_secret: "",
+      raben_username: "",
+      raben_password: "",
+      raben_edi_sender: "",
+      raben_edi_receiver: "",
+      raben_department: "",
+      raben_payer_identifier: "",
+      raben_is_test: true,
+      raben_product_type: "PROD02",
+      raben_service_level: "",
       // environment: undefined, // Select może być undefined
     },
   });
@@ -251,6 +441,9 @@ export function IntegrationFormDialog({
         break;
       case "SUUS":
         defaultName = "SUUS";
+        break;
+      case "GEIS":
+        defaultName = "Geis GService";
         break;
       case "AB":
         defaultName = "Hurtownia AB";
@@ -302,6 +495,7 @@ export function IntegrationFormDialog({
       api_token,
       suus_login,
       suus_password,
+      suus_order_type,
       ab_client_code,
       ab_login,
       ab_password,
@@ -312,11 +506,26 @@ export function IntegrationFormDialog({
       apaczka_app_secret,
       nip,
       environment,
+      ksef_auto_sync_enabled,
+      ksef_sync_interval,
+      geis_customer_code,
+      geis_password,
+      geis_is_test,
+      geis_iban,
+      raben_username,
+      raben_password,
+      raben_edi_sender,
+      raben_edi_receiver,
+      raben_department,
+      raben_payer_identifier,
+      raben_is_test,
+      raben_product_type,
+      raben_service_level,
       ...integrationData
     } = values;
 
     const category =
-      values.provider_type === "SUUS" || values.provider_type === "APACZKA"
+      values.provider_type === "SUUS" || values.provider_type === "APACZKA" || values.provider_type === "GEIS" || values.provider_type === "RABEN"
         ? "COURIER"
         : values.provider_type === "AB"
         ? "WHOLESALE"
@@ -332,7 +541,9 @@ export function IntegrationFormDialog({
     if (values.provider_type === "BASELINKER")
       api_config = { api_token: api_token };
     else if (values.provider_type === "SUUS")
-      api_config = { login: suus_login, password: suus_password };
+      api_config = { login: suus_login, password: suus_password, order_type: suus_order_type };
+    else if (values.provider_type === "GEIS")
+      api_config = { customer_code: geis_customer_code, password: geis_password, is_test: geis_is_test, iban: geis_iban };
     else if (values.provider_type === "AB")
       api_config = {
         client_code: ab_client_code,
@@ -345,7 +556,24 @@ export function IntegrationFormDialog({
       api_config = { app_id: apaczka_app_id, app_secret: apaczka_app_secret };
     else if (values.provider_type === "KSEF") {
       api_config = { token: ksef_token }; // Encrypted
-      sync_config = { nip: nip, environment: environment }; // Public
+      sync_config = { 
+        nip: nip, 
+        environment: environment,
+        ksef_auto_sync_enabled: !!ksef_auto_sync_enabled,
+        ksef_sync_interval: parseInt(ksef_sync_interval as any) || 30
+      }; // Public
+    } else if (values.provider_type === "RABEN") {
+      api_config = {
+        username: raben_username,
+        password: raben_password,
+        edi_sender: raben_edi_sender,
+        edi_receiver: raben_edi_receiver,
+        raben_department: raben_department,
+        payer_identifier: raben_payer_identifier,
+        is_test: raben_is_test !== false,
+        product_type: raben_product_type || "PROD02",
+        service_level: raben_service_level || ""
+      };
     }
 
     const payload = { ...integrationData, category, api_config, sync_config };
@@ -369,13 +597,15 @@ export function IntegrationFormDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleDialogChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Dodaj nową integrację</DialogTitle>
-          <DialogDescription>
+      <DialogContent className={cn("transition-all duration-300 bg-background/95 backdrop-blur-2xl border border-border/30 shadow-[0_0_50px_rgba(0,0,0,0.6)] rounded-[24px] p-8", step === 1 ? "sm:max-w-5xl" : "sm:max-w-3xl")}>
+        <DialogHeader className="border-b border-border/10 pb-4 mb-4">
+          <DialogTitle className="text-2xl font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
+            Dodaj nową integrację
+          </DialogTitle>
+          <DialogDescription className="text-sm">
             {step === 1
-              ? "Wybierz serwis, z którym chcesz się połączyć."
-              : `Konfiguracja dla ${providerType}.`}
+              ? "Wybierz serwis z katalogu dostępnych integracji, aby rozpocząć konfigurację."
+              : "Skonfiguruj połączenie z wybranym dostawcą usług."}
           </DialogDescription>
         </DialogHeader>
         <FormProvider {...methods}>

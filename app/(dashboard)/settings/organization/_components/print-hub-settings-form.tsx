@@ -39,7 +39,10 @@ const printHubSettingsSchema = z.object({
   print_hub_enabled: z.boolean(),
   print_hub_default_invoice_printer: z.string().optional().nullable(),
   print_hub_default_label_printer: z.string().optional().nullable(),
+  print_hub_exclude_nip: z.boolean(),
+  print_hub_exclude_b2c: z.boolean(),
   print_erp_symbol_on_label: z.boolean(),
+  print_full_name_on_label: z.boolean(),
   label_items_per_page: z.number().int().min(1).max(5),
 });
 type PrintHubSettingsValues = z.infer<typeof printHubSettingsSchema>;
@@ -60,7 +63,10 @@ export function PrintHubSettingsForm({
       print_hub_enabled: (organization as any).print_hub_enabled || false,
       print_hub_default_invoice_printer: (organization as any).print_hub_default_invoice_printer || "__none__",
       print_hub_default_label_printer: (organization as any).print_hub_default_label_printer || "__none__",
+      print_hub_exclude_nip: (organization as any).print_hub_exclude_nip || false,
+      print_hub_exclude_b2c: (organization as any).print_hub_exclude_b2c || false,
       print_erp_symbol_on_label: (organization as any).print_erp_symbol_on_label || false,
+      print_full_name_on_label: (organization as any).print_full_name_on_label || false,
       label_items_per_page: (organization as any).label_items_per_page || 3,
     },
   });
@@ -84,7 +90,10 @@ export function PrintHubSettingsForm({
         print_hub_enabled: response.data.print_hub_enabled,
         print_hub_default_invoice_printer: response.data.print_hub_default_invoice_printer || "__none__",
         print_hub_default_label_printer: response.data.print_hub_default_label_printer || "__none__",
+        print_hub_exclude_nip: response.data.print_hub_exclude_nip || false,
+        print_hub_exclude_b2c: response.data.print_hub_exclude_b2c || false,
         print_erp_symbol_on_label: response.data.print_erp_symbol_on_label || false,
+        print_full_name_on_label: response.data.print_full_name_on_label || false,
         label_items_per_page: response.data.label_items_per_page || 3,
       });
     },
@@ -141,7 +150,7 @@ export function PrintHubSettingsForm({
               )}
             />
 
-            {form.watch("print_hub_enabled") && printHubStatus === "connected" && (
+            {form.watch("print_hub_enabled") && (
               <div className="space-y-4 pt-4 border-t">
                 <FormDescription>
                   Wybierz domyślne drukarki dla poszczególnych rodzajów dokumentów. Pozostaw
@@ -158,6 +167,7 @@ export function PrintHubSettingsForm({
                       <Select
                         onValueChange={field.onChange}
                         value={field.value || "__none__"}
+                        disabled={printHubStatus !== "connected"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -166,6 +176,9 @@ export function PrintHubSettingsForm({
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="__none__">-- Brak (wybór ręczny) --</SelectItem>
+                          {field.value && field.value !== "__none__" && !printers.some((p) => p.name === field.value) && (
+                            <SelectItem value={field.value}>{field.value} (niedostępna)</SelectItem>
+                          )}
                           {printers.map((printer) => (
                             <SelectItem key={printer.name} value={printer.name}>
                               {printer.name}
@@ -173,9 +186,70 @@ export function PrintHubSettingsForm({
                           ))}
                         </SelectContent>
                       </Select>
+                      {printHubStatus !== "connected" && (
+                        <p className="text-xs text-amber-500 font-medium mt-1">
+                          ⚠️ Uruchom aplikację Print Hub na swoim komputerze, aby załadować listę drukarek.
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
+
+                {/* ─── Wykluczenia wydruku faktur ─── */}
+                <div className="space-y-4 pt-2 border-t">
+                  <div className="space-y-1">
+                    <FormLabel className="text-sm font-semibold">Filtry automatycznego wydruku faktur (FS)</FormLabel>
+                    <FormDescription className="text-xs">
+                      Zapobiegaj podwójnemu drukowaniu faktur przez Print Hub (np. gdy Subiekt już je automatycznie drukuje).
+                    </FormDescription>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="print_hub_exclude_nip"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">
+                            Nie drukuj faktur z NIP (firmowych / B2B)
+                          </FormLabel>
+                          <FormDescription>
+                            Zablokuje automatyczny wydruk przez Print Hub dla faktur posiadających numer NIP.
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="print_hub_exclude_b2c"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">
+                            Nie drukuj faktur na osobę fizyczną (bez NIP / B2C)
+                          </FormLabel>
+                          <FormDescription>
+                            Zablokuje automatyczny wydruk przez Print Hub dla osób fizycznych (np. gdy drukuje je drukarka fiskalna w Subiekcie).
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 {/* ─── Drukarka etykiet ─── */}
                 <FormField
@@ -187,6 +261,7 @@ export function PrintHubSettingsForm({
                       <Select
                         onValueChange={field.onChange}
                         value={field.value || "__none__"}
+                        disabled={printHubStatus !== "connected"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -195,6 +270,9 @@ export function PrintHubSettingsForm({
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="__none__">-- Brak (wybór ręczny) --</SelectItem>
+                          {field.value && field.value !== "__none__" && !printers.some((p) => p.name === field.value) && (
+                            <SelectItem value={field.value}>{field.value} (niedostępna)</SelectItem>
+                          )}
                           {printers.map((printer) => (
                             <SelectItem key={printer.name} value={printer.name}>
                               {printer.name}
@@ -202,6 +280,11 @@ export function PrintHubSettingsForm({
                           ))}
                         </SelectContent>
                       </Select>
+                      {printHubStatus !== "connected" && (
+                        <p className="text-xs text-amber-500 font-medium mt-1">
+                          ⚠️ Uruchom aplikację Print Hub na swoim komputerze, aby załadować listę drukarek.
+                        </p>
+                      )}
                       <FormDescription className="text-xs">
                         Drukarka etykiet (typu Godex) powinna obsługiwać format RAW. Zalecamy instalację sterowników Seagull.
                       </FormDescription>
@@ -243,6 +326,31 @@ export function PrintHubSettingsForm({
                       </FormItem>
                     )}
                   />
+
+                  {form.watch("print_erp_symbol_on_label") && (
+                    <FormField
+                      control={form.control}
+                      name="print_full_name_on_label"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">
+                              Drukuj pełną nazwę zamiast symbolu
+                            </FormLabel>
+                            <FormDescription>
+                              Jeśli włączone, na naklejce wydrukuje się pełna nazwa produktu z Subiekt GT zamiast samego symbolu ERP.
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   {form.watch("print_erp_symbol_on_label") && (
                     <FormField

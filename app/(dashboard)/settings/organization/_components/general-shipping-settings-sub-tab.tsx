@@ -19,6 +19,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -34,11 +35,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, Tag } from "lucide-react";
 
 const settingsSchema = z.object({
   default_label_format: z.nativeEnum(LabelFormat),
   default_reference_number_template: z.string().max(200).optional(),
+  warn_invoice_exists: z.boolean(),
+  warn_waybill_exists: z.boolean(),
+  warn_cod_mismatch: z.boolean(),
 });
 
 type SettingsFormValues = z.infer<typeof settingsSchema>;
@@ -58,24 +63,26 @@ export function GeneralShippingSettingsSubTab() {
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsSchema),
-    // Ustawiamy wartości domyślne na wypadek, gdyby API nie odpowiedziało
     defaultValues: {
       default_label_format: LabelFormat.PDF,
       default_reference_number_template: "",
+      warn_invoice_exists: true,
+      warn_waybill_exists: true,
+      warn_cod_mismatch: true,
     },
   });
 
-  // === OSTATECZNA POPRAWKA: Używamy `reset` do aktualizacji formularza ===
   useEffect(() => {
     if (organization) {
-      // `reset` to oficjalny sposób na wypełnienie formularza danymi z API.
-      // Aktualizuje on wartości i resetuje stan `isDirty`.
       form.reset({
         default_label_format: organization.default_label_format,
         default_reference_number_template: organization.default_reference_number_template || "",
+        warn_invoice_exists: organization.warn_invoice_exists ?? true,
+        warn_waybill_exists: organization.warn_waybill_exists ?? true,
+        warn_cod_mismatch: organization.warn_cod_mismatch ?? true,
       });
     }
-  }, [organization, form.reset]); // `form.reset` jest stabilną funkcją, ale dodajemy ją dla kompletności
+  }, [organization, form.reset]);
 
   const mutation = useMutation({
     mutationFn: (values: SettingsFormValues) => {
@@ -94,7 +101,6 @@ export function GeneralShippingSettingsSubTab() {
   });
 
   const onSubmit = (values: SettingsFormValues) => {
-    // `values` są teraz gwarantowane przez `react-hook-form` i `zod`
     mutation.mutate(values);
   };
 
@@ -129,7 +135,7 @@ export function GeneralShippingSettingsSubTab() {
                     <FormLabel>Domyślny format etykiety</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      value={field.value} // Używamy kontrolowanego komponentu
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -138,13 +144,18 @@ export function GeneralShippingSettingsSubTab() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value={LabelFormat.PDF}>
-                          PDF (dla drukarek biurowych)
+                          PDF — A4 (drukarka biurowa)
                         </SelectItem>
                         <SelectItem value={LabelFormat.ZPL}>
-                          ZPL (dla drukarek termicznych)
+                          Termiczny A6 — Godex / Zebra (10×15 cm)
                         </SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormDescription className="text-xs">
+                      Wybierz <strong>Termiczny A6</strong> jeśli drukujesz etykiety na drukarce
+                      termicznej (Godex, Zebra). Etykiety z Apaczki będą pobierane w rozmiarze
+                      10×15 cm, dopasowanym do rolki etykiet.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -197,6 +208,78 @@ export function GeneralShippingSettingsSubTab() {
                   </FormItem>
                 )}
               />
+
+              {/* === SEKCDA: OSTRZEŻENIA (NEW) === */}
+              <div className="border-t pt-6 space-y-4">
+                <h4 className="text-sm font-semibold">Komunikaty i ostrzeżenia</h4>
+                <p className="text-xs text-muted-foreground">
+                  Włącz lub wyłącz ostrzeżenia wyświetlane podczas pracy na zamówieniach.
+                </p>
+
+                <FormField
+                  control={form.control}
+                  name="warn_invoice_exists"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5 pr-4">
+                        <FormLabel className="text-sm">Ostrzeżenie o istniejącej fakturze</FormLabel>
+                        <FormDescription className="text-xs text-muted-foreground">
+                          Ostrzegaj przy nabijaniu lub wysyłkach, jeśli zamówienie posiada już powiązany dokument sprzedaży (fakturę).
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="warn_waybill_exists"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5 pr-4">
+                        <FormLabel className="text-sm">Ostrzeżenie o istniejącej wysyłce</FormLabel>
+                        <FormDescription className="text-xs text-muted-foreground">
+                          Ostrzegaj, jeśli dla wybranego zamówienia wygenerowano już list przewozowy/etykietę kurierską.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="warn_cod_mismatch"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5 pr-4">
+                        <FormLabel className="text-sm">Ostrzeżenie o kwocie pobrania (COD)</FormLabel>
+                        <FormDescription className="text-xs text-muted-foreground">
+                          Pokazuj ostrzeżenie, gdy kwota pobrania nie zgadza się z wartością zamówienia do zapłaty (lub gdy wybrano pobranie dla opłaconego zamówienia).
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
               <div className="flex justify-end">
                 <Button
                   type="submit"

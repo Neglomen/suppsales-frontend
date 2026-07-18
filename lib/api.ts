@@ -46,12 +46,24 @@ export default api;
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail;
-    if (detail && typeof detail === "object") {
-      if ("message" in detail) {
-        return String(detail.message);
+    if (detail) {
+      if (Array.isArray(detail)) {
+        return detail.map((err: any) => `${err.loc?.join(".") || "pole"}: ${err.msg}`).join("; ");
       }
+      if (typeof detail === "object") {
+        if (detail.error_code === "INSUFFICIENT_STOCK" && Array.isArray(detail.details)) {
+          const itemsList = detail.details
+            .map((item: any) => `${item.symbol} (wymagane: ${item.required}, dostępne: ${item.available})`)
+            .join(", ");
+          return `${detail.message || "Brak wystarczającej ilości towaru w magazynie Subiekta"}: ${itemsList}`;
+        }
+        if ("message" in detail) {
+          return String(detail.message);
+        }
+      }
+      return typeof detail === "string" ? detail : error.response?.data?.message || error.message;
     }
-    return typeof detail === "string" ? detail : error.response?.data?.message || error.message;
+    return error.response?.data?.message || error.message;
   }
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;

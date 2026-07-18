@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 import { usePrintHub } from "@/hooks/use-print-hub";
@@ -10,6 +10,8 @@ import { printHubService } from "@/lib/print-hub-service";
 import { useShippingConfig } from "../_hooks/use-shipping-config";
 import { MarketplaceOrder } from "@/types/marketplace-order";
 import { ServiceIntegration } from "@/types/service-integration";
+import { useMobile } from "@/hooks/use-mobile";
+import { MobileLock } from "@/components/shared/mobile-lock";
 import { EditAddressDialog } from "../_components/EditAddressDialog";
 import { EditInvoiceDialog } from "../_components/EditInvoiceDialog";
 import { ProductMappingDialog } from "../_components/product-mapping-dialog";
@@ -50,6 +52,8 @@ import {
   CheckCircle,
   History,
   Sparkles,
+  ArrowRightLeft,
+  ShoppingBag,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,8 +68,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { PlusCircle, Undo2 } from "lucide-react";
+import { cn, explodeBundleItems } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { SUUS_PACKAGE_CODES, RABEN_PACKAGE_CODES } from "@/lib/courier-data";
 
 interface PackageState {
   id: string;
@@ -83,6 +90,7 @@ interface PackageState {
 }
 
 export default function FulfillmentPage() {
+  const isMobile = useMobile(1023);
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -92,7 +100,10 @@ export default function FulfillmentPage() {
     status: printHubStatus,
     defaultLabelPrinter,
     printErpSymbolOnLabel,
+    printFullNameOnLabel,
     labelItemsPerPage,
+    printHubExcludeNip,
+    printHubExcludeB2c,
   } = usePrintHub();
 
   // 1. Fetch Shipping Config (couriers, predefined packages, delivery mappings)
@@ -105,11 +116,19 @@ export default function FulfillmentPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: serviceMappings } = useQuery<any[]>({
+    queryKey: ["additionalServiceMappings"],
+    queryFn: async () => (await api.get("/additional-service-mappings")).data,
+    enabled: !!config,
+  });
+
   const [pageOffset, setPageOffset] = useState(0);
-  const [queueFilter, setQueueFilter] = useState<"ALL" | "ERR_FV" | "ERR_LBL" | "SKIP" | "COMPLETED">("ALL");
+  const [queueFilter, setQueueFilter] = useState<"ALL" | "ERR_FV" | "ERR_LBL" | "SKIP" | "COMPLETED" | "DROPSHIP">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [localSearch, setLocalSearch] = useState("");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isFlagging, setIsFlagging] = useState(false);
+  const [lastAction, setLastAction] = useState<{ orderId: string; flag: string } | null>(null);
 
   // Debounce search query update
   useEffect(() => {
@@ -171,7 +190,7 @@ export default function FulfillmentPage() {
         }
         
         if (queueFilter === "ALL") {
-          ["SKIP"].forEach((flag) => {
+          ["SKIP", "TO_CHECK", "ERR_FV", "ERR_LBL", "DROPSHIP"].forEach((flag) => {
             params.append("excludeFlags", flag);
           });
         } else if (queueFilter === "ERR_FV") {
@@ -180,6 +199,8 @@ export default function FulfillmentPage() {
           params.append("flags", "ERR_LBL");
         } else if (queueFilter === "SKIP") {
           params.append("flags", "SKIP");
+        } else if (queueFilter === "DROPSHIP") {
+          params.append("flags", "DROPSHIP");
         }
       }
 
@@ -187,6 +208,7 @@ export default function FulfillmentPage() {
       return res.data;
     },
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 
   const currentOrder = queueData?.items?.[0] as MarketplaceOrder | undefined;
@@ -249,6 +271,7 @@ export default function FulfillmentPage() {
       offer: item.offer,
       product_id: item.product_id,
       imageUrl: item.imageUrl || item.image_url || null,
+      price: item.price || item.unitPrice || item.unit_price || item.price_unit || item.price_gross || null,
     }));
   }, [currentOrder]);
 
@@ -286,20 +309,74 @@ export default function FulfillmentPage() {
     if (!currentOrder || !config) {
       return { mappedCourier: null, mappedPackageId: null };
     }
-    const mapping = config.mappings.find((m) => {
-      const isSameIntegration = m.source_integration?.id === currentOrder.service_integration?.id;
-      if (!isSameIntegration) return false;
 
-      if (currentOrder.service_integration?.provider_type === "ALLEGRO") {
-        // Mapowania są zapisane po nazwie metody (method.name), nie po ID (method.id)
-        // Backend też używa nazwy: details.get("delivery", {}).get("method", {}).get("name")
-        const methodName = currentOrder.details_payload?.delivery?.method?.name;
-        return m.marketplace_delivery_method === methodName;
-      } else {
-        const method = currentOrder.details_payload?.delivery_method;
-        return m.marketplace_delivery_method === method;
+    // 1. Sprawdź, czy usługi dodatkowe w zamówieniu wymuszają konkretnego kuriera
+    if (serviceMappings && serviceMappings.length > 0) {
+      const details = currentOrder.details_payload || {};
+      const orderServices: string[] = [];
+
+      // Sprawdź w details_payload.delivery.additionalServices
+      const deliveryServices = details.delivery?.additionalServices || [];
+      deliveryServices.forEach((s: any) => {
+        if (s && s.definitionId) {
+          orderServices.push(s.definitionId);
+        }
+      });
+
+      // Sprawdź w lineItems
+      const lineItemsList = details.lineItems || details.line_items || [];
+      lineItemsList.forEach((item: any) => {
+        if (item && item.selectedAdditionalServices) {
+          item.selectedAdditionalServices.forEach((s: any) => {
+            if (s && s.definitionId) {
+              orderServices.push(s.definitionId);
+            }
+          });
+        }
+      });
+
+      const providerType = currentOrder.service_integration?.provider_type || "";
+
+      for (const serviceId of orderServices) {
+        const matchedSrv = serviceMappings.find(
+          (m) =>
+            m.marketplace_service_id === serviceId &&
+            m.source_integration_provider === providerType
+        );
+        if (matchedSrv) {
+          // Szukamy integracji dla tego kuriera
+          const courier = config.couriers.find(
+            (c) => c.provider_type === matchedSrv.courier_provider && c.is_active !== false
+          );
+          if (courier) {
+            const defaultPackage = config.packages.find((p) => p.is_default);
+            return {
+              mappedCourier: courier,
+              mappedPackageId: defaultPackage?.id || null,
+            };
+          }
+        }
       }
-    });
+    }
+
+    // 2. Normalna ścieżka na podstawie metody dostawy
+    const deliveryMethodName =
+      currentOrder.details_payload?.delivery?.method?.name ||
+      currentOrder.details_payload?.delivery_method ||
+      (currentOrder.service_integration?.provider_type === "EMPIK" ? currentOrder.details_payload?.shipping_type_label || currentOrder.details_payload?.shipping_type_code : null);
+    
+    if (!deliveryMethodName) {
+      const defaultPackage = config.packages.find((p) => p.is_default);
+      return { mappedCourier: null, mappedPackageId: defaultPackage?.id || null };
+    }
+
+    const mapping = config.mappings.find(
+      (m) =>
+        m.marketplace_delivery_method === deliveryMethodName &&
+        m.source_integration &&
+        m.source_integration.id === currentOrder.service_integration?.id
+    );
+
     const defaultPackage = config.packages.find((p) => p.is_default);
     if (!mapping) {
       return {
@@ -312,7 +389,7 @@ export default function FulfillmentPage() {
       mappedCourier: courier,
       mappedPackageId: mapping.default_package_definition_id || defaultPackage?.id || null,
     };
-  }, [currentOrder, config]);
+  }, [currentOrder, config, serviceMappings]);
 
   const selectedPackage = useMemo(() => {
     if (!config || !mappedPackageId) return null;
@@ -322,11 +399,38 @@ export default function FulfillmentPage() {
   // Order flags and address parsing
   const isCod = useMemo(() => {
     if (!currentOrder) return false;
+    if (currentOrder.payment_type === "CASH_ON_DELIVERY") return true;
     if (currentOrder.service_integration?.provider_type === "ALLEGRO") {
       return currentOrder.details_payload?.payment?.type === "CASH_ON_DELIVERY";
     }
+    if (currentOrder.service_integration?.provider_type === "EMPIK") {
+      const ptype = currentOrder.details_payload?.payment_type || currentOrder.details_payload?.paymentType;
+      return !!(ptype && String(ptype).toLowerCase().includes("pobran"));
+    }
     return String(currentOrder.details_payload?.payment_method_cod) === "1";
   }, [currentOrder]);
+
+  const shippingCost = useMemo(() => {
+    if (!currentOrder || !currentOrder.details_payload) return "0.00";
+    const payload = currentOrder.details_payload;
+    if (currentOrder.service_integration?.provider_type === "EMPIK") {
+      return payload.shipping_price !== undefined && payload.shipping_price !== null 
+        ? parseFloat(payload.shipping_price).toFixed(2)
+        : "0.00";
+    }
+    if (currentOrder.service_integration?.provider_type === "ALLEGRO") {
+      return payload.delivery?.cost?.amount !== undefined && payload.delivery?.cost?.amount !== null
+        ? parseFloat(payload.delivery.cost.amount).toFixed(2)
+        : "0.00";
+    }
+    return payload.delivery_price !== undefined && payload.delivery_price !== null
+      ? parseFloat(payload.delivery_price).toFixed(2)
+      : "0.00";
+  }, [currentOrder]);
+
+  const hasShippingCost = useMemo(() => {
+    return shippingCost && parseFloat(shippingCost) > 0;
+  }, [shippingCost]);
 
   const hasInvoiceRequired = useMemo(() => {
     if (!currentOrder) return false;
@@ -337,11 +441,48 @@ export default function FulfillmentPage() {
 
   const buyerMessage = useMemo(() => {
     if (!currentOrder) return null;
-    return (
-      currentOrder.details_payload?.messageToSeller?.text ||
-      currentOrder.details_payload?.user_comments ||
-      currentOrder.details_payload?.message_to_seller
-    );
+    const payload = currentOrder.details_payload;
+    if (!payload) return null;
+
+    if (payload.messageToSeller) {
+      if (typeof payload.messageToSeller === "object" && payload.messageToSeller.text) {
+        return payload.messageToSeller.text;
+      }
+      if (typeof payload.messageToSeller === "string") {
+        return payload.messageToSeller;
+      }
+    }
+    
+    if (payload.customer_message) return payload.customer_message;
+    if (payload.delivery_comments) return payload.delivery_comments;
+    if (payload.user_comments) return payload.user_comments;
+    if (payload.message_to_seller) return payload.message_to_seller;
+    
+    return null;
+  }, [currentOrder]);
+
+  const sellerNote = useMemo(() => {
+    if (!currentOrder) return undefined;
+    const payload = currentOrder.details_payload;
+    if (!payload) return undefined;
+
+    if (payload.admin_comments) return payload.admin_comments;
+    if (payload.adminComments) return payload.adminComments;
+    
+    if (payload.note) {
+      if (typeof payload.note === "object" && payload.note.text) {
+        return payload.note.text;
+      }
+      if (typeof payload.note === "string") {
+        return payload.note;
+      }
+    }
+
+    if (payload.seller_note) return payload.seller_note;
+    if (payload.seller_comment) return payload.seller_comment;
+    if (payload.notes && typeof payload.notes === "string") return payload.notes;
+
+    return undefined;
   }, [currentOrder]);
 
   const deliveryPointId = useMemo(() => {
@@ -360,7 +501,75 @@ export default function FulfillmentPage() {
   const [selectedCourierId, setSelectedCourierId] = useState<number | null>(null);
   const [packages, setPackages] = useState<PackageState[]>([]);
   const [selectedServiceCode, setSelectedServiceCode] = useState<string>("");
+  const [suggestedPackageInfo, setSuggestedPackageInfo] = useState<{ id: string | null; isNstd: boolean } | null>(null);
   const [apaczkaServices, setApaczkaServices] = useState<any[]>([]);
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
+
+  const courierProvider = useMemo(() => {
+    if (selectedCourierId) {
+      return config?.couriers.find((c) => c.id === selectedCourierId)?.provider_type;
+    }
+    return mappedCourier?.provider_type;
+  }, [selectedCourierId, mappedCourier, config]);
+
+  const handleServiceToggle = (serviceCode: string) => {
+    setSelectedServices((prev) => {
+      const next = new Set(prev);
+      if (next.has(serviceCode)) {
+        next.delete(serviceCode);
+      } else {
+        next.add(serviceCode);
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const autoSelected = new Set<string>();
+    if (currentOrder && serviceMappings && courierProvider) {
+      const lineItems = currentOrder.details_payload?.lineItems || [];
+      for (const item of lineItems) {
+        const allegroServices = item.selectedAdditionalServices || [];
+        for (const service of allegroServices) {
+          const serviceMap = serviceMappings.find(
+            (m) =>
+              m.marketplace_service_id === service.definitionId &&
+              m.courier_provider === courierProvider
+          );
+          if (serviceMap) {
+            autoSelected.add(serviceMap.courier_service_code);
+          } else if (courierProvider === "SUUS" && service.definitionId === "CARRY_IN") {
+            autoSelected.add("StdWniesienie2");
+          }
+        }
+      }
+    }
+    setSelectedServices(autoSelected);
+  }, [currentOrder, serviceMappings, courierProvider]);
+
+  const availableServicesForCourier = useMemo(() => {
+    if (!serviceMappings) return [];
+    const filtered = serviceMappings.filter(
+      (m) => m.courier_provider === courierProvider
+    );
+
+    // Add default SUUS carry-in service if it's SUUS and not already mapped
+    if (courierProvider === "SUUS") {
+      const hasWniesienie = filtered.some((m) => m.courier_service_code === "StdWniesienie2");
+      if (!hasWniesienie) {
+        filtered.push({
+          id: "default-suus-wniesienie",
+          marketplace_service_id: "CARRY_IN",
+          marketplace_service_name: "Wniesienie",
+          source_integration_provider: "ALLEGRO",
+          courier_provider: "SUUS",
+          courier_service_code: "StdWniesienie2",
+        });
+      }
+    }
+
+    return filtered;
+  }, [serviceMappings, courierProvider]);
 
   // Dialog open states for address and billing editing
   const [isEditAddressOpen, setIsEditAddressOpen] = useState(false);
@@ -370,6 +579,10 @@ export default function FulfillmentPage() {
   const [referenceNumber, setReferenceNumber] = useState<string>("");
   const [threads, setThreads] = useState<Thread[]>([]);
   const [isLoadingThreads, setIsLoadingThreads] = useState(false);
+
+  // Full order details (disputes, returns, related_orders) — fetched separately from queue data
+  const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [isLoadingOrderDetails, setIsLoadingOrderDetails] = useState(false);
 
   const totalCodAmount = currentOrder?.total_to_pay || 0;
 
@@ -381,15 +594,15 @@ export default function FulfillmentPage() {
     }
   }, [mappedCourier]);
 
-  // Synchronize packages on order and default mapping change
+  // Synchronize packages on order and suggested package change
   useEffect(() => {
-    if (currentOrder) {
+    if (currentOrder && suggestedPackageInfo) {
       const initialCodAmount = isCod ? totalCodAmount.toFixed(2) : "";
       setPackages([
         {
           id: crypto.randomUUID(),
           mode: "predefined",
-          selectedPackageId: mappedPackageId || undefined,
+          selectedPackageId: suggestedPackageInfo.id || undefined,
           customPackage: {
             length_cm: "",
             width_cm: "",
@@ -398,13 +611,13 @@ export default function FulfillmentPage() {
           },
           codAmount: initialCodAmount,
           courier_code: "COL",
-          is_nstd: false,
+          is_nstd: suggestedPackageInfo.isNstd,
         },
       ]);
-    } else {
+    } else if (!currentOrder) {
       setPackages([]);
     }
-  }, [currentOrder, mappedPackageId, isCod, totalCodAmount]);
+  }, [currentOrder, suggestedPackageInfo, isCod, totalCodAmount]);
 
   // Max reference length based on selected courier and active service
   const maxRefLength = useMemo(() => {
@@ -447,6 +660,16 @@ export default function FulfillmentPage() {
       return `${currentOrder.details_payload?.delivery?.address?.firstName || ""} ${
         currentOrder.details_payload?.delivery?.address?.lastName || ""
       }`.trim();
+    }
+    if (currentOrder.service_integration?.provider_type === "EMPIK") {
+      const da = currentOrder.delivery_address;
+      if (da) {
+        return `${da.first_name || ""} ${da.last_name || ""}`.trim();
+      }
+      const customer = currentOrder.details_payload?.customer;
+      if (customer) {
+        return `${customer.firstname || ""} ${customer.lastname || ""}`.trim();
+      }
     }
     return currentOrder.details_payload?.delivery_fullname || "Brak";
   }, [currentOrder]);
@@ -521,6 +744,62 @@ export default function FulfillmentPage() {
       setThreads([]);
     }
   }, [currentOrder]);
+
+  // Fetch full order details (disputes, returns, related_orders) when current order changes
+  useEffect(() => {
+    if (currentOrder?.id) {
+      setIsLoadingOrderDetails(true);
+      api
+        .get(`/orders/${currentOrder.id}`)
+        .then((res) => setOrderDetails(res.data))
+        .catch((err) => console.error("Error loading order details:", err))
+        .finally(() => setIsLoadingOrderDetails(false));
+    } else {
+      setOrderDetails(null);
+    }
+  }, [currentOrder?.id]);
+
+  // Fetch suggested package definition (intelligent mapping) when current order, selected courier or service changes
+  useEffect(() => {
+    if (!currentOrder) {
+      setSuggestedPackageInfo(null);
+      return;
+    }
+
+    const currentCourierId = selectedCourierId !== null ? selectedCourierId : mappedCourier?.id;
+    const currentServiceCode = selectedCourierId !== null ? selectedServiceCode : undefined;
+
+    const controller = new AbortController();
+
+    api
+      .get<{ package_definition_id: string | null; is_nstd: boolean }>("/shipping/suggest-packages", {
+        params: {
+          order_id: currentOrder.id,
+          courier_integration_id: currentCourierId || undefined,
+          service_code: currentServiceCode || undefined,
+        },
+        signal: controller.signal,
+      })
+      .then((res) => {
+        setSuggestedPackageInfo({
+          id: res.data.package_definition_id,
+          isNstd: res.data.is_nstd,
+        });
+      })
+      .catch((err) => {
+        if (err.name !== "CanceledError" && err.message !== "canceled") {
+          console.error("Failed to fetch suggested package:", err);
+          setSuggestedPackageInfo({
+            id: mappedPackageId || null,
+            isNstd: false,
+          });
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [currentOrder, selectedCourierId, selectedServiceCode, mappedCourier, mappedPackageId]);
 
   const totalMessages = useMemo(
     () => threads.reduce((sum, thread) => sum + (thread.messages?.length || 0), 0),
@@ -695,18 +974,47 @@ export default function FulfillmentPage() {
     }
   }, [totalOrders, pageOffset]);
 
-  // Endpoint handlers for order flags
-  const handleAddFlag = useCallback(async (flagType: "SKIP" | "TO_CHECK") => {
-    if (!currentOrder) return;
+  const handleAddFlag = useCallback(async (flagType: "SKIP" | "TO_CHECK" | "DROPSHIP") => {
+    if (!currentOrder || isFlagging) return;
+    if (currentOrder.flags?.includes(flagType)) return;
+    setIsFlagging(true);
     try {
       await api.post(`/orders/${currentOrder.id}/flags`, { flag: flagType });
-      toast.success(`Przypisano flagę: ${flagType === "SKIP" ? "Omiń" : "Do sprawdzenia"}`);
+      setLastAction({ orderId: currentOrder.id, flag: flagType });
+      toast.success(
+        `Przypisano flagę: ${
+          flagType === "SKIP"
+            ? "Omiń"
+            : flagType === "DROPSHIP"
+            ? "Dropshipping"
+            : "Do sprawdzenia"
+        }`
+      );
       queryClient.invalidateQueries({ queryKey: ["fulfillmentQueue"] });
       queryClient.invalidateQueries({ queryKey: ["shippingOrders"] });
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Nie udało się przypisać flagi.");
+    } finally {
+      setIsFlagging(false);
     }
-  }, [currentOrder, queryClient]);
+  }, [currentOrder, isFlagging, queryClient]);
+
+  const handleUndo = useCallback(async () => {
+    if (!lastAction) {
+      toast("Brak akcji do cofnięcia.", { icon: "ℹ️" });
+      return;
+    }
+    const { orderId, flag } = lastAction;
+    try {
+      await api.delete(`/orders/${orderId}/flags/${flag}`);
+      toast.success(`Cofnięto dodanie flagy: ${flag}`);
+      setLastAction(null);
+      queryClient.invalidateQueries({ queryKey: ["fulfillmentQueue"] });
+      queryClient.invalidateQueries({ queryKey: ["shippingOrders"] });
+    } catch (err) {
+      toast.error("Nie udało się cofnąć dodania flagy.");
+    }
+  }, [lastAction, queryClient]);
 
   const handleRemoveFlag = useCallback(async (flag: string) => {
     if (!currentOrder) return;
@@ -717,6 +1025,18 @@ export default function FulfillmentPage() {
       queryClient.invalidateQueries({ queryKey: ["shippingOrders"] });
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Nie udało się usunąć flagi.");
+    }
+  }, [currentOrder, queryClient]);
+
+  const handleUpdateFulfillmentStatus = useCallback(async (newStatus: string) => {
+    if (!currentOrder) return;
+    try {
+      await api.patch(`/orders/${currentOrder.id}/fulfillment-status`, { fulfillment_status: newStatus });
+      toast.success(`Zmieniono status realizacji na: ${newStatus}`);
+      queryClient.invalidateQueries({ queryKey: ["fulfillmentQueue"] });
+      queryClient.invalidateQueries({ queryKey: ["shippingOrders"] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Nie udało się zmienić statusu.");
     }
   }, [currentOrder, queryClient]);
 
@@ -824,7 +1144,11 @@ export default function FulfillmentPage() {
 
         // ── Automatyczny wydruk faktury FS przez PrintHub + suppprint.exe ──
         // Ta operacja jest NIEBLOKUJĄCA — błąd wydruku nie przerywa realizacji zamówienia.
-        if (printHubEnabled && printHubStatus === "connected" && invoiceResult.document_number) {
+        const taxId = currentOrder?.invoice_address?.tax_id || currentOrder?.invoiceAddress?.tax_id || currentOrder?.invoiceAddress?.taxId;
+        const hasNip = !!(taxId && taxId.trim());
+        const isExcluded = (hasNip && printHubExcludeNip) || (!hasNip && printHubExcludeB2c);
+
+        if (printHubEnabled && printHubStatus === "connected" && invoiceResult.document_number && !isExcluded) {
           try {
             printHubService.printSalesInvoice(
               invoiceResult.document_number,
@@ -883,6 +1207,7 @@ export default function FulfillmentPage() {
         const currentPayload: any = {
           cod_amount: isCod ? parseFloat(pkg.codAmount.replace(",", ".")) : undefined,
           is_nstd: pkg.is_nstd,
+          courier_code: pkg.courier_code || undefined,
         };
         if (pkg.mode === "predefined") {
           currentPayload.package_definition_id = pkg.selectedPackageId;
@@ -910,6 +1235,7 @@ export default function FulfillmentPage() {
         order_id: currentOrder.id,
         reference_number: refToUse,
         packages: packagesPayload,
+        manual_additional_services: Array.from(selectedServices),
       };
 
       const isManual = selectedCourierId !== mappedCourier?.id;
@@ -946,7 +1272,7 @@ export default function FulfillmentPage() {
       toast.loading("Automatyczny wydruk etykiet kurierskich...", { id: toastId });
 
       // Zbieramy pozycje które mają mapowanie ERP (raz dla całego zamówienia/paczek)
-      const erpItems = (productMappings
+      let erpItems = (productMappings
         ? lineItems
             .map((item: any) => {
               const offerId = item.offer?.id || item.product_id;
@@ -960,6 +1286,17 @@ export default function FulfillmentPage() {
             })
             .filter(Boolean)
         : []) as { erpSymbol: string; name: string; quantity: number }[];
+
+      if (erpIntegration?.id && erpItems.length > 0 && productMappings) {
+        try {
+          const symbols = erpItems.map((item) => item.erpSymbol);
+          const componentsResponse = await api.post(`/erp-proxy/integrations/${erpIntegration.id}/products/components/bulk`, { symbols });
+          const bundleComponents = componentsResponse.data;
+          erpItems = explodeBundleItems(lineItems, productMappings, bundleComponents);
+        } catch (compErr) {
+          console.error("Failed to fetch bundle components for printing, using fallback:", compErr);
+        }
+      }
 
       // 3. PrintHub Direct Printing
       let printSuccess = false;
@@ -978,6 +1315,7 @@ export default function FulfillmentPage() {
               printHubService.printPdf(label_data, fileName, {
                 printerName: defaultLabelPrinter || undefined,
                 printErpSymbols: printErpSymbolOnLabel,
+                printFullName: printFullNameOnLabel,
                 labelItemsPerPage: labelItemsPerPage,
                 erpItems: erpItems,
               });
@@ -992,8 +1330,8 @@ export default function FulfillmentPage() {
       toast.success(
         <div className="flex flex-col gap-1 text-left text-sm">
           <span className="font-semibold text-emerald-400">Zamówienie zrealizowane!</span>
-          <span className="text-xs text-slate-300">
-            Faktura: <strong className="font-mono bg-emerald-500/20 px-1 py-0.5 rounded text-white ml-1">{invoiceResult.document_number}</strong>
+          <span className="text-xs text-muted-foreground">
+            Faktura: <strong className="font-mono bg-emerald-500/15 dark:bg-emerald-500/20 px-1 py-0.5 rounded text-emerald-600 dark:text-emerald-400 ml-1">{invoiceResult.document_number}</strong>
           </span>
           {printSuccess && <span className="text-[11px] text-emerald-300">Wysłano dokumenty do PrintHub</span>}
         </div>,
@@ -1035,7 +1373,19 @@ export default function FulfillmentPage() {
       const activeEl = document.activeElement?.tagName;
       if (activeEl === "INPUT" || activeEl === "TEXTAREA") return;
 
-      if (!currentOrder || isProcessing) {
+      // Sprawdź skrót Ctrl+Z (Undo)
+      if (e.ctrlKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      // Ignoruj skróty przy wciśniętych klawiszach modyfikujących (Ctrl, Alt, Meta/Command)
+      if (e.ctrlKey || e.altKey || e.metaKey) {
+        return;
+      }
+
+      if (!currentOrder || isProcessing || isFlagging) {
         if (e.key === "Escape") {
           e.preventDefault();
           router.push("/shipping");
@@ -1054,9 +1404,13 @@ export default function FulfillmentPage() {
           e.preventDefault();
           handleAddFlag("SKIP");
           break;
-        case "c":
+        case "t":
           e.preventDefault();
           handleAddFlag("TO_CHECK");
+          break;
+        case "d":
+          e.preventDefault();
+          handleAddFlag("DROPSHIP");
           break;
         case "r":
           e.preventDefault();
@@ -1085,7 +1439,16 @@ export default function FulfillmentPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentOrder, isProcessing, handleProcessOrder, handleAddFlag, handleRemoveFlag, router, setPageOffset]);
+  }, [currentOrder, isProcessing, isFlagging, handleProcessOrder, handleAddFlag, handleRemoveFlag, handleUndo, router, setPageOffset]);
+
+  if (isMobile) {
+    return (
+      <MobileLock
+        title="Panel Realizacji Zamówień Niedostępny na Tablecie/Telefonie"
+        description="Fulfillment (pakowanie i realizacja wysyłek) wymaga stacjonarnego ekranu o rozdzielczości min. 1024px, a także podłączenia lokalnej drukarki etykiet i stacjonarnego skanera za pośrednictwem PrintHub. Ze względów bezpieczeństwa ta sekcja jest zablokowana na urządzeniach mobilnych."
+      />
+    );
+  }
 
   // Page loader and state checks
   if (isConfigLoading || isQueueLoading) {
@@ -1102,41 +1465,47 @@ export default function FulfillmentPage() {
   const deliveryMethodName = currentOrder
     ? (currentOrder.service_integration?.provider_type === "ALLEGRO"
       ? currentOrder.details_payload?.delivery?.method?.name || "Nie określono"
+      : currentOrder.service_integration?.provider_type === "EMPIK"
+      ? currentOrder.details_payload?.shipping_type_label || currentOrder.details_payload?.shipping_type_code || "Nie określono"
       : currentOrder.details_payload?.delivery_method || "Nie określono")
     : "Nie określono";
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden bg-background text-foreground">
       
       {/* 1. TOP HEADER SECTION */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-slate-900/60 backdrop-blur-md shrink-0">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-border/30 bg-slate-900/60 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => router.push("/shipping")}
-            className="text-slate-300 hover:text-white rounded-lg px-2 hover:bg-white/5"
+            className="text-muted-foreground hover:text-foreground rounded-lg px-2 hover:bg-accent/5"
           >
             <ArrowLeft className="h-4 w-4 mr-1.5" /> Powrót (Esc)
           </Button>
-          <div className="h-4 w-px bg-white/10" />
-          <h1 className="text-lg font-bold flex items-center gap-2 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-            <Sparkles className="h-4.5 w-4.5 text-indigo-400" /> Stacja Nabijania
+          <div className="h-4 w-px bg-border/30" />
+          <h1 className="text-lg font-bold flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
+            <Sparkles className="h-4.5 w-4.5 text-indigo-500" /> Stacja Nabijania
           </h1>
           
           <div className="relative w-64 ml-4 shrink-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            {isQueueFetching ? (
+              <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-indigo-550 animate-spin" />
+            ) : (
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+            )}
             <input
               type="text"
               placeholder="Szukaj (ID, login, email)..."
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
-              className="w-full bg-slate-950/80 border border-white/10 rounded-xl py-1.5 pl-9 pr-8 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+              className="w-full bg-slate-950/20 border border-border/30 rounded-xl py-1.5 pl-9 pr-8 text-xs text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
             />
             {localSearch && (
               <button
                 onClick={() => setLocalSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -1145,50 +1514,66 @@ export default function FulfillmentPage() {
         </div>
 
         {/* Queue filter selection pills */}
-        <div className="flex bg-slate-950 p-1 border border-white/10 rounded-xl gap-1 text-[11px] shrink-0">
+        <div className="flex bg-slate-950/20 p-1 border border-border/30 rounded-xl gap-1 text-[11px] shrink-0">
           <button
+            type="button"
             onClick={() => setQueueFilter("ALL")}
             className={cn(
-              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1",
+              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 border",
               queueFilter === "ALL"
-                ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                : "text-slate-400 hover:text-slate-200 border border-transparent"
+                ? "bg-indigo-500/15 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border-indigo-500/20 dark:border-indigo-500/30"
+                : "text-muted-foreground hover:text-foreground border-transparent"
             )}
           >
-            <Layers className="h-3.5 w-3.5 text-indigo-400" /> Kolejka główna
+            <Layers className="h-3.5 w-3.5 text-indigo-500" /> Kolejka główna
           </button>
           <button
+            type="button"
             onClick={() => setQueueFilter("ERR_FV")}
             className={cn(
-              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1",
+              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 border",
               queueFilter === "ERR_FV"
-                ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
-                : "text-slate-400 hover:text-slate-200 border border-transparent"
+                ? "bg-rose-500/15 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/20 dark:border-rose-500/30"
+                : "text-muted-foreground hover:text-foreground border-transparent"
             )}
           >
-            <AlertTriangle className="h-3.5 w-3.5 text-rose-400" /> Błąd FV
+            <AlertTriangle className="h-3.5 w-3.5 text-rose-500" /> Błąd FV
           </button>
           <button
+            type="button"
             onClick={() => setQueueFilter("ERR_LBL")}
             className={cn(
-              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1",
+              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 border",
               queueFilter === "ERR_LBL"
-                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                : "text-slate-400 hover:text-slate-200 border border-transparent"
+                ? "bg-amber-500/15 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/20 dark:border-amber-500/30"
+                : "text-muted-foreground hover:text-foreground border-transparent"
             )}
           >
-            <Box className="h-3.5 w-3.5 text-amber-400" /> Błąd Listu
+            <Box className="h-3.5 w-3.5 text-amber-500" /> Błąd Listu
           </button>
           <button
-            onClick={() => setQueueFilter("SKIP")}
+            type="button"
+            onClick={() => setQueueFilter("DROPSHIP")}
             className={cn(
-              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1",
-              queueFilter === "SKIP"
-                ? "bg-slate-800 text-slate-300 border border-white/10"
-                : "text-slate-400 hover:text-slate-200 border border-transparent"
+              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 border",
+              queueFilter === "DROPSHIP"
+                ? "bg-indigo-500/15 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border-indigo-500/20 dark:border-indigo-500/30"
+                : "text-muted-foreground hover:text-foreground border-transparent"
             )}
           >
-            <SkipForward className="h-3.5 w-3.5 text-slate-400" /> Ominięte
+            <Truck className="h-3.5 w-3.5 text-indigo-500" /> Dropshipping
+          </button>
+          <button
+            type="button"
+            onClick={() => setQueueFilter("SKIP")}
+            className={cn(
+              "px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 border",
+              queueFilter === "SKIP"
+                ? "bg-slate-900/15 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border-border"
+                : "text-muted-foreground hover:text-foreground border-transparent"
+            )}
+          >
+            <SkipForward className="h-3.5 w-3.5 text-muted-foreground" /> Ominięte
           </button>
         </div>
 
@@ -1199,16 +1584,16 @@ export default function FulfillmentPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1.5 border-white/10 hover:bg-white/5 text-slate-300 hover:text-white rounded-xl text-xs font-semibold cursor-pointer"
+                className="h-8 gap-1.5 border-border/30 hover:bg-accent/5 text-muted-foreground hover:text-foreground rounded-xl text-xs font-semibold cursor-pointer"
               >
                 <History className="h-3.5 w-3.5" />
                 <span>Zrealizowane</span>
               </Button>
             </SheetTrigger>
-            <SheetContent className="bg-slate-950 border-l border-white/10 text-slate-100 w-[450px] sm:max-w-[450px] flex flex-col p-0">
-              <SheetHeader className="p-6 border-b border-white/5">
-                <SheetTitle className="text-lg font-bold text-white flex items-center gap-2">
-                  <History className="h-5 w-5 text-indigo-400" />
+            <SheetContent className="bg-slate-950/95 border-l border-border/30 text-foreground w-[450px] sm:max-w-[450px] flex flex-col p-0">
+              <SheetHeader className="p-6 border-b border-border/30">
+                <SheetTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <History className="h-5 w-5 text-indigo-500" />
                   Historia zrealizowanych
                 </SheetTitle>
               </SheetHeader>
@@ -1242,9 +1627,9 @@ export default function FulfillmentPage() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              {order.service_integration?.provider_type === "ALLEGRO" && <AllegroIcon className="h-4 w-4 shrink-0" />}
-                              {order.service_integration?.provider_type === "BASELINKER" && <BaseLinkerIcon className="h-4 w-4 rounded-sm shrink-0" />}
-                              {order.service_integration?.provider_type === "EMPIK" && <EmpikIcon className="h-4 w-4 rounded-sm shrink-0" />}
+                              {order.service_integration?.provider_type === "ALLEGRO" && <AllegroIcon className="h-4 w-auto shrink-0" />}
+                              {order.service_integration?.provider_type === "BASELINKER" && <BaseLinkerIcon className="h-4 w-auto rounded-sm shrink-0" />}
+                              {order.service_integration?.provider_type === "EMPIK" && <EmpikIcon className="h-4 w-auto rounded-sm shrink-0" />}
                               <span className="text-xs font-mono font-semibold text-slate-200 group-hover:text-indigo-400 transition-colors">
                                 {order.external_order_id || order.id}
                               </span>
@@ -1322,7 +1707,7 @@ export default function FulfillmentPage() {
         <div className="bg-indigo-500/10 border-b border-indigo-500/20 px-6 py-2 flex items-center justify-between text-xs text-indigo-300 shrink-0">
           <div className="flex items-center gap-2">
             <Search className="h-3.5 w-3.5 animate-pulse text-indigo-400" />
-            <span>Podgląd wyszukanego zamówienia dla: <strong className="font-mono text-white">"{searchQuery}"</strong></span>
+            <span>Podgląd wyszukanego zamówienia dla: <strong className="font-mono text-foreground font-bold">&quot;{searchQuery}&quot;</strong></span>
           </div>
           <Button
             variant="ghost"
@@ -1331,7 +1716,7 @@ export default function FulfillmentPage() {
               setLocalSearch("");
               setSearchQuery("");
             }}
-            className="h-6 px-2 text-indigo-400 hover:text-white hover:bg-indigo-500/20 rounded-md text-[11px] cursor-pointer"
+            className="h-6 px-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/20 rounded-md text-[11px] cursor-pointer"
           >
             Wróć do kolejki głównej
           </Button>
@@ -1342,12 +1727,12 @@ export default function FulfillmentPage() {
       {!currentOrder ? (
         searchQuery ? (
           <div className="flex-1 flex flex-col justify-center items-center gap-4 text-center max-w-lg mx-auto px-6 animate-fade-in">
-            <div className="p-4 bg-slate-900 rounded-full border border-white/10 text-slate-400">
+            <div className="p-4 bg-slate-900 rounded-full border border-border/30 text-slate-400">
               <Search className="h-16 w-16 text-slate-500" />
             </div>
-            <h2 className="text-2xl font-bold text-white">Brak wyników wyszukiwania</h2>
-            <p className="text-sm text-slate-300 font-medium">
-              Nie znaleźliśmy zamówień pasujących do zapytania: <span className="font-semibold text-indigo-400">"{searchQuery}"</span>.
+            <h2 className="text-2xl font-bold text-foreground">Brak wyników wyszukiwania</h2>
+            <p className="text-sm text-muted-foreground font-medium">
+              Nie znaleźliśmy zamówień pasujących do zapytania: <span className="font-semibold text-indigo-400">&quot;{searchQuery}&quot;</span>.
             </p>
             <Button
               onClick={() => {
@@ -1364,14 +1749,16 @@ export default function FulfillmentPage() {
             <div className="p-4 bg-emerald-500/10 rounded-full border border-emerald-500/30 text-emerald-400 animate-bounce">
               <CheckCircle className="h-16 w-16" />
             </div>
-            <h2 className="text-2xl font-bold text-white">Kolejka zrealizowana</h2>
-            <p className="text-sm text-slate-300 font-medium">
+            <h2 className="text-2xl font-bold text-foreground">Kolejka zrealizowana</h2>
+            <p className="text-sm text-muted-foreground font-medium">
               {queueFilter === "ALL"
                 ? "Wszystkie zamówienia do wysłania zostały pomyślnie zrealizowane i nabite. Kolejka magazynowa jest pusta!"
                 : queueFilter === "ERR_FV"
                 ? "Brak zamówień z błędami faktur w tej kolejce."
                 : queueFilter === "ERR_LBL"
                 ? "Brak zamówień z błędami listów przewozowych w tej kolejce."
+                : queueFilter === "DROPSHIP"
+                ? "Brak zamówień dropshippingowych w tej kolejce."
                 : "Brak ominiętych zamówień w tej kolejce."}
             </p>
             <Button
@@ -1392,43 +1779,69 @@ export default function FulfillmentPage() {
         <main className="flex-1 flex overflow-hidden p-6 gap-6 min-h-0 bg-slate-950/60 backdrop-blur-md">
         
         {/* LEFT COLUMN: ORDER DETAILS PODGLĄD (55% width) */}
-        <section className="w-[55%] flex flex-col overflow-y-auto pr-2 gap-4 scrollbar-thin">
+        <section className="w-[58%] xl:w-[55%] flex flex-col overflow-y-auto pr-2 gap-4 scrollbar-thin">
           
           <Tabs defaultValue="details" className="w-full flex flex-col gap-4">
-            <TabsList className="bg-slate-900/80 border border-white/5 p-1 rounded-xl w-full grid grid-cols-2 shrink-0">
-              <TabsTrigger value="details" className="text-xs py-2 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all cursor-pointer flex items-center justify-center gap-1.5">
-                <Box className="h-3.5 w-3.5 text-indigo-300 group-data-[state=active]:text-white" /> Produkty i Paczki
+            <TabsList className="bg-slate-900/80 border border-border/20 p-1 rounded-xl w-full flex flex-wrap gap-0.5 shrink-0">
+              <TabsTrigger value="details" className="flex-1 min-w-0 text-xs py-2 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all cursor-pointer flex items-center justify-center gap-1.5">
+                <Box className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">Produkty i Paczki</span>
               </TabsTrigger>
-              <TabsTrigger value="chat" className="text-xs py-2 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-                <MessageSquare className="h-3.5 w-3.5 text-indigo-300 group-data-[state=active]:text-white" /> Rozmowy z Kupującym
-                {totalMessages > 0 && (
-                  <span className="bg-orange-500 text-white rounded-full text-[9px] px-1.5 py-0.5 font-bold animate-pulse">
-                    {totalMessages}
+              {/* Rozmowy — tab visible only if there are threads */}
+              {threads.length > 0 && (
+                <TabsTrigger value="chat" className="flex-1 min-w-0 text-xs py-2 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                  <MessageSquare className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">Rozmowy</span>
+                  {totalMessages > 0 && (
+                    <span className="bg-orange-500 text-white rounded-full text-[9px] px-1.5 py-0.5 font-bold animate-pulse shrink-0">
+                      {totalMessages}
+                    </span>
+                  )}
+                </TabsTrigger>
+              )}
+
+              {/* Zwroty i Spory — tab visible only if there's data */}
+              {((orderDetails?.returns?.length || 0) + (orderDetails?.disputes?.length || 0)) > 0 && (
+                <TabsTrigger value="zwroty" className="flex-1 min-w-0 text-xs py-2 rounded-lg data-[state=active]:bg-rose-600 data-[state=active]:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                  <ArrowRightLeft className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">Zwroty/Spory</span>
+                  <span className={`rounded-full text-[9px] px-1.5 py-0.5 font-bold shrink-0 ${
+                    (orderDetails?.disputes?.filter((d: any) => d.status === "ONGOING").length || 0) > 0
+                      ? "bg-rose-500 text-white animate-pulse"
+                      : "bg-amber-500 text-white"
+                  }`}>
+                    {(orderDetails?.returns?.length || 0) + (orderDetails?.disputes?.length || 0)}
                   </span>
-                )}
-              </TabsTrigger>
+                </TabsTrigger>
+              )}
+              {/* Inne zamówienia — tab visible only if there's data */}
+              {(orderDetails?.related_orders?.length || 0) > 0 && (
+                <TabsTrigger value="inne" className="flex-1 min-w-0 text-xs py-2 rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                  <ShoppingBag className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">Inne zamówienia</span>
+                  <span className="bg-emerald-500 text-white rounded-full text-[9px] px-1.5 py-0.5 font-bold shrink-0">
+                    {orderDetails.related_orders.length}
+                  </span>
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="details" className="mt-0 flex flex-col gap-4 focus:outline-none">
               {/* Order card info details */}
-              <Card className="p-6 border border-white/5 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-4">
+              <Card className="p-6 border border-border/30 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-4">
             
             {/* Order Hero Header */}
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+            <div className="flex items-center justify-between border-b border-border/20 pb-3">
               <div className="flex items-center gap-3">
-                {currentOrder.service_integration?.provider_type === "ALLEGRO" && <AllegroIcon className="h-6 w-6 shrink-0" />}
+                {currentOrder.service_integration?.provider_type === "ALLEGRO" && <AllegroIcon className="h-6 w-auto shrink-0" />}
                 {currentOrder.service_integration?.provider_type === "BASELINKER" && (
-                  <BaseLinkerIcon className="h-6 w-6 rounded-sm shrink-0" />
+                  <BaseLinkerIcon className="h-6 w-auto rounded-sm shrink-0" />
                 )}
                 {currentOrder.service_integration?.provider_type === "EMPIK" && (
-                  <EmpikIcon className="h-6 w-6 shrink-0" />
+                  <EmpikIcon className="h-6 w-auto shrink-0" />
                 )}
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-white text-base leading-none">
+                    <h3 className="font-bold text-foreground text-base leading-none">
                       {currentOrder.buyer_login || "Brak loginu"}
                     </h3>
-                    <Badge variant="outline" className="bg-slate-900 border-white/10 text-[9px] text-slate-300 font-semibold px-2 py-0.5 shadow-sm">
+                    <Badge variant="outline" className="bg-slate-900 border-border/30 text-[9px] text-muted-foreground font-semibold px-2 py-0.5 shadow-sm">
                       {currentOrder.service_integration?.name || currentOrder.service_integration?.provider_type || "Zamówienie"}
                     </Badge>
                   </div>
@@ -1469,17 +1882,21 @@ export default function FulfillmentPage() {
                       })
                     : "Brak daty"}
                 </span>
-                <Badge
-                  className={cn(
-                    "text-[10px] font-semibold h-5",
-                    currentOrder.fulfillment_status === "READY_FOR_SHIPMENT"
-                      ? "bg-indigo-500/20 text-indigo-400 border-indigo-500/30"
-                      : "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                  )}
-                  variant="outline"
+                <Select
+                  value={currentOrder.fulfillment_status || "NEW"}
+                  onValueChange={handleUpdateFulfillmentStatus}
                 >
-                  {currentOrder.fulfillment_status || "NOWY"}
-                </Badge>
+                  <SelectTrigger className="h-6 text-[10px] font-semibold border-border/30 bg-slate-900/60 text-foreground hover:bg-accent/10 transition-colors w-[150px] shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border/30 text-foreground">
+                    <SelectItem value="NEW">Nowe (NEW)</SelectItem>
+                    <SelectItem value="PROCESSING">W realizacji (PROCESSING)</SelectItem>
+                    <SelectItem value="READY_FOR_SHIPMENT">Do wysyłki (READY)</SelectItem>
+                    <SelectItem value="SENT">Wysłane (SENT)</SelectItem>
+                    <SelectItem value="CANCELLED">Anulowane (CANCELLED)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -1489,20 +1906,87 @@ export default function FulfillmentPage() {
                 <AlertCircle className="h-4 w-4 text-amber-400" />
                 <AlertTitle className="text-xs font-bold">Uwaga! Wiadomość od kupującego</AlertTitle>
                 <AlertDescription className="mt-1 text-xs italic font-semibold">
-                  "{buyerMessage}"
+                  &quot;{buyerMessage}&quot;
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Warning: Invoice already exists */}
+            {organization?.warn_invoice_exists && (currentOrder.erp_sales_document_number || currentOrder.erpSalesDocumentNumber) && (
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-200 font-medium">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span>
+                  Faktura już istnieje w ERP: <strong className="font-mono bg-amber-500/15 dark:bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-700 dark:text-amber-400 ml-0.5">{currentOrder.erp_sales_document_number || currentOrder.erpSalesDocumentNumber}</strong>
+                </span>
+              </div>
+            )}
+
+            {/* Warning: Waybill already exists */}
+            {organization?.warn_waybill_exists && currentOrder.tracking_numbers && currentOrder.tracking_numbers.length > 0 && (
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-200 font-medium">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <span>
+                  Wygenerowano już list przewozowy: <strong className="font-mono bg-amber-500/15 dark:bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-700 dark:text-amber-400 ml-0.5">{currentOrder.tracking_numbers.join(", ")}</strong>
+                </span>
+              </div>
+            )}
+
+            {/* Warning: COD Mismatch */}
+            {organization?.warn_cod_mismatch && (() => {
+              const orderTotal = currentOrder.total_to_pay || currentOrder.totalToPay || 0;
+              const packagesCodSum = packages.reduce((sum, pkg) => {
+                const amt = pkg.codAmount ? parseFloat(pkg.codAmount.replace(",", ".")) : 0;
+                return sum + (isNaN(amt) ? 0 : amt);
+              }, 0);
+
+              if (isCod) {
+                if (Math.abs(packagesCodSum - orderTotal) > 0.01) {
+                  return (
+                    <div className="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-1.5 text-[11px] text-rose-700 dark:text-rose-200 font-medium">
+                      <AlertCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                      <span>
+                        Niezgodność pobrania (COD): suma w paczkach (<strong className="text-rose-700 dark:text-rose-100">{packagesCodSum.toFixed(2)} PLN</strong>) różni się od wartości zamówienia (<strong className="text-rose-700 dark:text-rose-100">{orderTotal.toFixed(2)} PLN</strong>)
+                      </span>
+                    </div>
+                  );
+                }
+              } else {
+                if (packagesCodSum > 0.01) {
+                  return (
+                    <div className="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-1.5 text-[11px] text-rose-700 dark:text-rose-200 font-medium">
+                      <AlertCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                      <span>
+                        Zamówienie opłacone, ale w paczkach zdefiniowano kwotę pobrania (<strong className="text-rose-700 dark:text-rose-100">{packagesCodSum.toFixed(2)} PLN</strong>)
+                      </span>
+                    </div>
+                  );
+                }
+              }
+              return null;
+            })()}
+
+            {/* Seller Note Alert */}
+            {sellerNote && (
+              <Alert className="border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-200">
+                <AlertCircle className="h-4 w-4 text-indigo-500" />
+                <AlertTitle className="text-xs font-bold flex items-center gap-1.5">
+                   Uwaga do zakupu (sprzedawca)
+                </AlertTitle>
+                <AlertDescription className="mt-1 text-xs italic font-semibold">
+                  &quot;{sellerNote}&quot;
                 </AlertDescription>
               </Alert>
             )}
 
             {/* Diagnostic error alerts */}
             {currentOrder.flags?.includes("ERR_FV") && (
-              <Alert className="border-rose-500/30 bg-rose-500/10 text-rose-200">
-                <AlertCircle className="h-4 w-4 text-rose-400" />
+              <Alert className="border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200">
+                <AlertCircle className="h-4 w-4 text-rose-500" />
                 <AlertTitle className="text-xs font-bold flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
                   Błąd wystawiania Faktury (ERR_FV)
                 </AlertTitle>
-                <AlertDescription className="mt-1 text-xs font-medium">
+                <AlertDescription className="mt-1 text-xs font-medium text-rose-700/80 dark:text-rose-200/80">
                   Podczas ostatniej próby realizacji wystąpił błąd komunikacji z Subiektem GT. 
                   Upewnij się, że symbole produktów są zmapowane prawidłowo w Subiekcie i spróbuj ponownie.
                 </AlertDescription>
@@ -1510,16 +1994,16 @@ export default function FulfillmentPage() {
             )}
 
             {currentOrder.flags?.includes("ERR_LBL") && (
-              <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-200">
-                <AlertCircle className="h-4 w-4 text-amber-400" />
+              <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
                 <AlertTitle className="text-xs font-bold flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
                   Błąd generowania Listu Przewozowego (ERR_LBL)
                 </AlertTitle>
-                <AlertDescription className="mt-1 text-xs font-medium">
+                <AlertDescription className="mt-1 text-xs font-medium text-amber-700/80 dark:text-amber-200/80">
                   {currentOrder.erp_sales_document_number || currentOrder.erpSalesDocumentNumber ? (
                     <span>
-                      Faktura <strong className="font-mono bg-emerald-500/20 px-1 py-0.5 rounded text-white ml-0.5 mr-0.5">{currentOrder.erp_sales_document_number || currentOrder.erpSalesDocumentNumber}</strong> została utworzona pomyślnie, lecz generowanie etykiety kurierskiej się nie powiodło (błąd 400). Sprawdź poprawność gabarytu paczki oraz adresu odbiorcy.
+                      Faktura <strong className="font-mono bg-emerald-500/15 dark:bg-emerald-500/20 px-1 py-0.5 rounded text-emerald-700 dark:text-emerald-400 ml-0.5 mr-0.5">{currentOrder.erp_sales_document_number || currentOrder.erpSalesDocumentNumber}</strong> została utworzona pomyślnie, lecz generowanie etykiety kurierskiej się nie powiodło (błąd 400). Sprawdź poprawność gabarytu paczki oraz adresu odbiorcy.
                     </span>
                   ) : (
                     <span>
@@ -1559,18 +2043,18 @@ export default function FulfillmentPage() {
                       Edytuj ✏️
                     </Button>
                   </div>
-                  <p className="font-semibold text-white mt-1.5">{receiverFullName}</p>
-                  <p className="text-slate-300 text-xs mt-0.5">
+                  <p className="font-semibold text-foreground mt-1.5">{receiverFullName}</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">
                     {currentOrder.delivery_address?.street || ""}, {currentOrder.delivery_address?.zip_code || ""}{" "}
                     {currentOrder.delivery_address?.city || ""}
                   </p>
                   {currentOrder.delivery_address?.phone_number && (
-                    <p className="text-[11px] font-mono text-indigo-300 mt-1.5 flex items-center gap-1">📞 {currentOrder.delivery_address.phone_number}</p>
+                    <p className="text-[11px] font-mono text-indigo-400 dark:text-indigo-300 mt-1.5 flex items-center gap-1">📞 {currentOrder.delivery_address.phone_number}</p>
                   )}
                 </div>
                 {deliveryPointId && (
                   <div className="mt-3 flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 px-2 py-1 rounded-lg text-xs text-blue-400 font-medium max-w-fit shadow-sm">
-                    <MapPin className="h-3.5 w-3.5" /> Punkt: <strong className="font-mono text-white text-[10px]">{deliveryPointId}</strong>
+                    <MapPin className="h-3.5 w-3.5" /> Punkt: <strong className="font-mono text-foreground text-[10px]">{deliveryPointId}</strong>
                   </div>
                 )}
               </div>
@@ -1580,18 +2064,18 @@ export default function FulfillmentPage() {
                 "p-3.5 border rounded-xl flex flex-col justify-between transition-all duration-300",
                 hasInvoiceRequired
                   ? (isInvoiceDataIncomplete ? "border-rose-500/30 bg-rose-500/5 shadow-lg shadow-rose-950/10" : "border-amber-500/20 bg-amber-500/5")
-                  : "border-white/5 bg-slate-950/30"
+                  : "border-border/30 bg-slate-950/10"
               )}>
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider flex items-center gap-1">
                       {hasInvoiceRequired && <FileText className="h-3.5 w-3.5 text-amber-500 animate-pulse" />} Dane do faktury (FV):
                     </span>
                     <Button
                       variant="link"
                       size="sm"
                       onClick={() => setIsEditInvoiceOpen(true)}
-                      className="h-auto p-0 text-[11px] text-amber-400 hover:text-amber-300 font-semibold"
+                      className="h-auto p-0 text-[11px] text-amber-500 hover:text-amber-400 font-semibold"
                     >
                       Edytuj FV ✏️
                     </Button>
@@ -1600,38 +2084,38 @@ export default function FulfillmentPage() {
                   {hasInvoiceRequired ? (
                     <div className="mt-1.5 space-y-0.5 text-xs">
                       {invoiceData?.companyName ? (
-                        <p className="font-semibold text-white truncate">{invoiceData.companyName}</p>
+                        <p className="font-semibold text-foreground truncate">{invoiceData.companyName}</p>
                       ) : (
                         (invoiceData?.firstName || invoiceData?.lastName) ? (
-                          <p className="font-semibold text-white">{`${invoiceData.firstName || ""} ${invoiceData.lastName || ""}`.trim()}</p>
+                          <p className="font-semibold text-foreground">{`${invoiceData.firstName || ""} ${invoiceData.lastName || ""}`.trim()}</p>
                         ) : (
-                          <p className="text-rose-400 italic font-semibold">Brak nazwy nabywcy!</p>
+                          <p className="text-rose-500 italic font-semibold">Brak nazwy nabywcy!</p>
                         )
                       )}
                       
                       {invoiceData?.taxId && (
-                        <p className="font-mono text-amber-400 font-bold bg-amber-500/10 px-1 py-0.5 rounded w-fit mt-1 select-all">NIP: {invoiceData.taxId}</p>
+                        <p className="font-mono text-amber-500 dark:text-amber-400 font-bold bg-amber-500/10 px-1 py-0.5 rounded w-fit mt-1 select-all">NIP: {invoiceData.taxId}</p>
                       )}
                       
                       {invoiceData?.street ? (
-                        <p className="text-slate-300 mt-1">{invoiceData.street}</p>
+                        <p className="text-muted-foreground mt-1">{invoiceData.street}</p>
                       ) : (
-                        <p className="text-rose-400 italic">Brak adresu ulicy!</p>
+                        <p className="text-rose-500 italic">Brak adresu ulicy!</p>
                       )}
                       
                       {(invoiceData?.zipCode || invoiceData?.city) ? (
-                        <p className="text-slate-300">{`${invoiceData.zipCode || ""} ${invoiceData.city || ""}`.trim()}</p>
+                        <p className="text-muted-foreground">{`${invoiceData.zipCode || ""} ${invoiceData.city || ""}`.trim()}</p>
                       ) : (
-                        <p className="text-rose-400 italic font-medium">Brak kodu pocztowego / miasta!</p>
+                        <p className="text-rose-500 italic font-medium">Brak kodu pocztowego / miasta!</p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500 italic mt-3.5">Faktura nie jest wymagana dla tego zamówienia.</p>
+                    <p className="text-xs text-muted-foreground/60 italic mt-3.5">Faktura nie jest wymagana dla tego zamówienia.</p>
                   )}
                 </div>
                 
                 {hasInvoiceRequired && isInvoiceDataIncomplete && (
-                  <div className="mt-3 text-[10px] text-rose-400 font-bold flex items-center gap-1.5">
+                  <div className="mt-3 text-[10px] text-rose-500 font-bold flex items-center gap-1.5">
                     <AlertTriangle className="h-3.5 w-3.5 animate-bounce" /> Niekompletne dane do FV!
                   </div>
                 )}
@@ -1639,116 +2123,13 @@ export default function FulfillmentPage() {
             </div>
           </Card>
 
-          {/* Purchased Line Items Card */}
-          <Card className="p-6 border border-white/5 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-3">
-            <h4 className="text-xs text-slate-400 uppercase font-semibold tracking-wider">Zakupione Produkty:</h4>
-            {subiektStock && !subiektStock.is_connected && (
-              <Alert variant="destructive" className="mb-3 bg-red-950/20 border-red-500/20 text-red-400 py-2 px-3">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle className="text-xs font-semibold">Brak połączenia z ERP</AlertTitle>
-                <AlertDescription className="text-[11px] leading-snug">
-                  {subiektStock.reason || "Nie można sprawdzić stanów magazynowych w Subiekcie."}
-                </AlertDescription>
-              </Alert>
-            )}
-            <div className="divide-y divide-white/5">
-              {lineItems.map((item: any, idx: number) => {
-                const offerId = item.offer?.id || item.product_id;
-                const mapping = productMappings?.[offerId];
-                const hasSymbol = !!mapping?.erp_product_symbol;
-                const stockInfo = subiektStock?.items?.find((s: any) => s.offer_id === offerId);
 
-                return (
-                  <div key={idx} className="py-3 flex justify-between items-start gap-4">
-                    <div className="flex items-start gap-3 flex-1">
-                      {/* Product thumbnail image with premium loading/error fallback */}
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          className="w-12 h-12 rounded-xl object-contain border border-white/10 shrink-0 bg-white p-0.5 shadow-sm"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-slate-950/60 border border-white/5 flex items-center justify-center text-slate-600 shrink-0 shadow-inner">
-                          <Box className="h-5 w-5" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white leading-tight break-words">{item.name}</p>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          <span className="text-xs text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded">
-                            Ilość: x{item.quantity}
-                          </span>
-                          {subiektStock?.is_connected && stockInfo && stockInfo.has_mapping && (
-                            <Badge 
-                              variant="outline" 
-                              className={cn(
-                                "text-[10px] h-5 px-1.5 py-0 font-normal",
-                                stockInfo.is_service
-                                  ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                  : stockInfo.has_sufficient_stock
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                  : "bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium"
-                              )}
-                            >
-                              {stockInfo.is_service 
-                                ? "Usługa" 
-                                : `W ERP: ${stockInfo.quantity_available ?? 0} szt.`}
-                            </Badge>
-                          )}
-                          {offerId && (
-                            <span className="text-[11px] text-slate-400 font-mono">Oferta ID: {offerId}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1.5 shrink-0 animate-fade-in">
-                      {isMappingsLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          {hasSymbol ? (
-                            <div className="text-right">
-                              <span className="text-xs font-mono font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded block">
-                                {mapping.erp_product_symbol}
-                              </span>
-                              <span className="text-[10px] text-slate-400 mt-0.5 block">{mapping.erp_product_name || "Zmapowano"}</span>
-                            </div>
-                          ) : (
-                            <Badge variant="destructive" className="bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] py-0.5 font-bold animate-pulse">
-                              <AlertTriangle className="h-3 w-3 mr-1" /> Brak symbolu ERP
-                            </Badge>
-                          )}
-                          <ProductMappingDialog
-                            offerId={offerId}
-                            offerName={item.name}
-                            currentMapping={mapping}
-                            sourceIntegrationId={currentOrder.service_integration?.id}
-                            erpIntegrationId={erpIntegration?.id}
-                            onMappingUpdated={() => {
-                              queryClient.invalidateQueries({ queryKey: ["productMappings"] });
-                              refetchSubiektStock();
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
 
           {/* Configured Package Card (Editable, Stateful, and Multi-Package) */}
-          <Card className="p-6 border border-white/5 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-4">
-            <h4 className="text-xs text-slate-400 uppercase font-semibold tracking-wider flex items-center justify-between">
+          <Card className="p-6 border border-border/30 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-4">
+            <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <Box className="h-4 w-4 text-indigo-400" /> Konfiguracja Przesyłki:
+                <Box className="h-4 w-4 text-indigo-500" /> Konfiguracja Przesyłki:
               </span>
               {(selectedCourierId !== mappedCourier?.id || packages.length > 1 || packages[0]?.selectedPackageId !== mappedPackageId || packages[0]?.mode !== "predefined") && (
                 <button
@@ -1775,7 +2156,7 @@ export default function FulfillmentPage() {
                     }
                     toast.success("Przywrócono domyślne ustawienia przesyłki.");
                   }}
-                  className="text-[10px] text-indigo-400 hover:text-indigo-300 underline font-semibold transition-colors animate-pulse"
+                  className="text-[10px] text-indigo-500 hover:text-indigo-450 underline font-semibold transition-colors animate-pulse"
                 >
                   Przywróć domyślne
                 </button>
@@ -1787,20 +2168,20 @@ export default function FulfillmentPage() {
               const selectedCourier = config?.couriers?.find((c) => c.id === selectedCourierId);
               const isApaczka = selectedCourier?.provider_type === "APACZKA";
               return (
-                <div className={cn("grid gap-3 text-sm bg-slate-950/20 p-3.5 border border-white/5 rounded-xl", isApaczka ? "grid-cols-2" : "grid-cols-1")}>
+                <div className={cn("grid gap-3 text-sm bg-slate-950/20 p-3.5 border border-border/30 rounded-xl", isApaczka ? "grid-cols-2" : "grid-cols-1")}>
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Kurier (Odbiorca Etykiety):</label>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Kurier (Odbiorca Etykiety):</label>
                     <select
                       value={selectedCourierId || ""}
                       onChange={(e) => {
                         const val = e.target.value;
                         setSelectedCourierId(val ? Number(val) : null);
                       }}
-                      className="bg-slate-900 border border-white/10 rounded-lg text-white text-xs p-2 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                      className="bg-slate-900 border border-border/30 rounded-lg text-foreground text-xs p-2 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                     >
-                      <option value="" className="bg-slate-950">-- Wybierz kuriera --</option>
+                      <option value="" className="bg-slate-950 text-foreground">-- Wybierz kuriera --</option>
                       {config?.couriers?.map((courier) => (
-                        <option key={courier.id} value={courier.id} className="bg-slate-950">
+                        <option key={courier.id} value={courier.id} className="bg-slate-950 text-foreground">
                           {courier.name}
                         </option>
                       ))}
@@ -1810,21 +2191,21 @@ export default function FulfillmentPage() {
                   {/* Dropdown usługi tylko dla Apaczka */}
                   {isApaczka && (
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">Usługa Apaczka:</label>
+                      <label className="text-[10px] text-muted-foreground block mb-1">Usługa Apaczka:</label>
                       <select
                         value={selectedServiceCode || ""}
                         onChange={(e) => setSelectedServiceCode(e.target.value)}
                         disabled={apaczkaServices.length === 0}
                         className={cn(
-                          "bg-slate-900 border border-white/10 rounded-lg text-white text-xs p-2 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer",
+                          "bg-slate-900 border border-border/30 rounded-lg text-foreground text-xs p-2 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer",
                           apaczkaServices.length === 0 && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         {apaczkaServices.length === 0 ? (
-                          <option value="" className="bg-slate-950">Ładowanie usług...</option>
+                          <option value="" className="bg-slate-950 text-foreground">Ładowanie usług...</option>
                         ) : (
                           apaczkaServices.map((service) => (
-                            <option key={service.id} value={service.id} className="bg-slate-950">
+                            <option key={service.id} value={service.id} className="bg-slate-950 text-foreground">
                               {service.name || service.id}
                             </option>
                           ))
@@ -1836,36 +2217,68 @@ export default function FulfillmentPage() {
               );
             })()}
 
+            {availableServicesForCourier.length > 0 && (
+              <div className="bg-slate-950/20 p-3.5 border border-border/30 rounded-xl text-sm space-y-1.5 shadow-inner">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Usługi dodatkowe</Label>
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  {availableServicesForCourier.map((serviceMap) => (
+                    <div
+                      key={serviceMap.id}
+                      className="flex items-center space-x-1.5 bg-slate-900/40 border border-border/30 rounded-lg px-2 py-1.5 hover:bg-slate-900/60 transition-colors"
+                    >
+                      <Checkbox
+                        id={`service-${serviceMap.id}`}
+                        checked={selectedServices.has(
+                          serviceMap.courier_service_code
+                        )}
+                        onCheckedChange={() =>
+                          handleServiceToggle(serviceMap.courier_service_code)
+                        }
+                        className="h-3.5 w-3.5 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                      />
+                      <label
+                        htmlFor={`service-${serviceMap.id}`}
+                        className="text-[11px] text-muted-foreground font-medium cursor-pointer truncate select-none leading-none"
+                        title={`${serviceMap.marketplace_service_name} (${serviceMap.courier_service_code})`}
+                      >
+                        {serviceMap.marketplace_service_name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Reference Number Input */}
-            <div className="bg-slate-950/20 p-3.5 border border-white/5 rounded-xl text-sm space-y-1.5 shadow-inner">
+            <div className="bg-slate-950/20 p-3.5 border border-border/30 rounded-xl text-sm space-y-1.5 shadow-inner">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                  <Tag className="h-3 w-3 text-indigo-400" />
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-1">
+                  <Tag className="h-3 w-3 text-indigo-500" />
                   Numer referencyjny na etykiecie:
                 </span>
                 <span className={cn(
                   "text-[10px] font-mono font-semibold px-1 rounded",
                   referenceNumber.length >= maxRefLength
-                    ? "text-red-400 bg-red-500/10 animate-pulse font-bold"
+                    ? "text-red-550 bg-red-500/10 animate-pulse font-bold"
                     : referenceNumber.length > maxRefLength - 5
-                    ? "text-amber-400 bg-amber-500/10 font-bold"
-                    : "text-slate-500"
+                    ? "text-amber-550 bg-amber-500/10 font-bold"
+                    : "text-muted-foreground"
                 )}>
                   {referenceNumber.length}/{maxRefLength}
                 </span>
               </div>
-              <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-3 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
+              <div className="relative flex items-center bg-slate-900/60 border border-border/30 rounded-lg px-3 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
                 <input
                   type="text"
                   value={referenceNumber}
                   onChange={(e) => setReferenceNumber(e.target.value.substring(0, maxRefLength))}
                   placeholder="Zostaw puste dla domyślnego (nazwy produktów)"
-                  className="w-full bg-transparent border-none shadow-none outline-none p-0 h-9 text-xs text-slate-200 focus:outline-none focus:ring-0 min-w-0"
+                  className="w-full bg-transparent border-none shadow-none outline-none p-0 h-9 text-xs text-foreground focus:outline-none focus:ring-0 min-w-0"
                 />
                 {referenceNumber && (
                   <button
                     onClick={() => setReferenceNumber("")}
-                    className="text-slate-400 hover:text-white p-0.5 rounded-full hover:bg-white/5 transition-all cursor-pointer"
+                    className="text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-accent/5 transition-all cursor-pointer"
                     title="Wyczyść numer referencyjny"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -1873,7 +2286,7 @@ export default function FulfillmentPage() {
                 )}
               </div>
               {currentOrder?.service_integration?.provider_type === "ALLEGRO" && (
-                <p className="text-[9px] text-amber-500/70 leading-none">
+                <p className="text-[9px] text-amber-600 dark:text-amber-500/70 leading-none">
                   ⚠️ Allegro WZA wymaga referencji o długości maksymalnie 35 znaków.
                 </p>
               )}
@@ -1884,10 +2297,10 @@ export default function FulfillmentPage() {
               {packages.map((pkg, index) => (
                 <div
                   key={pkg.id}
-                  className="p-3.5 border border-white/5 rounded-xl space-y-3 relative bg-slate-950/40 shadow-inner"
+                  className="p-3.5 border border-border/30 rounded-xl space-y-3 relative bg-slate-950/20 shadow-inner"
                 >
                   <div className="flex justify-between items-center h-5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Paczka #{index + 1}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Paczka #{index + 1}</span>
                     {packages.length > 1 && (
                       <Button
                         variant="ghost"
@@ -1902,14 +2315,14 @@ export default function FulfillmentPage() {
                   
                   <div className="flex flex-col gap-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex bg-slate-900/80 rounded-lg p-0.5 border border-white/5 w-fit">
+                      <div className="flex bg-slate-900/80 rounded-lg p-0.5 border border-border/30 w-fit">
                         <button
                           type="button"
                           onClick={() => handlePackageChange(index, "mode", "predefined")}
                           className={`text-[9px] font-semibold py-1.5 px-3 rounded-md transition-all ${
                             pkg.mode === "predefined"
                               ? "bg-indigo-600 text-white shadow font-semibold"
-                              : "text-slate-400 hover:text-slate-200"
+                              : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           Predefiniowane
@@ -1920,7 +2333,7 @@ export default function FulfillmentPage() {
                           className={`text-[9px] font-semibold py-1.5 px-3 rounded-md transition-all ${
                             pkg.mode === "custom"
                               ? "bg-indigo-600 text-white shadow font-semibold"
-                              : "text-slate-400 hover:text-slate-200"
+                              : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           Własne wymiary
@@ -1939,8 +2352,8 @@ export default function FulfillmentPage() {
                           }
                           className={`h-[26px] px-2.5 rounded-lg border text-[9px] font-bold transition-all flex items-center justify-center ${
                             pkg.is_nstd
-                              ? "bg-amber-500/20 text-amber-400 border-amber-500/30 shadow-md"
-                              : "bg-slate-900/40 text-slate-400 border-white/5 hover:text-slate-300"
+                              ? "bg-amber-500/20 text-amber-500 border-amber-500/30 shadow-md"
+                              : "bg-slate-900/40 text-muted-foreground border-border/30 hover:text-foreground"
                           }`}
                         >
                           Niestandardowa (NSTD)
@@ -1958,7 +2371,7 @@ export default function FulfillmentPage() {
                             }
                             disabled={isConfigLoading}
                           >
-                            <SelectTrigger className="h-8 text-xs bg-slate-900/50 border-white/10 rounded-lg">
+                            <SelectTrigger className="h-8 text-xs bg-slate-900/50 border-border/30 rounded-lg">
                               <SelectValue placeholder="Wybierz opakowanie..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -1981,8 +2394,8 @@ export default function FulfillmentPage() {
                           }
                           className={`h-8 px-2.5 rounded-lg border text-[9px] font-bold transition-all flex items-center justify-center shrink-0 ${
                             pkg.is_nstd
-                              ? "bg-amber-500/20 text-amber-400 border-amber-500/30 shadow-md"
-                              : "bg-slate-900/40 text-slate-400 border-white/5 hover:text-slate-300"
+                              ? "bg-amber-500/20 text-amber-500 border-amber-500/30 shadow-md"
+                              : "bg-slate-900/40 text-muted-foreground border-border/30 hover:text-foreground"
                           }`}
                         >
                           Niestandardowa (NSTD)
@@ -1991,60 +2404,105 @@ export default function FulfillmentPage() {
                     ) : (
                       <div className="space-y-2 pt-0.5">
                         <div className="grid grid-cols-4 gap-1.5">
-                          <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Dł</span>
+                          <div className="relative flex items-center bg-slate-900/60 border border-border/30 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all">
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase mr-0.5 shrink-0 select-none">Dł</span>
                             <input
                               id={`length_cm-${pkg.id}`}
                               name="length_cm"
                               value={pkg.customPackage.length_cm}
                               onChange={(e) => handleCustomDimensionChange(index, e)}
-                              className="w-full bg-transparent border-none shadow-none outline-none p-0 h-8 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                              className="w-full bg-transparent border-none shadow-none outline-none p-0 h-8 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground min-w-0"
                             />
-                            <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                            <span className="text-[9px] text-muted-foreground ml-0.5 shrink-0 select-none">cm</span>
                           </div>
 
-                          <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Sz</span>
+                          <div className="relative flex items-center bg-slate-900/60 border border-border/30 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all">
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase mr-0.5 shrink-0 select-none">Sz</span>
                             <input
                               id={`width_cm-${pkg.id}`}
                               name="width_cm"
                               value={pkg.customPackage.width_cm}
                               onChange={(e) => handleCustomDimensionChange(index, e)}
-                              className="w-full bg-transparent border-none shadow-none outline-none p-0 h-8 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                              className="w-full bg-transparent border-none shadow-none outline-none p-0 h-8 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground min-w-0"
                             />
-                            <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                            <span className="text-[9px] text-muted-foreground ml-0.5 shrink-0 select-none">cm</span>
                           </div>
 
-                          <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Wy</span>
+                          <div className="relative flex items-center bg-slate-900/60 border border-border/30 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all">
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase mr-0.5 shrink-0 select-none">Wy</span>
                             <input
                               id={`height_cm-${pkg.id}`}
                               name="height_cm"
                               value={pkg.customPackage.height_cm}
                               onChange={(e) => handleCustomDimensionChange(index, e)}
-                              className="w-full bg-transparent border-none shadow-none outline-none p-0 h-8 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                              className="w-full bg-transparent border-none shadow-none outline-none p-0 h-8 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground min-w-0"
                             />
-                            <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                            <span className="text-[9px] text-muted-foreground ml-0.5 shrink-0 select-none">cm</span>
                           </div>
 
-                          <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Wg</span>
+                          <div className="relative flex items-center bg-slate-900/60 border border-border/30 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all">
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase mr-0.5 shrink-0 select-none">Wg</span>
                             <input
                               id={`weight_kg-${pkg.id}`}
                               name="weight_kg"
                               value={pkg.customPackage.weight_kg}
                               onChange={(e) => handleCustomDimensionChange(index, e)}
-                              className="w-full bg-transparent border-none shadow-none outline-none p-0 h-8 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                              className="w-full bg-transparent border-none shadow-none outline-none p-0 h-8 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground min-w-0"
                             />
-                            <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">kg</span>
+                            <span className="text-[9px] text-muted-foreground ml-0.5 shrink-0 select-none">kg</span>
                           </div>
                         </div>
+                        {courierProvider === "SUUS" && (
+                          <div className="space-y-1 mt-1 text-left">
+                            <label className="text-[10px] text-muted-foreground block mb-0.5">Typ opakowania SUUS</label>
+                            <Select
+                              onValueChange={(value) =>
+                                handlePackageChange(index, "courier_code", value)
+                              }
+                              value={pkg.courier_code || ""}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-slate-900/50 border-border/30 rounded-lg">
+                                <SelectValue placeholder="Wybierz typ opakowania..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover border border-border/30">
+                                {Object.entries(SUUS_PACKAGE_CODES).map(([code, name]) => (
+                                  <SelectItem key={code} value={code} className="text-xs">
+                                    {code} - {name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {courierProvider === "RABEN" && (
+                          <div className="space-y-1 mt-1 text-left">
+                            <label className="text-[10px] text-muted-foreground block mb-0.5">Typ opakowania Raben</label>
+                            <Select
+                              onValueChange={(value) =>
+                                handlePackageChange(index, "courier_code", value)
+                              }
+                              value={pkg.courier_code || ""}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-slate-900/50 border-border/30 rounded-lg">
+                                <SelectValue placeholder="Wybierz typ opakowania..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover border border-border/30">
+                                {Object.entries(RABEN_PACKAGE_CODES).map(([code, name]) => (
+                                  <SelectItem key={code} value={code} className="text-xs">
+                                    {code} - {name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
                     )}
 
                     {/* Palet Presets inside custom packages */}
                     {pkg.mode === "custom" && (
-                      <div className="pt-2 flex items-center justify-between gap-2 flex-wrap border-t border-white/5">
+                      <div className="pt-2 flex items-center justify-between gap-2 flex-wrap border-t border-border/20">
                         <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider select-none">Palety:</span>
                         <div className="flex gap-1">
                           {[
@@ -2054,7 +2512,7 @@ export default function FulfillmentPage() {
                             <button
                               key={preset.label}
                               type="button"
-                              className="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-slate-300 text-[8px] font-medium border border-white/5 transition-all flex items-center gap-0.5"
+                              className="px-1.5 py-0.5 rounded bg-accent/10 hover:bg-accent/20 text-muted-foreground hover:text-foreground text-[8px] font-medium border border-border/30 transition-all flex items-center gap-0.5"
                               onClick={() => {
                                 setPackages((pkgs) =>
                                   pkgs.map((p, i) =>
@@ -2083,11 +2541,11 @@ export default function FulfillmentPage() {
                     )}
 
                     {isCod && (
-                      <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-3 h-8 mt-0.5">
+                      <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-3 h-8 mt-0.5">
                         <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider select-none flex items-center gap-1">
                           <CreditCard className="h-3.5 w-3.5 text-emerald-500 animate-pulse" /> Kwota Pobrania (COD)
                         </span>
-                        <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all max-w-[140px]">
+                        <div className="relative flex items-center bg-slate-900/60 border border-border/30 rounded-lg px-2 focus-within:border-indigo-500/50 transition-all max-w-[140px]">
                           <input
                             id={`cod-amount-${pkg.id}`}
                             value={pkg.codAmount}
@@ -2095,11 +2553,11 @@ export default function FulfillmentPage() {
                               handleCodAmountChange(index, e.target.value)
                             }
                             placeholder="0.00"
-                            className="w-full bg-transparent border-none shadow-none outline-none p-0 h-6 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200"
+                            className="w-full bg-transparent border-none shadow-none outline-none p-0 h-6 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground"
                             type="number"
                             step="0.01"
                           />
-                          <span className="text-[9px] text-slate-500 ml-1.5 shrink-0 select-none font-medium">PLN</span>
+                          <span className="text-[9px] text-muted-foreground ml-1.5 shrink-0 select-none font-medium">PLN</span>
                         </div>
                       </div>
                     )}
@@ -2113,19 +2571,19 @@ export default function FulfillmentPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full h-9 text-[11px] bg-slate-950/20 hover:bg-slate-950/40 border-white/5 rounded-lg transition-all flex items-center justify-center gap-1.5"
+                className="w-full h-9 text-[11px] bg-slate-950/20 hover:bg-slate-950/40 border-border/30 rounded-lg transition-all flex items-center justify-center gap-1.5"
                 onClick={addPackage}
               >
-                <PlusCircle className="h-4 w-4 text-indigo-400" /> Dodaj paczkę
+                <PlusCircle className="h-4 w-4 text-indigo-500" /> Dodaj paczkę
               </Button>
               {isCod && packages.length > 1 && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full h-9 text-[11px] bg-slate-950/20 hover:bg-slate-950/40 border-white/5 rounded-lg transition-all flex items-center justify-center gap-1.5"
+                  className="w-full h-9 text-[11px] bg-slate-950/20 hover:bg-slate-950/40 border-border/30 rounded-lg transition-all flex items-center justify-center gap-1.5"
                   onClick={handleSplitCodClick}
                 >
-                  <CreditCard className="h-4 w-4 text-emerald-400 animate-pulse" /> Podziel pobranie
+                  <CreditCard className="h-4 w-4 text-emerald-500 animate-pulse" /> Podziel pobranie
                 </Button>
               )}
             </div>
@@ -2156,29 +2614,208 @@ export default function FulfillmentPage() {
               )}
             </Card>
           </TabsContent>
-          
+
+          {/* ── TAB: Zwroty i Spory ── */}
+          <TabsContent value="zwroty" className="mt-0 focus:outline-none flex flex-col gap-4">
+            {/* Returns */}
+            {(orderDetails?.returns?.length || 0) > 0 && (
+              <Card className="border border-white/5 bg-slate-900/40 backdrop-blur-md rounded-2xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-border/20 flex items-center gap-2">
+                  <ArrowRightLeft className="h-4 w-4 text-rose-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Zwroty</h4>
+                  <span className="ml-auto bg-rose-500/15 text-rose-400 border border-rose-500/20 rounded-full text-[9px] px-2 py-0.5 font-bold">
+                    {orderDetails.returns.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-border/10 px-5">
+                  {orderDetails.returns.map((ret: any) => (
+                    <div key={ret.id} className="py-3.5 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-sm text-foreground font-mono">
+                            {ret.external_return_id || ret.reference_number || ret.id}
+                          </span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                            ret.status === "ONGOING" || ret.status === "WAITING"
+                              ? "bg-rose-500/15 text-rose-400"
+                              : "bg-emerald-500/15 text-emerald-400"
+                          }`}>
+                            {ret.status}
+                          </span>
+                        </div>
+                        {ret.created_at_external && (
+                          <p className="text-[10px] text-muted-foreground font-mono">
+                            {new Date(ret.created_at_external).toLocaleString("pl-PL")}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[10px] border-border/30 hover:border-rose-500/30 text-foreground/70 hover:text-rose-400 rounded-lg shrink-0"
+                        onClick={() => window.open(`/returns/${ret.id}`, "_blank")}
+                      >
+                        Szczegóły
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Disputes */}
+            {(orderDetails?.disputes?.length || 0) > 0 && (
+              <Card className="border border-rose-500/20 bg-rose-950/10 backdrop-blur-md rounded-2xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-rose-500/15 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-rose-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-rose-400/80">Spory i Reklamacje</h4>
+                  <span className={`ml-auto rounded-full text-[9px] px-2 py-0.5 font-bold border ${
+                    (orderDetails.disputes.filter((d: any) => d.status === "ONGOING").length) > 0
+                      ? "bg-rose-500/15 text-rose-400 border-rose-500/30 animate-pulse"
+                      : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  }`}>
+                    {orderDetails.disputes.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-rose-500/10 px-5">
+                  {orderDetails.disputes.map((dispute: any) => (
+                    <div key={dispute.id} className="py-4 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-sm text-foreground leading-tight">
+                          {dispute.subject || "Spór"}
+                        </span>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                          dispute.status === "ONGOING"
+                            ? "bg-rose-500/15 text-rose-400 animate-pulse"
+                            : "bg-emerald-500/15 text-emerald-400"
+                        }`}>
+                          {dispute.status === "ONGOING" ? "W toku" : "Zamknięta"}
+                        </span>
+                      </div>
+                      {dispute.buyer_login && (
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          Kupujący: <span className="text-foreground/80">{dispute.buyer_login}</span>
+                        </p>
+                      )}
+                      {dispute.opened_date && (
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          Otwarty: {new Date(dispute.opened_date).toLocaleDateString("pl-PL")}
+                        </p>
+                      )}
+                      {dispute.decision_due_date && (
+                        <p className="text-[10px] text-amber-400/80 font-mono font-semibold">
+                          ⚠ Termin decyzji: {new Date(dispute.decision_due_date).toLocaleDateString("pl-PL")}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Loading state */}
+            {isLoadingOrderDetails && (
+              <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-xs">Ładowanie szczegółów...</span>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── TAB: Inne zamówienia klienta ── */}
+          <TabsContent value="inne" className="mt-0 focus:outline-none">
+            <Card className="border border-white/5 bg-slate-900/40 backdrop-blur-md rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-border/20 flex items-center gap-2">
+                <ShoppingBag className="h-4 w-4 text-emerald-400" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Inne zamówienia klienta</h4>
+                <span className="ml-auto text-[10px] text-muted-foreground italic">
+                  wg e-mail / loginu
+                </span>
+              </div>
+              {isLoadingOrderDetails ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-xs">Ładowanie...</span>
+                </div>
+              ) : !orderDetails?.related_orders || orderDetails.related_orders.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  <ShoppingBag className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                  <p className="text-xs">Brak innych zamówień tego klienta.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/10">
+                  {orderDetails.related_orders.map((relOrder: any) => {
+                    const isCompleted = ["SENT", "PICKED_LISTED"].includes(relOrder.fulfillment_status || relOrder.status);
+                    return (
+                      <div key={relOrder.id} className="px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-white/5 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-bold font-mono text-xs text-foreground/90 truncate">
+                              {relOrder.external_order_id
+                                ? relOrder.external_order_id.split("-").pop()
+                                : relOrder.id.slice(0, 8)}
+                            </span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                              isCompleted
+                                ? "bg-emerald-500/15 text-emerald-400"
+                                : "bg-indigo-500/15 text-indigo-400"
+                            }`}>
+                              {relOrder.fulfillment_status || relOrder.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                            <span>{relOrder.service_integration?.name || "Ręczne"}</span>
+                            {relOrder.purchased_at && (
+                              <span className="font-mono">
+                                {new Date(relOrder.purchased_at).toLocaleDateString("pl-PL")}
+                              </span>
+                            )}
+                            {relOrder.total_to_pay != null && (
+                              <span className="font-semibold text-foreground/70">
+                                {Number(relOrder.total_to_pay).toFixed(2)} PLN
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg border border-transparent hover:border-emerald-500/20 shrink-0"
+                          onClick={() => window.open(`/orders/${relOrder.id}`, "_blank")}
+                        >
+                          Szczegóły
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
           </Tabs>
         </section>
 
         {/* RIGHT COLUMN: ACTION PANEL & CONTROLLER QUEUE (45% width) */}
-        <section className="w-[45%] flex flex-col gap-6">
+        <section className="w-[42%] xl:w-[45%] flex flex-col gap-6">
           
           {/* Main big processing card */}
-          <Card className="flex-1 p-8 border border-white/5 bg-slate-900/40 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center text-center gap-6 shadow-2xl relative overflow-hidden group">
+          <Card className="p-4 xl:p-5 border border-border/30 bg-slate-900/40 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center gap-3 xl:gap-4 shadow-2xl relative overflow-hidden group">
             
             {/* Decorative background glow */}
             <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 via-transparent to-orange-500/10 pointer-events-none opacity-40 group-hover:opacity-65 transition-all duration-700" />
 
-            <div className="relative z-10 flex flex-col items-center gap-5 w-full">
-              <div className="p-5 bg-gradient-to-tr from-orange-500/20 to-indigo-500/20 rounded-full border border-white/10 shadow-lg text-orange-400 animate-pulse">
-                <Flame className="h-14 w-14" />
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-white tracking-wide">Panel Sterowania Realizacją</h3>
-                <p className="text-xs text-slate-300 max-w-sm">
-                  Jedno kliknięcie automatycznie wygeneruje i wydrukuje fakturę, list przewozowy oraz zrealizuje zamówienie.
-                </p>
+            <div className="relative z-10 flex flex-col items-center gap-4 w-full">
+              <div className="flex items-center gap-3 w-full justify-start pl-1">
+                <div className="p-2.5 bg-gradient-to-tr from-orange-500/20 to-indigo-500/20 rounded-xl border border-border/30 text-orange-400 animate-pulse shrink-0">
+                  <Flame className="h-6 w-6" />
+                </div>
+                <div className="text-left">
+                  <h3 className="text-sm font-bold text-foreground tracking-wide leading-tight">Panel Sterowania Realizacją</h3>
+                  <p className="text-[10px] text-muted-foreground leading-normal mt-0.5">
+                    Automatycznie wygeneruje i wydrukuje FV oraz list przewozowy.
+                  </p>
+                </div>
               </div>
 
               {/* Glowing Pulse NABIJ button */}
@@ -2186,15 +2823,15 @@ export default function FulfillmentPage() {
                 onClick={handleProcessOrder}
                 disabled={isProcessing}
                 className={cn(
-                  "relative w-full max-w-md h-16 text-lg font-bold uppercase tracking-wider rounded-2xl shadow-xl transition-all duration-300 flex items-center justify-center gap-2",
+                  "relative w-full max-w-md h-12 text-sm font-bold uppercase tracking-wider rounded-xl shadow-xl transition-all duration-300 flex items-center justify-center gap-2",
                   isProcessing
-                    ? "bg-slate-900 border border-white/10 text-slate-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-orange-500 to-indigo-600 border-none hover:scale-[1.02] hover:shadow-indigo-500/25 active:scale-95 text-white animate-glow cursor-pointer"
+                    ? "bg-slate-900 border border-border/30 text-slate-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-orange-500 to-indigo-600 border-none hover:scale-[1.01] hover:shadow-indigo-500/20 active:scale-95 text-white animate-glow cursor-pointer"
                 )}
               >
                 {isProcessing ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin mr-1 text-slate-400" /> Przetwarzanie...
+                    <Loader2 className="h-4 w-4 animate-spin mr-1 text-slate-400" /> Przetwarzanie...
                   </>
                 ) : (
                   <>
@@ -2202,17 +2839,154 @@ export default function FulfillmentPage() {
                   </>
                 )}
               </Button>
+
+              {/* Embedded Purchased Products (Compact List) */}
+              <div className="w-full border-t border-border/30 pt-3 flex flex-col gap-2 text-left">
+                <div className="flex justify-between items-center w-full px-1">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                    Zakupione Produkty:
+                  </span>
+                  {subiektStock && !subiektStock.is_connected && (
+                    <span className="text-[10px] text-rose-500 font-bold">Brak połączenia z ERP</span>
+                  )}
+                </div>
+
+                {subiektStock && !subiektStock.is_connected && (
+                  <Alert variant="destructive" className="bg-red-950/20 border-red-500/20 text-red-400 py-1.5 px-2.5 rounded-xl">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <AlertDescription className="text-[10px] leading-snug">
+                      {subiektStock.reason || "Brak połączenia z Subiektem."}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="divide-y divide-border/10 max-h-[280px] overflow-y-auto pr-1 scrollbar-thin w-full">
+                  {lineItems.map((item: any, idx: number) => {
+                    const offerId = item.offer?.id || item.product_id || item.auction_id || item.offer_id;
+                    const mapping = productMappings?.[offerId];
+                    const hasSymbol = !!mapping?.erp_product_symbol;
+                    const stockInfo = subiektStock?.items?.find((s: any) => s.offer_id === offerId);
+
+                    const getItemPrice = (i: any) => {
+                      if (!i) return null;
+                      const p = i.price;
+                      if (!p) return null;
+                      if (typeof p === "string") return p;
+                      if (typeof p === "number") return `${p.toFixed(2)} PLN`;
+                      if (p.amount) {
+                        const curr = p.currency || "PLN";
+                        return `${parseFloat(p.amount).toFixed(2)} ${curr}`;
+                      }
+                      return null;
+                    };
+                    const priceFormatted = getItemPrice(item);
+
+                    return (
+                      <div key={idx} className="py-3 flex justify-between items-start gap-3 w-full border-b border-border/10 last:border-b-0">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              className="w-16 h-16 rounded-xl object-contain border border-border/40 shrink-0 bg-white p-1 shadow-sm mt-0.5"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-xl bg-slate-950/15 border border-border/30 flex items-center justify-center text-muted-foreground shrink-0 shadow-inner mt-0.5">
+                              <Box className="h-7 w-7" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <p className="text-xs font-semibold text-foreground leading-snug break-words whitespace-normal" title={item.name}>
+                              {item.name}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.2 rounded">
+                                x{item.quantity}
+                              </span>
+                              {offerId && (
+                                <span className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.2 rounded border border-primary/20 font-medium">
+                                  ID aukcji: {offerId}
+                                </span>
+                              )}
+                              {priceFormatted && (
+                                <span className="text-[10px] font-semibold text-foreground bg-muted/60 px-1.5 py-0.2 rounded border border-border/40">
+                                  Cena: {priceFormatted}
+                                </span>
+                              )}
+                              {subiektStock?.is_connected && stockInfo && stockInfo.has_mapping && (
+                                <span className={cn(
+                                  "text-[9px] font-medium",
+                                  stockInfo.is_service
+                                    ? "text-blue-500"
+                                    : stockInfo.has_sufficient_stock
+                                    ? "text-emerald-500"
+                                    : "text-rose-500 font-bold"
+                                )}>
+                                  {stockInfo.is_service ? "Usługa" : `ERP: ${stockInfo.quantity_available ?? 0}`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isMappingsLoading ? (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          ) : hasSymbol ? (
+                            <div className="text-right">
+                              <span className="text-[9px] font-mono font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.2 rounded block">
+                                {mapping.erp_product_symbol}
+                              </span>
+                            </div>
+                          ) : (
+                            <Badge variant="destructive" className="bg-red-500/10 border border-red-500/30 text-red-500 text-[8px] py-0 px-1 font-bold animate-pulse">
+                              Brak ERP
+                            </Badge>
+                          )}
+                          <ProductMappingDialog
+                            offerId={offerId}
+                            offerName={item.name}
+                            currentMapping={mapping}
+                            sourceIntegrationId={currentOrder.service_integration?.id}
+                            erpIntegrationId={erpIntegration?.id}
+                            onMappingUpdated={() => {
+                              queryClient.invalidateQueries({ queryKey: ["productMappings"] });
+                              refetchSubiektStock();
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </Card>
 
           {/* Flags management card */}
-          <Card className="p-6 border border-white/5 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-4">
-            <h4 className="text-xs text-slate-400 uppercase font-semibold tracking-wider flex items-center gap-1.5">
-              <Tag className="h-4 w-4 text-indigo-400" /> Flagi zamówienia (Odłóż na później):
-            </h4>
+          <Card className="p-4 xl:p-6 border border-border/30 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-3 xl:gap-4">
+            <div className="flex justify-between items-center w-full">
+              <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider flex items-center gap-1.5">
+                <Tag className="h-4 w-4 text-indigo-500" /> Flagi zamówienia (Odłóż na później):
+              </h4>
+              {lastAction && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleUndo}
+                  className="text-2xs text-indigo-500 hover:text-indigo-650 hover:bg-indigo-500/10 h-7 px-2.5 rounded-lg flex items-center gap-1 transition-all duration-200"
+                >
+                  <Undo2 className="h-3.5 w-3.5 mr-1" /> Cofnij (Ctrl+Z)
+                </Button>
+              )}
+            </div>
 
             {/* Display active flags */}
-            <div className="flex flex-wrap gap-2 min-h-[2.2rem] p-3 rounded-xl bg-slate-950/30 border border-white/5 items-center">
+            <div className="flex flex-wrap gap-2 min-h-[2.2rem] p-3 rounded-xl bg-slate-950/30 border border-border/30 items-center">
               {currentOrder.flags && currentOrder.flags.length > 0 ? (
                 currentOrder.flags.map((flag) => (
                   <Badge
@@ -2220,14 +2994,22 @@ export default function FulfillmentPage() {
                     className={cn(
                       "text-xs px-2.5 py-1 flex items-center gap-1 border font-semibold",
                       flag === "SKIP"
-                        ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                        : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                        ? "bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/20"
+                        : flag === "DROPSHIP"
+                        ? "bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 border-indigo-500/20"
+                        : "bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/20"
                     )}
                   >
-                    {flag === "SKIP" ? "Omiń (SKIP)" : "Do wyjaśnienia (TO_CHECK)"}
+                    {flag === "SKIP"
+                      ? "Omiń (SKIP)"
+                      : flag === "DROPSHIP"
+                      ? "Dropshipping (DROPSHIP)"
+                      : flag === "TO_CHECK"
+                      ? "Do wyjaśnienia (TO_CHECK)"
+                      : flag}
                     <button
                       onClick={() => handleRemoveFlag(flag)}
-                      className="ml-1 text-muted-foreground hover:text-white transition-colors"
+                      className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
                       title="Usuń flagę"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -2235,84 +3017,100 @@ export default function FulfillmentPage() {
                   </Badge>
                 ))
               ) : (
-                <span className="text-xs text-slate-500 italic">Brak przypisanych flag. Użyj skrótów lub przycisków.</span>
+                <span className="text-xs text-muted-foreground italic">Brak przypisanych flag. Użyj skrótów lub przycisków.</span>
               )}
             </div>
 
             {/* Set flags buttons */}
-            <div className="grid grid-cols-2 gap-3 shrink-0">
+            <div className="grid grid-cols-3 gap-1.5 xl:gap-3 shrink-0">
               <Button
                 variant="outline"
                 onClick={() => handleAddFlag("TO_CHECK")}
-                disabled={isProcessing}
-                className="border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 font-semibold text-xs h-10 hover:border-rose-500/40 active:scale-95"
+                disabled={isProcessing || isFlagging || currentOrder?.flags?.includes("TO_CHECK")}
+                className="border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-400 font-semibold text-[10px] xl:text-xs h-9 xl:h-10 hover:border-rose-500/40 active:scale-95"
               >
-                Do wyjaśnienia ⚠️ (C)
+                Do wyjaśnienia ⚠️ (T)
               </Button>
               
               <Button
                 variant="outline"
                 onClick={() => handleAddFlag("SKIP")}
-                disabled={isProcessing}
-                className="border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 font-semibold text-xs h-10 hover:border-amber-500/40 active:scale-95 flex items-center justify-center gap-1"
+                disabled={isProcessing || isFlagging || currentOrder?.flags?.includes("SKIP")}
+                className="border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 text-amber-400 font-semibold text-[10px] xl:text-xs h-9 xl:h-10 hover:border-amber-500/40 active:scale-95 flex items-center justify-center gap-1"
               >
-                Omiń zamówienie <ArrowRight className="h-3.5 w-3.5" /> (S)
+                Omiń ➡️ (S)
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => handleAddFlag("DROPSHIP")}
+                disabled={isProcessing || isFlagging || currentOrder?.flags?.includes("DROPSHIP")}
+                className="border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10 text-indigo-400 font-semibold text-[10px] xl:text-xs h-9 xl:h-10 hover:border-indigo-500/40 active:scale-95 flex items-center justify-center gap-1"
+              >
+                Dropship 📦 (D)
               </Button>
             </div>
           </Card>
 
           {/* Keyboard Shortcuts legends card */}
-          <Card className="p-6 border border-white/5 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-3">
-            <h4 className="text-xs text-slate-400 uppercase font-semibold tracking-wider flex items-center gap-1.5">
-              <Keyboard className="h-4 w-4 text-indigo-400" /> Skróty Klawiszowe (Klawiatura Magazyniera):
+          <Card className="p-4 xl:p-6 border border-border/30 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-2.5 xl:gap-3">
+            <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider flex items-center gap-1.5">
+              <Keyboard className="h-4 w-4 text-indigo-500" /> Skróty Klawiszowe (Klawiatura Magazyniera):
             </h4>
             
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-medium">Realizacja (Nabij):</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-white border border-white/10 shadow shadow-black">
+            <div className="grid grid-cols-2 gap-x-3 xl:gap-x-6 gap-y-1.5 text-[11px] xl:text-xs">
+              <div className="flex justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Realizacja (Nabij):</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-foreground border border-border shadow shadow-black/10">
                   Enter / Spacja
                 </kbd>
               </div>
 
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-medium">Do wyjaśnienia:</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-white border border-white/10 shadow shadow-black">
-                  C
+              <div className="flex justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Do wyjaśnienia:</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-foreground border border-border shadow shadow-black/10">
+                  T
                 </kbd>
               </div>
 
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-medium">Omiń zamówienie:</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-white border border-white/10 shadow shadow-black">
+              <div className="flex justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Omiń zamówienie:</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-foreground border border-border shadow shadow-black/10">
                   S / Strzałka w prawo
                 </kbd>
               </div>
 
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-medium">Poprzednie w kolejce:</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-white border border-white/10 shadow shadow-black">
+              <div className="flex justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Dropshipping:</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-foreground border border-border shadow shadow-black/10">
+                  D
+                </kbd>
+              </div>
+
+              <div className="flex justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Poprzednie w kolejce:</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-foreground border border-border shadow shadow-black/10">
                   [
                 </kbd>
               </div>
 
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-medium">Następne w kolejce:</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-white border border-white/10 shadow shadow-black">
+              <div className="flex justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Następne w kolejce:</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-foreground border border-border shadow shadow-black/10">
                   ]
                 </kbd>
               </div>
 
-              <div className="flex justify-between py-1 border-b border-white/5">
-                <span className="text-slate-400 font-medium">Wyczyść flagi:</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-white border border-white/10 shadow shadow-black">
+              <div className="flex justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Wyczyść flagi:</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-foreground border border-border shadow shadow-black/10">
                   R
                 </kbd>
               </div>
 
               <div className="flex justify-between py-1 col-span-2 mt-1">
-                <span className="text-slate-400 font-medium">Wyjście ze stacji:</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-white border border-white/10 shadow shadow-black">
+                <span className="text-muted-foreground font-medium">Wyjście ze stacji:</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-950 font-mono text-[10px] font-bold text-foreground border border-border shadow shadow-black/10">
                   Esc
                 </kbd>
               </div>

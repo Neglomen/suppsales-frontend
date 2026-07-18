@@ -8,18 +8,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Book, Building, Link as LinkIcon, Mail, Package, Sliders, Users, Waypoints } from "lucide-react";
+import { Book, Building, Link as LinkIcon, Mail, Package, Sliders, Users, Waypoints, Wand2 } from "lucide-react";
 
 import { TeamMembersTab } from "./_components/team-members-tab";
 import { GeneralSettingsTab } from "./_components/general-settings-tab";
 import { SmtpSettingsTab } from "./_components/smtp-settings-tab";
 import { AddressBookTab } from "./_components/address-book-tab";
 import { PackagesTab } from "./_components/packages-tab";
+import { SmartPackagesTab } from "./_components/smart-packages-tab";
 import { DeliveryMappingsTab } from "./_components/delivery-mappings-tab";
 import { MappingsDataTable } from "../product-erp-mappings/_components/mappings-data-table";
 import { BillingSettingsTab } from "./_components/billing-settings-tab";
+import { useMobile } from "@/hooks/use-mobile";
 
 export default function OrganizationSettingsPage() {
+  const isMobile = useMobile(768);
+
   const renderTabContent = (
     title: string,
     description: string,
@@ -35,6 +39,22 @@ export default function OrganizationSettingsPage() {
       </CardContent>
     </Card>
   );
+
+  if (isMobile) {
+    return (
+      <div className="p-4 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Ustawienia Zespołu</h1>
+          <p className="text-muted-foreground">
+            Zarządzaj zespołem i zaproszeniami na urządzeniu mobilnym.
+          </p>
+        </div>
+        <div className="w-full">
+          <TeamMembersTab />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
@@ -77,6 +97,10 @@ export default function OrganizationSettingsPage() {
             <TabsTrigger value="packages" className="justify-start px-4 h-10 w-full data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted transition-colors rounded-xl">
               <Package className="mr-3 h-4 w-4" /> Opakowania kurierskie
             </TabsTrigger>
+
+            <TabsTrigger value="smart-packages" className="justify-start px-4 h-10 w-full data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted transition-colors rounded-xl">
+              <Wand2 className="mr-3 h-4 w-4" /> Inteligentne opakowania
+            </TabsTrigger>
             
             <TabsTrigger value="mappings" className="justify-start px-4 h-10 w-full data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted transition-colors rounded-xl">
               <Waypoints className="mr-3 h-4 w-4" /> Mapowanie metod dostaw
@@ -102,11 +126,7 @@ export default function OrganizationSettingsPage() {
 
         {/* Lepsza, bardziej reużywalna struktura dla zawartości zakładek */}
         <TabsContent value="members" className="m-0 focus-visible:outline-none focus-visible:ring-0">
-          {renderTabContent(
-            "Członkowie Zespołu",
-            "Zapraszaj nowych użytkowników i zarządzaj ich dostępem.",
-            TeamMembersTab
-          )}
+          <TeamMembersTab />
         </TabsContent>
         <TabsContent value="company" className="m-0 focus-visible:outline-none focus-visible:ring-0">
           {renderTabContent(
@@ -134,6 +154,13 @@ export default function OrganizationSettingsPage() {
             "Zarządzanie Opakowaniami",
             "Dodawaj i edytuj swoje standardowe opakowania wysyłkowe.",
             PackagesTab
+          )}
+        </TabsContent>
+        <TabsContent value="smart-packages" className="m-0 focus-visible:outline-none focus-visible:ring-0">
+          {renderTabContent(
+            "Inteligentne Mapowanie Opakowań",
+            "Zarządzaj regułami automatycznego dopasowywania opakowań do zamówień.",
+            SmartPackagesTab
           )}
         </TabsContent>
         <TabsContent value="mappings" className="m-0 focus-visible:outline-none focus-visible:ring-0">

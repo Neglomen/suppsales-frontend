@@ -203,14 +203,14 @@ export function EditInvoiceDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[550px] bg-slate-900 border border-slate-800 text-white p-0 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="p-6 pb-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md">
+      <DialogContent className="sm:max-w-[550px] bg-background border border-border text-foreground p-0 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="p-6 pb-4 border-b border-border/60 bg-muted/40 backdrop-blur-md">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
               <FileText className="h-5 w-5 text-primary" />
               Edytuj dane do faktury (FV)
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-muted-foreground text-xs">
               Modyfikacja danych płatnika faktury sprzedaży. Wpłynie to na dane generowane w systemie ERP.
             </DialogDescription>
           </DialogHeader>
@@ -224,8 +224,8 @@ export function EditInvoiceDialog({
             {/* Scrollable Form Body */}
             <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto pr-4 scrollbar-thin">
               {/* Nabywca Section */}
-              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
-                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+              <div className="bg-slate-950/10 dark:bg-slate-950/40 border border-border/60 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-border/20 pb-2">
                   <User className="h-4 w-4" />
                   <span className="text-xs font-bold uppercase tracking-wider">Osoba fizyczna</span>
                 </div>
@@ -236,14 +236,14 @@ export function EditInvoiceDialog({
                     name="first_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs text-slate-300">Imię</FormLabel>
+                        <FormLabel className="text-xs text-muted-foreground">Imię</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                            <Input placeholder="Jan" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                            <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                            <Input placeholder="Jan" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                           </div>
                         </FormControl>
-                        <FormMessage className="text-xs text-red-400" />
+                        <FormMessage className="text-xs text-red-550" />
                       </FormItem>
                     )}
                   />
@@ -252,14 +252,14 @@ export function EditInvoiceDialog({
                     name="last_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs text-slate-300">Nazwisko</FormLabel>
+                        <FormLabel className="text-xs text-muted-foreground">Nazwisko</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                            <Input placeholder="Kowalski" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                            <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                            <Input placeholder="Kowalski" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                           </div>
                         </FormControl>
-                        <FormMessage className="text-xs text-red-400" />
+                        <FormMessage className="text-xs text-red-550" />
                       </FormItem>
                     )}
                   />
@@ -267,8 +267,8 @@ export function EditInvoiceDialog({
               </div>
 
               {/* Firma Section */}
-              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
-                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+              <div className="bg-slate-950/10 dark:bg-slate-950/40 border border-border/60 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-border/20 pb-2">
                   <Building className="h-4 w-4" />
                   <span className="text-xs font-bold uppercase tracking-wider">Firma</span>
                 </div>
@@ -278,14 +278,14 @@ export function EditInvoiceDialog({
                   name="company_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs text-slate-300">Pełna nazwa firmy</FormLabel>
+                      <FormLabel className="text-xs text-muted-foreground">Pełna nazwa firmy</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Building className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                          <Input placeholder="Firma Sp. z o.o." {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                          <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                          <Input placeholder="Firma Sp. z o.o." {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                         </div>
                       </FormControl>
-                      <FormMessage className="text-xs text-red-400" />
+                      <FormMessage className="text-xs text-red-550" />
                     </FormItem>
                   )}
                 />
@@ -295,22 +295,22 @@ export function EditInvoiceDialog({
                   name="tax_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs text-slate-300">NIP (numer identyfikacji podatkowej)</FormLabel>
+                      <FormLabel className="text-xs text-muted-foreground">NIP (numer identyfikacji podatkowej)</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Hash className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                          <Input placeholder="np. 5361914942" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white font-mono" />
+                          <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                          <Input placeholder="np. 5361914942" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground font-mono" />
                         </div>
                       </FormControl>
-                      <FormMessage className="text-xs text-red-400" />
+                      <FormMessage className="text-xs text-red-550" />
                     </FormItem>
                   )}
                 />
               </div>
 
               {/* Adres Rejestracyjny Section */}
-              <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
-                <div className="flex items-center gap-2 text-primary border-b border-slate-900 pb-2">
+              <div className="bg-slate-950/10 dark:bg-slate-950/40 border border-border/60 rounded-xl p-4 space-y-4">
+                <div className="flex items-center gap-2 text-primary border-b border-border/20 pb-2">
                   <MapPin className="h-4 w-4" />
                   <span className="text-xs font-bold uppercase tracking-wider">Adres rejestracyjny</span>
                 </div>
@@ -320,14 +320,14 @@ export function EditInvoiceDialog({
                   name="street"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs text-slate-300">Ulica i numer</FormLabel>
+                      <FormLabel className="text-xs text-muted-foreground">Ulica i numer</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <MapPin className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-                          <Input placeholder="ul. Kwiatowa 1/2" {...field} className="pl-9 bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                          <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/60" />
+                          <Input placeholder="ul. Kwiatowa 1/2" {...field} className="pl-9 bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                         </div>
                       </FormControl>
-                      <FormMessage className="text-xs text-red-400" />
+                      <FormMessage className="text-xs text-red-550" />
                     </FormItem>
                   )}
                 />
@@ -339,11 +339,11 @@ export function EditInvoiceDialog({
                       name="zip_code"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs text-slate-300">Kod pocztowy</FormLabel>
+                          <FormLabel className="text-xs text-muted-foreground">Kod pocztowy</FormLabel>
                           <FormControl>
-                            <Input placeholder="00-000" {...field} className="bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white text-center font-mono" />
+                            <Input placeholder="00-000" {...field} className="bg-background border-border text-sm h-10 rounded-lg text-foreground text-center font-mono" />
                           </FormControl>
-                          <FormMessage className="text-xs text-red-400" />
+                          <FormMessage className="text-xs text-red-550" />
                         </FormItem>
                       )}
                     />
@@ -354,11 +354,11 @@ export function EditInvoiceDialog({
                       name="city"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs text-slate-300">Miejscowość</FormLabel>
+                          <FormLabel className="text-xs text-muted-foreground">Miejscowość</FormLabel>
                           <FormControl>
-                            <Input placeholder="Warszawa" {...field} className="bg-slate-900/80 border-slate-800 text-sm h-10 rounded-lg text-white" />
+                            <Input placeholder="Warszawa" {...field} className="bg-background border-border text-sm h-10 rounded-lg text-foreground" />
                           </FormControl>
-                          <FormMessage className="text-xs text-red-400" />
+                          <FormMessage className="text-xs text-red-550" />
                         </FormItem>
                       )}
                     />
@@ -368,8 +368,8 @@ export function EditInvoiceDialog({
             </div>
 
             {/* Dialog Footer Actions */}
-            <div className="p-6 border-t border-slate-800 bg-slate-900/50 flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={onClose} className="border-slate-800 hover:bg-slate-850 hover:text-white text-slate-300">
+            <div className="p-6 border-t border-border bg-muted/40 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={onClose} className="border-border hover:bg-accent/10 hover:text-foreground text-muted-foreground">
                 Anuluj
               </Button>
               <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md px-6">

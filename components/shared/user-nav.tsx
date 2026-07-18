@@ -58,7 +58,7 @@ export function UserNav({ showLabel }: UserNavProps) {
             <div className="absolute inset-0 bg-primary/20 blur-lg rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-56 glass" align={showLabel ? "start" : "end"} forceMount>
+        <DropdownMenuContent className="w-56 glass" align="end" forceMount>
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
               <p className="text-sm font-semibold leading-none premium-gradient-text">

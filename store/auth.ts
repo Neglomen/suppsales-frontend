@@ -3,11 +3,20 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 // Definicja typu User (bez zmian)
+interface OrganizationContext {
+  id: string;
+  name: string;
+  print_hub_enabled: boolean;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  permissions: string[];
+}
+
 interface User {
   id: string;
   email: string;
   name: string | null;
   is_super_admin: boolean;
+  organization: OrganizationContext | null;
 }
 
 // Zaktualizowany interfejs stanu
@@ -22,6 +31,32 @@ interface AuthState {
   setHasHydrated: (state: boolean) => void; // --- NOWA AKCJA ---
 }
 
+const ssrSafeCustomStorage = {
+  getItem: (name: string) => {
+    if (typeof window === "undefined") return null;
+    const localVal = localStorage.getItem(name);
+    if (localVal) return localVal;
+    return sessionStorage.getItem(name);
+  },
+  setItem: (name: string, value: string) => {
+    if (typeof window === "undefined") return;
+    const rememberMe = localStorage.getItem("auth-remember-me") === "true";
+    if (rememberMe) {
+      localStorage.setItem(name, value);
+      sessionStorage.removeItem(name);
+    } else {
+      sessionStorage.setItem(name, value);
+      localStorage.removeItem(name);
+    }
+  },
+  removeItem: (name: string) => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(name);
+    sessionStorage.removeItem(name);
+    localStorage.removeItem("auth-remember-me");
+  },
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -34,9 +69,12 @@ export const useAuthStore = create<AuthState>()(
         // 1. Wyczyść stan w Zustand
         set({ user: null, token: null });
 
-        // 2. Wyczyść localStorage (dodatkowe zabezpieczenie)
-        // Jeśli nazwa Twojego storage'a jest inna, zmień ją tutaj
-        localStorage.removeItem("auth-storage");
+        // 2. Wyczyść storage (dodatkowe zabezpieczenie)
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("auth-storage");
+          sessionStorage.removeItem("auth-storage");
+          localStorage.removeItem("auth-remember-me");
+        }
 
         // 3. Użyj twardego przeładowania do strony logowania.
         // To jest najbezpieczniejszy sposób na wylogowanie, ponieważ
@@ -49,7 +87,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-storage",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => ssrSafeCustomStorage),
       // --- NOWA, KLUCZOWA OPCJA ---
       onRehydrateStorage: () => (state) => {
         // Ta funkcja jest wywoływana, gdy nawodnienie się zakończy.

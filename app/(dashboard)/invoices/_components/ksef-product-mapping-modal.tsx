@@ -158,7 +158,7 @@ export function KsefProductMappingModal({
   const { data: subiektIntegration } = useQuery({
     queryKey: ["subiekt-integration"],
     queryFn: async () => {
-      const res = await api.get("/service-integrations/", { params: { category: "ERP" } });
+      const res = await api.get("/service-integrations", { params: { category: "ERP" } });
       return (res.data as any[]).find((i) => i.provider_type === "SUBIEKT_GT");
     },
     enabled: isOpen,

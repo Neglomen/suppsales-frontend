@@ -13,6 +13,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { StatusMappingConfig } from "../StatusMappingConfig";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const SyncSwitch = ({ name, label }: { name: any; label: string }) => (
   <FormField
@@ -76,10 +83,42 @@ export const BaselinkerManageTab = ({ integrationId }: BaselinkerManageTabProps)
         Ustawienia synchronizacji
       </h4>
       <div className="space-y-3">
-        <SyncSwitch
-          name={{ control: form.control, name: "sync_orders" }}
-          label="Zamówienia"
-        />
+        <div className="space-y-2">
+          <SyncSwitch
+            name={{ control: form.control, name: "sync_orders" }}
+            label="Zamówienia"
+          />
+          {form.watch("sync_orders") && (
+            <FormField
+              control={form.control}
+              name="sync_config.sync_orders_interval"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between pl-6 pr-3 py-1.5 rounded-lg border border-dashed border-border/10 bg-background/30">
+                  <FormLabel className="text-xs font-semibold">Częstotliwość synchronizacji zamówień</FormLabel>
+                  <Select 
+                    onValueChange={(val) => field.onChange(parseInt(val))} 
+                    value={field.value?.toString() || "5"}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-40 h-8 bg-background/50 border-border/10 text-xs">
+                        <SelectValue placeholder="Wybierz" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="1">Co minutę</SelectItem>
+                      <SelectItem value="2">Co 2 minuty</SelectItem>
+                      <SelectItem value="5">Co 5 minut</SelectItem>
+                      <SelectItem value="10">Co 10 minut</SelectItem>
+                      <SelectItem value="15">Co 15 minut</SelectItem>
+                      <SelectItem value="30">Co 30 minut</SelectItem>
+                      <SelectItem value="60">Co godzinę</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+          )}
+        </div>
       </div>
       <StatusMappingConfig integrationId={integrationId} />
     </div>

@@ -41,6 +41,30 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  --color-slate-50: var(--slate-50);
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+  --color-slate-300: var(--slate-300);
+  --color-slate-400: var(--slate-400);
+  --color-slate-500: var(--slate-500);
+  --color-slate-600: var(--slate-600);
+  --color-slate-700: var(--slate-700);
+  --color-slate-800: var(--slate-800);
+  --color-slate-900: var(--slate-900);
+  --color-slate-950: var(--slate-950);
+
+  --color-zinc-50: var(--slate-50);
+  --color-zinc-100: var(--slate-100);
+  --color-zinc-200: var(--slate-200);
+  --color-zinc-300: var(--slate-300);
+  --color-zinc-400: var(--slate-400);
+  --color-zinc-500: var(--slate-500);
+  --color-zinc-600: var(--slate-600);
+  --color-zinc-700: var(--slate-700);
+  --color-zinc-800: var(--slate-800);
+  --color-zinc-900: var(--slate-900);
+  --color-zinc-950: var(--slate-950);
 }
 
 :root {
@@ -81,45 +105,71 @@
   --sidebar-accent-foreground: oklch(0.45 0.18 260);
   --sidebar-border: oklch(0.9 0.02 285);
   --sidebar-ring: oklch(0.45 0.18 260 / 0.4);
+
+  /* Dynamically inverted scales for light theme */
+  --slate-50: oklch(0.07 0.03 243);
+  --slate-100: oklch(0.16 0.03 243);
+  --slate-200: oklch(0.24 0.03 243);
+  --slate-300: oklch(0.34 0.03 243);
+  --slate-400: oklch(0.44 0.03 243);
+  --slate-500: oklch(0.53 0.03 243);
+  --slate-600: oklch(0.70 0.02 243);
+  --slate-700: oklch(0.86 0.01 243);
+  --slate-800: oklch(0.92 0.01 243);
+  --slate-900: oklch(0.96 0.01 243);
+  --slate-950: oklch(0.98 0.01 243);
 }
 
 .dark {
-  --background: oklch(0.12 0.02 260);
+  --background: oklch(0.19 0.02 260);
   --foreground: oklch(0.98 0.01 260);
   
-  --card: oklch(0.14 0.03 260);
+  --card: oklch(0.23 0.03 260);
   --card-foreground: oklch(0.98 0.01 260);
   
-  --popover: oklch(0.14 0.03 260);
+  --popover: oklch(0.23 0.03 260);
   --popover-foreground: oklch(0.98 0.01 260);
   
   --primary: oklch(0.65 0.18 290);
   --primary-foreground: oklch(0.12 0.02 260);
   
-  --secondary: oklch(0.18 0.04 290);
+  --secondary: oklch(0.25 0.04 290);
   --secondary-foreground: oklch(0.98 0.01 260);
   
-  --muted: oklch(0.18 0.04 290);
-  --muted-foreground: oklch(0.7 0.02 260);
+  --muted: oklch(0.25 0.04 290);
+  --muted-foreground: oklch(0.78 0.02 260);
   
-  --accent: oklch(0.25 0.06 290 / 0.15);
+  --accent: oklch(0.30 0.06 290 / 0.2);
   --accent-foreground: oklch(0.98 0.01 260);
   
   --destructive: oklch(0.5 0.2 25);
   --destructive-foreground: oklch(0.98 0.01 260);
   
-  --border: oklch(0.25 0.03 260 / 0.5);
-  --input: oklch(0.25 0.03 260 / 0.5);
+  --border: oklch(0.30 0.03 260 / 0.5);
+  --input: oklch(0.30 0.03 260 / 0.5);
   --ring: oklch(0.65 0.15 260 / 0.5);
   
-  --sidebar: oklch(0.12 0.02 260);
+  --sidebar: oklch(0.19 0.02 260);
   --sidebar-foreground: oklch(0.98 0.01 260);
   --sidebar-primary: oklch(0.65 0.15 260);
   --sidebar-primary-foreground: oklch(0.12 0.02 260);
-  --sidebar-accent: oklch(0.18 0.04 260);
+  --sidebar-accent: oklch(0.25 0.04 260);
   --sidebar-accent-foreground: oklch(0.98 0.01 260);
-  --sidebar-border: oklch(0.25 0.03 260 / 0.5);
+  --sidebar-border: oklch(0.30 0.03 260 / 0.5);
   --sidebar-ring: oklch(0.65 0.15 260 / 0.5);
+
+  /* Standard scales for dark theme */
+  --slate-50: oklch(0.98 0.01 243);
+  --slate-100: oklch(0.96 0.01 243);
+  --slate-200: oklch(0.92 0.01 243);
+  --slate-300: oklch(0.86 0.01 243);
+  --slate-400: oklch(0.70 0.02 243);
+  --slate-500: oklch(0.53 0.03 243);
+  --slate-600: oklch(0.44 0.03 243);
+  --slate-700: oklch(0.34 0.03 243);
+  --slate-800: oklch(0.24 0.03 243);
+  --slate-900: oklch(0.16 0.03 243);
+  --slate-950: oklch(0.07 0.03 243);
 }
 
 @layer base {
@@ -139,7 +189,11 @@
   }
 
   .dark .glass {
-    @apply bg-black/40 backdrop-blur-xl border border-white/10 shadow-emerald-500/5;
+    @apply bg-slate-900/40 backdrop-blur-xl border border-white/5 shadow-2xl;
+  }
+
+  .glass-dark {
+    @apply bg-slate-950/20 backdrop-blur-xl border border-border/30 shadow-xl;
   }
 
   .neon-border {

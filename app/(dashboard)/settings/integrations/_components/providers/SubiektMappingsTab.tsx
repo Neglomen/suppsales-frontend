@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api, { getErrorMessage } from "@/lib/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -49,6 +49,8 @@ interface ServiceMappings {
 
 interface MappingsConfig {
   ksef_enabled?: boolean;
+  fiscalization_enabled?: boolean;
+  fiscal_printer_id?: number | null;
   payment_type_mappings: Record<string, string>;
   service_mappings: ServiceMappings;
   product_mappings: Record<string, string>;
@@ -73,6 +75,8 @@ export function SubiektMappingsTab({ integrationId }: SubiektMappingsTabProps) {
       const response = await api.get(`/erp-proxy/integrations/${integrationId}/mappings-config`);
       return {
         ksef_enabled: response.data.ksef_enabled || false,
+        fiscalization_enabled: response.data.fiscalization_enabled || false,
+        fiscal_printer_id: response.data.fiscal_printer_id !== undefined && response.data.fiscal_printer_id !== null ? response.data.fiscal_printer_id : null,
         payment_type_mappings: response.data.payment_type_mappings || {},
         service_mappings: response.data.service_mappings || { delivery_prepaid: "", delivery_cod: "", additional_services: {} },
         product_mappings: response.data.product_mappings || {},
@@ -96,6 +100,8 @@ export function SubiektMappingsTab({ integrationId }: SubiektMappingsTabProps) {
     if (currentConfig) {
       setConfigState({
         ksef_enabled: currentConfig.ksef_enabled || false,
+        fiscalization_enabled: currentConfig.fiscalization_enabled || false,
+        fiscal_printer_id: currentConfig.fiscal_printer_id !== undefined && currentConfig.fiscal_printer_id !== null ? currentConfig.fiscal_printer_id : null,
         payment_type_mappings: currentConfig.payment_type_mappings || {},
         service_mappings: {
           delivery_prepaid: currentConfig.service_mappings.delivery_prepaid || "",
@@ -226,6 +232,64 @@ export function SubiektMappingsTab({ integrationId }: SubiektMappingsTabProps) {
                       />
                     </div>
 
+                    <div className="flex items-center justify-between p-4 rounded-xl border border-primary/10 bg-primary/5">
+                      <div className="space-y-1 pr-6">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground">Włącz automatyczną fiskalizację (dla klientów detalicznych)</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" className="text-muted-foreground hover:text-primary transition-colors">
+                                <HelpCircle className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              Po włączeniu tej opcji, zamówienia detaliczne (bez podanego NIP-u) będą automatycznie rejestrowane i drukowane jako paragony fiskalne.
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Obsługuje automatyczne drukowanie paragonów fiskalnych w tle na wybranej drukarce.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={configState.fiscalization_enabled || false}
+                        onCheckedChange={(checked) => setConfigState({ 
+                          ...configState, 
+                          fiscalization_enabled: checked,
+                          fiscal_printer_id: checked ? (configState.fiscal_printer_id || null) : null
+                        })}
+                      />
+                    </div>
+
+                    {configState.fiscalization_enabled && (
+                      <div className="space-y-1.5 p-4 rounded-xl border border-border bg-card">
+                        <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                          ID Drukarki Fiskalnej w Subiekcie
+                          <span className="text-destructive">*</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" className="text-muted-foreground hover:text-primary transition-colors">
+                                <HelpCircle className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              Podaj identyfikator drukarki fiskalnej zdefiniowany w systemie Subiekt GT.
+                            </TooltipContent>
+                          </Tooltip>
+                        </label>
+                        <Input
+                          type="number"
+                          placeholder="np. 1"
+                          value={configState.fiscal_printer_id !== null && configState.fiscal_printer_id !== undefined ? configState.fiscal_printer_id : ""}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
+                            setConfigState({ ...configState, fiscal_printer_id: isNaN(val as number) ? null : val });
+                          }}
+                          required
+                        />
+                      </div>
+                    )}
+
                     <div className="rounded-xl border border-border/80 bg-card p-4 flex gap-3.5">
                       <Info className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
                       <div className="space-y-1">
@@ -283,6 +347,7 @@ export function SubiektMappingsTab({ integrationId }: SubiektMappingsTabProps) {
             Wszystkie zmiany zapisywane są centralnie w Aplikacji Matce.
           </span>
           <Button 
+            type="button"
             onClick={handleSaveAll} 
             disabled={saveConfigMutation.isPending}
             className="shadow-lg shadow-primary/15 hover:shadow-primary/20 transition-all gap-2"
@@ -313,8 +378,39 @@ function SectionPaymentMappings({
   onChange: (p: Record<string, string>) => void;
 }) {
   const [mappings, setMappings] = useState<{ platformStatus: string; subiektForm: string }[]>([]);
+  const [customRows, setCustomRows] = useState<Record<number, boolean>>({});
+  const lastSentRef = useRef<Record<string, string> | null>(null);
+
+  const PREDEFINED_KEYS = [
+    { value: "ONLINE", label: "Płatność online (szybki przelew, Blik, karta)" },
+    { value: "CASH_ON_DELIVERY", label: "Pobranie - Domyślne (wszyscy kurierzy)" },
+    { value: "CASH_ON_DELIVERY:SUUS", label: "Pobranie - Rohlig Suus (SUUS)" },
+    { value: "CASH_ON_DELIVERY:GEIS", label: "Pobranie - Geis (GEIS)" },
+    { value: "CASH_ON_DELIVERY:APACZKA", label: "Pobranie - Apaczka (APACZKA)" },
+    { value: "CASH_ON_DELIVERY:DPD", label: "Pobranie - DPD" },
+    { value: "CASH_ON_DELIVERY:DHL", label: "Pobranie - DHL" },
+    { value: "CASH_ON_DELIVERY:INPOST", label: "Pobranie - Paczkomaty / Kurier InPost" },
+    { value: "CASH_ON_DELIVERY:GLS", label: "Pobranie - GLS" },
+    { value: "CASH_ON_DELIVERY:UPS", label: "Pobranie - UPS" },
+    { value: "CASH_ON_DELIVERY:FEDEX", label: "Pobranie - FedEx" },
+    { value: "CASH_ON_DELIVERY:ONE", label: "Pobranie - Allegro One (ONE)" },
+    { value: "CASH_ON_DELIVERY:ORLEN", label: "Pobranie - ORLEN Paczka (ORLEN)" },
+    { value: "CASH_ON_DELIVERY:POCZTA", label: "Pobranie - Poczta Polska / Pocztex" },
+  ];
 
   useEffect(() => {
+    // Sprawdzamy, czy zmiana pochodzi z naszego własnego wpisywania
+    if (lastSentRef.current) {
+      const currentEntries = Object.entries(config.payment_type_mappings);
+      const lastEntries = Object.entries(lastSentRef.current);
+      if (currentEntries.length === lastEntries.length) {
+        const isSame = currentEntries.every(([k, v]) => lastSentRef.current?.[k] === v);
+        if (isSame) {
+          return;
+        }
+      }
+    }
+
     const list = Object.entries(config.payment_type_mappings).map(([k, v]) => ({
       platformStatus: k,
       subiektForm: v
@@ -327,13 +423,17 @@ function SectionPaymentMappings({
   }, [config.payment_type_mappings]);
 
   const handleAdd = () => {
-    setMappings([...mappings, { platformStatus: "", subiektForm: "" }]);
+    setMappings([...mappings, { platformStatus: "ONLINE", subiektForm: "" }]);
   };
 
   const handleRemove = (idx: number) => {
     const updated = mappings.filter((_, i) => i !== idx);
     setMappings(updated);
     triggerChange(updated);
+    // Usuwamy stan custom dla tego wiersza
+    const newCustomRows = { ...customRows };
+    delete newCustomRows[idx];
+    setCustomRows(newCustomRows);
   };
 
   const handleFieldChange = (idx: number, field: "platformStatus" | "subiektForm", value: string) => {
@@ -350,6 +450,7 @@ function SectionPaymentMappings({
         record[item.platformStatus.trim().toUpperCase()] = item.subiektForm.trim();
       }
     }
+    lastSentRef.current = record;
     onChange(record);
   };
 
@@ -367,11 +468,24 @@ function SectionPaymentMappings({
             Powiąż statusy płatności z platformy (np. Allegro, Shopify) z formami płatności zdefiniowanymi w Subiekcie GT.
           </CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={handleAdd} className="gap-1.5 shrink-0">
+        <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="gap-1.5 shrink-0">
           <Plus className="h-4 w-4" /> Dodaj mapowanie
         </Button>
       </CardHeader>
       <CardContent className="pt-6 space-y-4">
+        <div className="flex gap-3 p-3.5 rounded-xl border border-indigo-500/15 bg-indigo-500/5 text-xs text-muted-foreground leading-relaxed">
+          <Info className="h-4.5 w-4.5 text-indigo-400 shrink-0 mt-0.5" />
+          <div>
+            <strong className="text-foreground font-semibold block mb-0.5">Wskazówka: Mapowanie pobrań według kuriera</strong>
+            Aby przypisać unikalną formę płatności w Subiekcie w zależności od kuriera realizującego pobranie (COD), dodaj mapowanie wpisując klucz w formacie:{" "}
+            <code className="bg-slate-950/40 px-1 py-0.5 rounded font-mono text-white text-[10px]">CASH_ON_DELIVERY:KOD_KURIERA</code>{" "}
+            (np. <code className="bg-slate-950/40 px-1 py-0.5 rounded font-mono text-white text-[10px]">CASH_ON_DELIVERY:SUUS</code>,{" "}
+            <code className="bg-slate-950/40 px-1 py-0.5 rounded font-mono text-white text-[10px]">CASH_ON_DELIVERY:GEIS</code> lub{" "}
+            <code className="bg-slate-950/40 px-1 py-0.5 rounded font-mono text-white text-[10px]">CASH_ON_DELIVERY:APACZKA</code>).{" "}
+            Brak dedykowanego wpisu spowoduje automatyczny fallback do domyślnego klucza <code className="bg-slate-950/40 px-1 py-0.5 rounded font-mono text-white text-[10px]">CASH_ON_DELIVERY</code>.
+          </div>
+        </div>
+
         {mappings.length === 0 ? (
           <div className="text-center py-10 border border-dashed rounded-xl bg-muted/20 text-muted-foreground text-sm">
             Brak zdefiniowanych mapowań płatności. Kliknij przycisk powyżej, aby dodać pierwsze powiązanie.
@@ -387,53 +501,106 @@ function SectionPaymentMappings({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mappings.map((mapping, idx) => (
-                  <TableRow key={idx} className="hover:bg-muted/10">
-                    <TableCell className="align-middle">
-                      <Input
-                        placeholder="np. ONLINE lub CASH_ON_DELIVERY"
-                        value={mapping.platformStatus}
-                        onChange={(e) => handleFieldChange(idx, "platformStatus", e.target.value)}
-                        className="font-mono text-sm"
-                      />
-                    </TableCell>
-                    <TableCell className="align-middle">
-                      {paymentForms.length > 0 ? (
-                        <Select
-                          value={mapping.subiektForm}
-                          onValueChange={(val) => handleFieldChange(idx, "subiektForm", val)}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Wybierz formę płatności..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {paymentForms.map((form) => (
-                              <SelectItem key={form.id} value={form.name}>
-                                {form.name}
+                {mappings.map((mapping, idx) => {
+                  const isCustom =
+                    customRows[idx] ||
+                    (mapping.platformStatus !== "" &&
+                      !PREDEFINED_KEYS.some((k) => k.value === mapping.platformStatus));
+
+                  return (
+                    <TableRow key={idx} className="hover:bg-muted/10">
+                      <TableCell className="align-middle">
+                        {isCustom ? (
+                          <div className="relative flex items-center gap-1.5 w-full">
+                            <Input
+                              placeholder="np. CASH_ON_DELIVERY:GEODIS"
+                              value={mapping.platformStatus}
+                              onChange={(e) => handleFieldChange(idx, "platformStatus", e.target.value)}
+                              className="font-mono text-xs pr-9 h-9"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setCustomRows((prev) => ({ ...prev, [idx]: false }));
+                                handleFieldChange(idx, "platformStatus", "ONLINE");
+                              }}
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 rounded-lg"
+                              title="Wybierz z listy popularnych"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Select
+                            value={mapping.platformStatus}
+                            onValueChange={(val) => {
+                              if (val === "custom") {
+                                setCustomRows((prev) => ({ ...prev, [idx]: true }));
+                                handleFieldChange(idx, "platformStatus", "");
+                              } else {
+                                handleFieldChange(idx, "platformStatus", val);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-full h-9 text-xs">
+                              <SelectValue placeholder="Wybierz typ płatności..." />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/35 bg-[#0a0c16]/95 backdrop-blur-lg">
+                              {PREDEFINED_KEYS.map((k) => (
+                                <SelectItem key={k.value} value={k.value} className="text-xs">
+                                  {k.label}
+                                </SelectItem>
+                              ))}
+                              <div className="h-px bg-border/40 my-1" />
+                              <SelectItem value="custom" className="text-xs font-semibold text-indigo-400">
+                                Niestandardowy klucz (wpisz ręcznie)...
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          placeholder="Dokładna nazwa formy w Subiekcie"
-                          value={mapping.subiektForm}
-                          onChange={(e) => handleFieldChange(idx, "subiektForm", e.target.value)}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right align-middle">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg"
-                        onClick={() => handleRemove(idx)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
+                      <TableCell className="align-middle">
+                        {paymentForms.length > 0 ? (
+                          <Select
+                            value={mapping.subiektForm}
+                            onValueChange={(val) => handleFieldChange(idx, "subiektForm", val)}
+                          >
+                            <SelectTrigger className="w-full h-9 text-xs">
+                              <SelectValue placeholder="Wybierz formę płatności..." />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl border-border/35 bg-[#0a0c16]/95 backdrop-blur-lg">
+                              {paymentForms.map((form) => (
+                                <SelectItem key={form.id} value={form.name} className="text-xs">
+                                  {form.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            placeholder="Dokładna nazwa formy w Subiekcie"
+                            value={mapping.subiektForm}
+                            onChange={(e) => handleFieldChange(idx, "subiektForm", e.target.value)}
+                            className="h-9 text-xs"
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right align-middle">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg"
+                          onClick={() => handleRemove(idx)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -455,8 +622,28 @@ function SectionServiceMappings({
 }) {
   const [fixedServices, setFixedServices] = useState({ delivery_prepaid: "", delivery_cod: "" });
   const [dynamicServices, setDynamicServices] = useState<{ code: string; symbol: string }[]>([]);
+  const lastSentRef = useRef<ServiceMappings | null>(null);
 
   useEffect(() => {
+    // Sprawdzamy, czy zmiana pochodzi z naszego własnego wpisywania
+    if (lastSentRef.current) {
+      const current = config.service_mappings;
+      const last = lastSentRef.current;
+      if (
+        current.delivery_prepaid === last.delivery_prepaid &&
+        current.delivery_cod === last.delivery_cod
+      ) {
+        const currentEntries = Object.entries(current.additional_services || {});
+        const lastEntries = Object.entries(last.additional_services || {});
+        if (currentEntries.length === lastEntries.length) {
+          const isSame = currentEntries.every(([k, v]) => last.additional_services?.[k] === v);
+          if (isSame) {
+            return;
+          }
+        }
+      }
+    }
+
     setFixedServices({
       delivery_prepaid: config.service_mappings.delivery_prepaid || "",
       delivery_cod: config.service_mappings.delivery_cod || ""
@@ -501,11 +688,13 @@ function SectionServiceMappings({
         additional[item.code.trim()] = item.symbol.trim();
       }
     }
-    onChange({
+    const payload = {
       delivery_prepaid: fixed.delivery_prepaid.trim(),
       delivery_cod: fixed.delivery_cod.trim(),
       additional_services: additional
-    });
+    };
+    lastSentRef.current = payload;
+    onChange(payload);
   };
 
   return (
@@ -579,7 +768,7 @@ function SectionServiceMappings({
                 </TooltipContent>
               </Tooltip>
             </h3>
-            <Button variant="outline" size="sm" onClick={handleAddDynamic} className="gap-1.5">
+            <Button type="button" variant="outline" size="sm" onClick={handleAddDynamic} className="gap-1.5">
               <Plus className="h-4 w-4" /> Dodaj usługę dynamiczną
             </Button>
           </div>
@@ -618,6 +807,7 @@ function SectionServiceMappings({
                       </TableCell>
                       <TableCell className="text-right align-middle">
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
                           className="text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg"
@@ -906,7 +1096,7 @@ function SectionProductMappings({
               />
             </div>
             <div className="md:col-span-2">
-              <Button onClick={handleAdd} className="w-full gap-1">
+              <Button type="button" onClick={handleAdd} className="w-full gap-1">
                 <Plus className="h-4 w-4" /> Dodaj
               </Button>
             </div>
@@ -957,6 +1147,7 @@ function SectionProductMappings({
                     </TableCell>
                     <TableCell className="text-right align-middle">
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         className="text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg"
@@ -980,6 +1171,7 @@ function SectionProductMappings({
             </span>
             <div className="flex items-center gap-1.5">
               <Button
+                type="button"
                 variant="outline"
                 size="icon"
                 disabled={currentPage === 1}
@@ -989,6 +1181,7 @@ function SectionProductMappings({
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <Button
+                type="button"
                 variant="outline"
                 size="icon"
                 disabled={currentPage === totalPages}

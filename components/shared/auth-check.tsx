@@ -8,21 +8,22 @@ import { Loader2 } from "lucide-react";
 
 export function AuthCheck({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  // Pobieramy flagę nawodnienia i status autentykacji bezpośrednio ze store'a
-  const { isAuthenticated, _hasHydrated } = useAuthStore();
+  const { isAuthenticated, user, _hasHydrated } = useAuthStore();
 
   useEffect(() => {
-    // Uruchamiamy logikę tylko wtedy, gdy stan jest już nawodniony
-    if (_hasHydrated) {
-      // Jeśli stan jest wczytany i użytkownik NIE jest zalogowany, przekieruj
-      if (!isAuthenticated) {
-        router.replace("/login");
-      }
-    }
-  }, [_hasHydrated, isAuthenticated, router]);
+    if (!_hasHydrated) return;
 
-  // Jeśli stan nie jest jeszcze nawodniony, pokazujemy ekran ładowania.
-  // To zapobiega "mignięciu" i przedwczesnemu przekierowaniu.
+    if (!isAuthenticated) {
+      router.replace("/login");
+      return;
+    }
+
+    // Super admin nie ma dostępu do zwykłego dashboardu
+    if (user?.is_super_admin) {
+      router.replace("/superadmin");
+    }
+  }, [_hasHydrated, isAuthenticated, user, router]);
+
   if (!_hasHydrated) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
@@ -31,7 +32,15 @@ export function AuthCheck({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Jeśli stan jest nawodniony i użytkownik jest zalogowany
-  // (bo `useEffect` by go już przekierował, gdyby nie był), renderujemy chronioną treść.
+  // Jeśli superadmin trafił tutaj, nie renderuj nic (redirect trwa)
+  if (!isAuthenticated || user?.is_super_admin) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return <>{children}</>;
 }
+

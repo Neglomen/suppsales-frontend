@@ -233,6 +233,18 @@ export function InvoicePreviewDialog({
               </div>
             </div>
 
+            {/* Odbiorca */}
+            {invoice.recipient_name && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3 flex items-center gap-2">
+                  <User className="h-3.5 w-3.5" /> Odbiorca
+                </h3>
+                <div className="rounded-lg border p-3 space-y-1.5 bg-muted/20">
+                  <p className="text-sm font-medium">{invoice.recipient_name}</p>
+                </div>
+              </div>
+            )}
+
             <Separator />
 
             {/* Szczegóły */}

@@ -13,7 +13,7 @@ import toast from "react-hot-toast";
 import { DeliveryMethodMapping } from "@/types/delivery-method-mapping";
 import { ServiceIntegration } from "@/types/service-integration";
 import { PackageDefinition } from "@/types/package-definition";
-import { SUUS_PACKAGE_CODES } from "@/lib/courier-data";
+import { SUUS_PACKAGE_CODES, RABEN_PACKAGE_CODES } from "@/lib/courier-data";
 import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
@@ -42,7 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AllegroIcon, BaseLinkerIcon } from "@/components/shared/icons";
+import { AllegroIcon, BaseLinkerIcon, EmpikIcon } from "@/components/shared/icons";
 
 interface DeliveryMappingFormDialogProps {
   isOpen: boolean;
@@ -85,14 +85,25 @@ export function DeliveryMappingFormDialog({
 
   const filteredPackages = useMemo(() => {
 
-    if (!selectedIntegration || selectedIntegration.provider_type !== "SUUS") {
+    if (!selectedIntegration) {
       return packageDefinitions.filter((pkg) => !pkg.courier_code);
     }
 
-    return packageDefinitions.filter(
-      (pkg) =>
-        pkg.courier_code && SUUS_PACKAGE_CODES.hasOwnProperty(pkg.courier_code)
-    );
+    if (selectedIntegration.provider_type === "SUUS") {
+      return packageDefinitions.filter(
+        (pkg) =>
+          pkg.courier_code && SUUS_PACKAGE_CODES.hasOwnProperty(pkg.courier_code)
+      );
+    }
+
+    if (selectedIntegration.provider_type === "RABEN") {
+      return packageDefinitions.filter(
+        (pkg) =>
+          pkg.courier_code && RABEN_PACKAGE_CODES.hasOwnProperty(pkg.courier_code)
+      );
+    }
+
+    return packageDefinitions.filter((pkg) => !pkg.courier_code);
   }, [selectedIntegrationId, courierIntegrations, packageDefinitions]);
 
   useEffect(() => {
@@ -173,10 +184,13 @@ export function DeliveryMappingFormDialog({
               </p>
               <div className="flex items-center gap-2 mt-1">
                 {sourceIntegration?.provider_type === "ALLEGRO" && (
-                  <AllegroIcon className="h-5 w-5" />
+                  <AllegroIcon className="h-5 w-auto shrink-0" />
                 )}
                 {sourceIntegration?.provider_type === "BASELINKER" && (
-                  <BaseLinkerIcon className="h-5 w-5 rounded-sm" />
+                  <BaseLinkerIcon className="h-5 w-auto rounded-sm shrink-0" />
+                )}
+                {sourceIntegration?.provider_type === "EMPIK" && (
+                  <EmpikIcon className="h-5 w-auto rounded-sm shrink-0" />
                 )}
                 <p className="font-semibold">
                   {mapping?.marketplace_delivery_method}

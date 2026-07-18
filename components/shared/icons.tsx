@@ -344,19 +344,106 @@ export const KsefIcon = (props: SVGProps<SVGSVGElement>) => (
 );
 
 export const EmpikIcon = (props: SVGProps<SVGSVGElement>) => (
-  <svg viewBox="0 0 100 50" {...props}>
-    <rect width="100" height="50" rx="8" fill="#1E1E1E" />
+  <svg viewBox="0 0 100 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <rect width="100" height="40" rx="8" fill="#ffffff" />
     <text
       x="50%"
       y="50%"
       textAnchor="middle"
-      dy=".3em"
-      fontSize="20"
-      fontWeight="bold"
-      fill="#FFFFFF"
-      fontFamily="system-ui, sans-serif"
+      dominantBaseline="middle"
+      fontSize="21"
+      fontWeight="900"
+      fill="#000000"
+      fontFamily="system-ui, -apple-system, sans-serif"
+      letterSpacing="-0.5px"
     >
       empik
     </text>
   </svg>
 );
+
+export const GeisIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 100 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <rect width="100" height="40" rx="8" fill="#ffffff" />
+    <g transform="skewX(-10)">
+      <text
+        x="45%"
+        y="50%"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="24"
+        fontWeight="900"
+        fill="#004F9F"
+        fontFamily="'Outfit', 'Inter', system-ui, sans-serif"
+        letterSpacing="-0.5px"
+      >
+        Geis
+      </text>
+    </g>
+    <rect x="25" y="30" width="45" height="3" fill="#F1C40F" rx="1.5" />
+  </svg>
+);
+
+export const GeodisIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 130 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <rect width="130" height="40" rx="8" fill="#ffffff" />
+    {/* Red left accent bar */}
+    <rect x="8" y="8" width="5" height="24" rx="2" fill="#E30613" />
+    {/* GEODIS wordmark */}
+    <text
+      x="22"
+      y="27"
+      fontSize="20"
+      fontWeight="900"
+      fill="#1A1A2E"
+      fontFamily="'Outfit', 'Inter', system-ui, sans-serif"
+      letterSpacing="1px"
+    >
+      GEODIS
+    </text>
+  </svg>
+);
+
+export const InPostIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 100 35"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    <rect width="100" height="35" rx="6" fill="#FFCC00" />
+    <text
+      x="50"
+      y="24"
+      fontFamily="sans-serif"
+      fontSize="16"
+      fontWeight="bold"
+      fill="#111111"
+      textAnchor="middle"
+    >
+      InPost
+    </text>
+  </svg>
+);
+
+export const RabenIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 100 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <rect width="100" height="40" rx="8" fill="#0c2340" />
+    <text
+      x="50%"
+      y="50%"
+      textAnchor="middle"
+      dominantBaseline="middle"
+      fontSize="20"
+      fontWeight="900"
+      fill="#ffffff"
+      fontFamily="'Outfit', 'Inter', system-ui, sans-serif"
+      letterSpacing="1px"
+    >
+      Raben
+    </text>
+    <rect x="15" y="32" width="70" height="3" fill="#E30613" rx="1.5" />
+  </svg>
+);
+
+

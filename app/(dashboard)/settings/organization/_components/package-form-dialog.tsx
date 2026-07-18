@@ -8,7 +8,7 @@ import api from "@/lib/api";
 import toast from "react-hot-toast";
 
 import { PackageDefinition } from "@/types/package-definition";
-import { SUUS_PACKAGE_CODES } from "@/lib/courier-data";
+import { SUUS_PACKAGE_CODES, RABEN_PACKAGE_CODES } from "@/lib/courier-data";
 import {
   Dialog,
   DialogContent,
@@ -243,11 +243,22 @@ export function PackageFormDialog({
                           </SelectItem>
                         )
                       )}
+                      <Separator />
+                      <Label className="px-2 py-1.5 text-sm font-semibold">
+                        Kody Raben
+                      </Label>
+                      {Object.entries(RABEN_PACKAGE_CODES).map(
+                        ([code, name]) => (
+                          <SelectItem key={code} value={code}>
+                            {code} - {name}
+                          </SelectItem>
+                        )
+                      )}
                     </SelectContent>
                   </Select>
                   <FormDescription>
                     Wybierz, jeśli to opakowanie jest specyficzne dla systemu
-                    SUUS.
+                    SUUS lub Raben.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

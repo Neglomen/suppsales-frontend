@@ -9,6 +9,9 @@ import {
   BaseLinkerIcon,
   SubiektIcon,
   SuusIcon,
+  GeisIcon,
+  GeodisIcon,
+  RabenIcon,
 } from "@/components/shared/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +44,9 @@ export const IntegrationCard = ({
     SUBIEKT_GT: <SubiektIcon className="w-24 h-auto drop-shadow-lg" />,
     KSEF: <KsefIcon className="w-24 h-auto drop-shadow-lg" />,
     APACZKA: <Package className="w-12 h-12 text-primary drop-shadow-lg" />,
+    GEIS: <GeisIcon className="w-28 h-auto drop-shadow-lg" />,
+    GEODIS: <GeodisIcon className="w-28 h-auto drop-shadow-lg" />,
+    RABEN: <RabenIcon className="w-28 h-auto drop-shadow-lg" />,
   };
 
   return (

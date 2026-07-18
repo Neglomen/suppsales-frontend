@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import { usePrintHub } from "@/hooks/use-print-hub";
 import { printHubService } from "@/lib/print-hub-service";
+import { useMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -99,6 +100,8 @@ interface PaginatedInvoicesResponse {
 interface InvoiceFilters {
   search?: string;
   source?: string;
+  ksefCategory?: string;
+  erpSyncStatus?: string;
 }
 
 // ─── Helpery ─────────────────────────────────────────────────────────────────
@@ -149,6 +152,7 @@ const SourceBadge = ({ source }: { source: string | null }) => {
 export default function InvoicesPage() {
   const queryClient = useQueryClient();
   const { isEnabled: printHubEnabled, status: printHubStatus, defaultInvoicePrinter } = usePrintHub();
+  const isMobile = useMobile(768);
   
   const [activeTab, setActiveTab] = useState<"ksef" | "other">("ksef");
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -336,7 +340,7 @@ export default function InvoicesPage() {
         accessorKey: "invoice_number",
         header: "Numer faktury",
         cell: ({ row }) => (
-          <div className="min-w-[180px] pl-2 flex items-start gap-4">
+          <div className="min-w-[140px] pl-2 flex items-start gap-3">
             <div className="flex flex-col items-center gap-1.5 mt-0.5 shrink-0">
               {(() => {
                 const rawType = row.original.invoice_type || "VAT";
@@ -376,10 +380,10 @@ export default function InvoicesPage() {
                 return <Badge variant="outline" className="h-[18px] text-[9px] px-1.5 py-0 uppercase font-bold tracking-wider leading-none shadow-sm mt-1">{rawType}</Badge>;
               })()}
             </div>
-            <div className="pt-2">
-              <p className="font-bold text-sm premium-gradient-text">{row.original.invoice_number}</p>
+            <div className="pt-2 overflow-hidden">
+              <p className="font-bold text-xs premium-gradient-text truncate max-w-[110px]" title={row.original.invoice_number}>{row.original.invoice_number}</p>
               {row.original.original_invoice_number && (
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[160px]">
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[110px]" title={row.original.original_invoice_number}>
                   {row.original.original_invoice_number}
                 </p>
               )}
@@ -391,8 +395,8 @@ export default function InvoicesPage() {
         accessorKey: "seller_name",
         header: "Sprzedawca",
         cell: ({ row }) => (
-          <div className="min-w-[220px] pr-4">
-            <p className="text-sm font-bold truncate">{row.original.seller_name || "—"}</p>
+          <div className="min-w-[140px] max-w-[170px] pr-4">
+            <p className="text-sm font-bold truncate" title={row.original.seller_name || undefined}>{row.original.seller_name || "—"}</p>
             {row.original.seller_nip && (
               <p className="text-[11px] text-muted-foreground font-mono">NIP: {row.original.seller_nip}</p>
             )}
@@ -470,6 +474,18 @@ export default function InvoicesPage() {
     ];
 
     if (activeTab === "ksef") {
+      baseCols.splice(3, 0, {
+        accessorKey: "recipient_name",
+        header: "Odbiorca",
+        cell: ({ row }) => (
+          <div className="min-w-[130px] max-w-[170px] pr-4">
+            <p className="text-sm font-medium truncate" title={row.original.recipient_name || undefined}>
+              {row.original.recipient_name || "—"}
+            </p>
+          </div>
+        ),
+      });
+
       baseCols.push({
         accessorKey: "ksef_category",
         header: "Kategoria",
@@ -506,7 +522,7 @@ export default function InvoicesPage() {
                     variant="outline"
                     size="sm"
                     className={cn(
-                      "h-8 w-[140px] justify-start text-xs font-medium px-3 border hover:border-border transition-colors",
+                      "h-8 w-[115px] justify-start text-xs font-medium px-3 border hover:border-border transition-colors",
                       display.bg
                     )}
                   >
@@ -632,7 +648,7 @@ export default function InvoicesPage() {
               <Download className="mr-2 h-4 w-4" />
               Pobierz PDF
             </DropdownMenuItem>
-            {printHubEnabled && (
+            {printHubEnabled && !isMobile && (
               <DropdownMenuItem onClick={() => handleSinglePrint(row.original)}>
                 <Printer className="mr-2 h-4 w-4" />
                 Drukuj (Print Hub)
@@ -650,7 +666,7 @@ export default function InvoicesPage() {
     });
 
     return baseCols;
-  }, [activeTab, printHubEnabled, updateInvoiceDetailsMutation.isPending, processingInvoiceIds]);
+  }, [activeTab, printHubEnabled, isMobile, updateInvoiceDetailsMutation.isPending, processingInvoiceIds]);
 
   const table = useReactTable({
     data: data?.items ?? [],
@@ -914,7 +930,7 @@ export default function InvoicesPage() {
     setIsKsefSyncing(true);
     const tid = toast.loading("Pobieranie faktur z KSeF...");
     try {
-      const intRes = await api.get("/service-integrations/", { params: { category: "GOVERNMENT" } });
+      const intRes = await api.get("/service-integrations", { params: { category: "GOVERNMENT" } });
       const ksefIntegration = (intRes.data as any[]).find((i) => i.provider_type === "KSEF");
       if (!ksefIntegration) {
         toast.error("Brak aktywnej integracji z KSeF.", { id: tid });
@@ -930,7 +946,7 @@ export default function InvoicesPage() {
     }
   }, []);
 
-  const hasFilters = !!(filters.search || filters.source);
+  const hasFilters = !!(filters.search || filters.source || filters.ksefCategory || filters.erpSyncStatus);
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -938,20 +954,20 @@ export default function InvoicesPage() {
     <div className="flex flex-col h-full gap-0">
       {/* Nagłówek i Zakładki */}
       <div className="px-6 pt-6 pb-2 flex-shrink-0 border-b border-border/40 bg-card/40">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10">
-              <Receipt className="h-6 w-6 text-primary" />
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-primary/10 shrink-0">
+              <Receipt className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Faktury Zakupowe</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Faktury Zakupowe</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 hidden sm:block">
                 {data ? `${data.total.toLocaleString("pl-PL")} pozycj${data.total === 1 ? 'a' : 'i'} ` : "Ładowanie..."}
                 (sortowane po dacie wystawienia)
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-3 shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -994,19 +1010,19 @@ export default function InvoicesPage() {
       </div>
 
       {/* Toolbar z filtrami */}
-      <div className="px-6 py-4 flex-shrink-0 bg-background/50 backdrop-blur-md sticky top-0 z-20">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <div className="relative flex-1 max-w-[280px]">
+      <div className="px-3 sm:px-6 py-3 sm:py-4 flex-shrink-0 bg-background/50 backdrop-blur-md sticky top-0 z-20">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:flex-1 sm:max-w-[280px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="Szukaj (nr, wystawca, nabywca)..."
+              placeholder="Szukaj..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-9 h-9 bg-background focus-visible:ring-1"
+              className="pl-9 h-9 bg-background focus-visible:ring-1 w-full"
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant={"outline"} className={cn("h-9 border-dashed text-left font-normal", !dateRange && "text-muted-foreground")}>
@@ -1055,6 +1071,48 @@ export default function InvoicesPage() {
                   <SelectItem value="ACTION">Action</SelectItem>
                 </SelectContent>
               </Select>
+            )}
+
+            {activeTab === "ksef" && (
+              <>
+                <Select
+                  value={filters.erpSyncStatus ?? "ALL"}
+                  onValueChange={(v) => {
+                    setFilters((prev) => ({ ...prev, erpSyncStatus: v === "ALL" ? undefined : v }));
+                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                  }}
+                >
+                  <SelectTrigger className="w-[150px] h-9 border-dashed">
+                    <Filter className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Status ERP" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Status ERP: Wszystkie</SelectItem>
+                    <SelectItem value="PENDING">Oczekuje</SelectItem>
+                    <SelectItem value="SYNCED">Zsynchronizowano</SelectItem>
+                    <SelectItem value="FAILED">Błąd</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={filters.ksefCategory ?? "ALL"}
+                  onValueChange={(v) => {
+                    setFilters((prev) => ({ ...prev, ksefCategory: v === "ALL" ? undefined : v }));
+                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                  }}
+                >
+                  <SelectTrigger className="w-[160px] h-9 border-dashed">
+                    <Filter className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="Kategoria KSeF" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Kategoria: Wszystkie</SelectItem>
+                    <SelectItem value="NONE">Brak</SelectItem>
+                    <SelectItem value="PURCHASE">Zakupowa</SelectItem>
+                    <SelectItem value="COST">Kosztowa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
             )}
           </div>
 
@@ -1105,27 +1163,31 @@ export default function InvoicesPage() {
                       <Download className="mr-2 h-4 w-4 text-primary" />
                       Pobierz archiwum ZIP
                     </DropdownMenuItem>
-                    {printHubEnabled && (
+                    {printHubEnabled && !isMobile && (
                       <DropdownMenuItem onClick={handleMassivePrint} className="py-2 focus:bg-primary/5">
                         <Printer className="mr-2 h-4 w-4 text-primary" />
                         Drukuj sekwencyjnie
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleCheckSubiekt} className="py-2">
-                      <CheckSquare className="mr-2 h-4 w-4 text-muted-foreground" />
-                      Weryfikacja ERP
-                    </DropdownMenuItem>
-                    {activeTab === "ksef" ? (
-                      <DropdownMenuItem onClick={handleCreateKsefInSubiekt} className="py-2 focus:bg-blue-50 focus:text-blue-700">
-                        <FilePlus2 className="mr-2 h-4 w-4 text-blue-600" />
-                        Eksportuj FZ z KSeF do Subiekta
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem onClick={handleCreateSubiekt} className="py-2 focus:bg-emerald-50 focus:text-emerald-700">
-                        <FilePlus2 className="mr-2 h-4 w-4 text-emerald-600" />
-                        Eksportuj do Subiekta
-                      </DropdownMenuItem>
+                    {!isMobile && (
+                      <>
+                        <DropdownMenuItem onClick={handleCheckSubiekt} className="py-2">
+                          <CheckSquare className="mr-2 h-4 w-4 text-muted-foreground" />
+                          Weryfikacja ERP
+                        </DropdownMenuItem>
+                        {activeTab === "ksef" ? (
+                          <DropdownMenuItem onClick={handleCreateKsefInSubiekt} className="py-2 focus:bg-blue-50 focus:text-blue-700">
+                            <FilePlus2 className="mr-2 h-4 w-4 text-blue-600" />
+                            Eksportuj FZ z KSeF do Subiekta
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onClick={handleCreateSubiekt} className="py-2 focus:bg-emerald-50 focus:text-emerald-700">
+                            <FilePlus2 className="mr-2 h-4 w-4 text-emerald-600" />
+                            Eksportuj do Subiekta
+                          </DropdownMenuItem>
+                        )}
+                      </>
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1136,10 +1198,10 @@ export default function InvoicesPage() {
       </div>
 
       {/* Tabela */}
-      <div className="flex-1 overflow-hidden px-6 pb-6">
+      <div className="flex-1 overflow-hidden px-2 sm:px-6 pb-6">
         <div className="h-full flex flex-col rounded-xl border border-border/40 bg-card shadow-sm overflow-hidden relative">
           <div className="flex-1 overflow-auto smooth-scroll">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[640px]">
               <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-md border-b border-border/40">
                 {table.getHeaderGroups().map((hg) => (
                   <tr key={hg.id}>

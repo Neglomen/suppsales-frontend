@@ -115,8 +115,12 @@ export function ChatPanel({
     );
   }
 
-  const defaultOpenThreadId = threads.find(
-    (t) => t.order_id === currentOrderId
+  // Otwieramy: najpierw wątek powiązany z tym zamówieniem, a jeśli brak – najnowszy wątek
+  const defaultOpenThreadId = (
+    threads.find((t) => t.order_id === currentOrderId) ??
+    [...threads].sort(
+      (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+    )[0]
   )?.id;
 
   return (

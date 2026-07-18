@@ -61,7 +61,7 @@ export function LinkOfferDialog({ productId, open, onOpenChange, onSuccess }: Li
 
   useEffect(() => {
     if (open && integrations.length === 0) {
-      api.get("/service-integrations/").then((res) => {
+      api.get("/service-integrations").then((res) => {
         setIntegrations(res.data.filter((i: any) => i.provider_type === "ALLEGRO" || i.category === "MARKETPLACE"));
       });
     }

@@ -4,7 +4,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { MarketplaceOrder } from "@/types/marketplace-order";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AllegroIcon, BaseLinkerIcon } from "@/components/shared/icons"; // Importuj ikony
+import { AllegroIcon, BaseLinkerIcon, EmpikIcon } from "@/components/shared/icons"; // Importuj ikony
 
 interface GetShippingTableColumnsProps {
   onPrepareShipment: (orderId: string) => void;
@@ -38,10 +38,13 @@ export const getShippingTableColumns = ({
     cell: ({ row }) => (
       <div className="flex items-center gap-2">
         {row.original.service_integration?.provider_type === "ALLEGRO" && (
-          <AllegroIcon className="h-4 w-4" />
+          <AllegroIcon className="h-[18px] w-auto shrink-0" />
         )}
         {row.original.service_integration?.provider_type === "BASELINKER" && (
-          <BaseLinkerIcon className="h-4 w-4 rounded-sm" />
+          <BaseLinkerIcon className="h-[18px] w-auto shrink-0" />
+        )}
+        {row.original.service_integration?.provider_type === "EMPIK" && (
+          <EmpikIcon className="h-[18px] w-auto rounded-sm shrink-0" />
         )}
         <span className="font-mono text-xs">
           {row.original.external_order_id}
@@ -63,6 +66,7 @@ export const getShippingTableColumns = ({
       // === BEZPIECZNY DOSTĘP DO DANYCH ===
       const allegroAddress = payload.delivery?.address;
       const baselinkerFullName = payload.delivery_fullname;
+      const empikAddress = row.original.delivery_address;
 
       if (allegroAddress) {
         return `${allegroAddress.firstName || ""} ${
@@ -71,6 +75,17 @@ export const getShippingTableColumns = ({
       }
       if (baselinkerFullName) {
         return `${baselinkerFullName}, ${payload.delivery_city || ""}`.trim();
+      }
+      if (empikAddress) {
+        return `${empikAddress.first_name || ""} ${
+          empikAddress.last_name || ""
+        }, ${empikAddress.city || ""}`.trim();
+      }
+      const empikCustomer = payload.customer;
+      if (empikCustomer) {
+        return `${empikCustomer.firstname || ""} ${
+          empikCustomer.lastname || ""
+        }`.trim();
       }
       return "Sprawdź szczegóły";
       // === KONIEC POPRAWKI ===
@@ -86,6 +101,8 @@ export const getShippingTableColumns = ({
       return (
         payload.delivery?.method?.name ||
         payload.delivery_method ||
+        payload.shipping_type_label ||
+        payload.shipping_type_code ||
         "Nie określono"
       );
       // === KONIEC POPRAWKI ===

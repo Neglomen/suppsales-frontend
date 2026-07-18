@@ -54,6 +54,7 @@ import {
   Loader2,
   Link2,
   RefreshCw,
+  ImageIcon,
 } from "lucide-react";
 
 // --- Typy ---
@@ -67,6 +68,10 @@ interface ProductSupplierMapping {
   supplierProductIndex?: string;
   supplier_integration_name?: string;
   supplierIntegrationName?: string;
+  marketplace_offer_name?: string;
+  marketplaceOfferName?: string;
+  marketplace_offer_image_url?: string;
+  marketplaceOfferImageUrl?: string;
 }
 
 // --- Schemat formularza ---
@@ -265,12 +270,36 @@ export function ProductSupplierMappings() {
     () => [
       {
         accessorKey: "marketplace_offer_id",
-        header: "ID oferty (platforma)",
-        cell: ({ row }) => (
-          <span className="font-mono text-xs text-primary">
-            {getField(row.original, "marketplaceOfferId", "marketplace_offer_id")}
-          </span>
-        ),
+        header: "Oferta (platforma)",
+        cell: ({ row }) => {
+          const offerId = getField(row.original, "marketplaceOfferId", "marketplace_offer_id");
+          const offerName = getField(row.original, "marketplaceOfferName", "marketplace_offer_name");
+          const imageUrl = getField(row.original, "marketplaceOfferImageUrl", "marketplace_offer_image_url");
+
+          return (
+            <div className="flex items-center gap-3">
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={offerName || offerId}
+                  className="h-10 w-10 min-w-10 rounded-md object-contain bg-white p-0.5 border border-border/50"
+                />
+              ) : (
+                <div className="flex bg-muted/50 h-10 w-10 min-w-10 rounded-md items-center justify-center border border-border/50 text-muted-foreground">
+                  <ImageIcon className="h-5 w-5" />
+                </div>
+              )}
+              <div className="flex flex-col overflow-hidden max-w-[280px]">
+                <span className="font-medium text-sm truncate animate-in fade-in duration-200" title={offerName || "Brak nazwy oferty"}>
+                  {offerName || "Brak nazwy oferty"}
+                </span>
+                <span className="font-mono text-[10px] text-muted-foreground truncate">
+                  {offerId}
+                </span>
+              </div>
+            </div>
+          );
+        },
       },
       {
         accessorKey: "supplier_integration_name",

@@ -142,7 +142,9 @@ export function MarketplaceOrderListColumn({
       // ### KONIEC KLUCZOWEJ POPRAWKI ###
     });
 
-  const allOrders = data?.pages.flatMap((page) => page.items) ?? [];
+  const rawOrders = data?.pages.flatMap((page) => page.items) ?? [];
+  // Eliminacja ewentualnych duplikatów po ID zamówienia w celu uniknięcia błędów kluczy w React
+  const allOrders = Array.from(new Map(rawOrders.map((order) => [order.id, order])).values());
   const parentRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({

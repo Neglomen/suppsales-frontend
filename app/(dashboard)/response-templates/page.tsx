@@ -214,10 +214,19 @@ export default function ResponseTemplatesPage() {
   };
 
   const handleCopy = (version: Template | Variant) => {
+    // Convert common HTML block/break tags to newlines to preserve formatting
+    const formatted = version.content
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<\/h[1-6]>/gi, "\n\n");
+
     const plainText =
-      new DOMParser().parseFromString(version.content, "text/html")
+      new DOMParser().parseFromString(formatted, "text/html")
         .documentElement.textContent || "";
-    navigator.clipboard.writeText(plainText);
+
+    navigator.clipboard.writeText(plainText.trim());
     setCopied(true);
     toast.success("Treść szablonu skopiowana do schowka!");
     setTimeout(() => setCopied(false), 2000);
@@ -628,15 +637,18 @@ export default function ResponseTemplatesPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="w-12 font-semibold text-right">Temat:</span>
-                              <span className="bg-background px-2 py-0.5 rounded border text-foreground font-semibold">
-                                {renderDemoPreview(activeVersion.title)}
-                              </span>
+                              <span
+                                className="bg-background px-2 py-0.5 rounded border text-foreground font-semibold"
+                                dangerouslySetInnerHTML={{
+                                  __html: renderDemoPreview(activeVersion.title),
+                                }}
+                              />
                             </div>
                           </div>
                           {/* Ciało E-maila */}
                           <div className="p-6 bg-background dark:bg-zinc-950 flex-grow overflow-y-auto">
                             <div
-                              className="prose prose-sm dark:prose-invert prose-blue max-w-none break-words"
+                              className="prose prose-sm dark:prose-invert prose-blue max-w-none break-words whitespace-pre-wrap"
                               dangerouslySetInnerHTML={{
                                 __html: renderDemoPreview(activeVersion.content),
                               }}

@@ -13,7 +13,7 @@ const fontSans = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SuupSales",
+  title: "SuppSales",
   description: "Automate your e-commerce business.",
 };
 

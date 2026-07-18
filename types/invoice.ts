@@ -68,6 +68,7 @@ export interface SupplierInvoice {
   // Dane nabywcy z KSeF
   buyer_nip: string | null;
   buyer_name: string | null;
+  recipient_name: string | null;
 
   // Typ faktury KSeF (Vat, Zal, Kor, etc.)
   invoice_type: string | null;

@@ -32,6 +32,6 @@ export function useShippingConfig() {
   return useQuery({
     queryKey: ["shippingConfig"],
     queryFn: fetchShippingConfig,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0, // always refetch on mount to pick up mapping or template changes
   });
 }

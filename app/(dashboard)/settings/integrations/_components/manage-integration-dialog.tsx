@@ -30,6 +30,9 @@ import { SuusManageTab } from "./providers/SuusManageTab";
 import { ABManageTab } from "./providers/ABManageTab";
 import { ApaczkaManageTab } from "./providers/ApaczkaManageTab";
 import { EmpikManageTab } from "@/app/(dashboard)/integrations/_components/providers/EmpikManageTab";
+import { GeisManageTab } from "./providers/GeisManageTab";
+import { GeodisManageTab } from "./providers/GeodisManageTab";
+import { RabenManageTab } from "./providers/RabenManageTab";
 import {
   FormControl,
   FormField,
@@ -88,6 +91,7 @@ export function ManageIntegrationDialog({
       api_token: "",
       suus_login: "",
       suus_password: "",
+      suus_order_type: "B2B",
       ab_client_code: "",
       ab_login: "",
       ab_password: "",
@@ -97,9 +101,30 @@ export function ManageIntegrationDialog({
       nip: "",
       environment: "test",
       ksef_token: "",
+      ksef_auto_sync_enabled: false,
+      ksef_sync_interval: 30,
       apaczka_app_id: "",
       apaczka_app_secret: "",
       apaczka_bank_account: "",
+      geis_customer_code: "",
+      geis_password: "",
+      geis_is_test: true,
+      geis_iban: "",
+      geis_pdf_format: "PDFO",
+      geodis_client_id: "",
+      geodis_client_secret: "",
+      geodis_customer_id: "",
+      geodis_warehouse_id: "",
+      geodis_is_test: true,
+      raben_username: "",
+      raben_password: "",
+      raben_edi_sender: "",
+      raben_edi_receiver: "",
+      raben_department: "",
+      raben_payer_identifier: "",
+      raben_is_test: true,
+      raben_product_type: "PROD02",
+      raben_service_level: "",
       empik_token: "",
       sync_config: {},
     }
@@ -114,24 +139,48 @@ export function ManageIntegrationDialog({
         sync_returns: !!integration.sync_returns,
         autoresponder_enabled: !!integration.autoresponder_enabled,
         autoresponder_message: integration.autoresponder_message || "",
-        api_token: "",
+        api_token: integration.api_config?.api_token || "",
         suus_login: integration.api_config?.login || "",
-        suus_password: "",
+        suus_password: integration.api_config?.password || "",
+        suus_order_type: integration.api_config?.order_type || "B2B",
         ab_client_code: integration.api_config?.client_code || "",
         ab_login: integration.api_config?.login || "",
-        ab_password: "",
+        ab_password: integration.api_config?.password || "",
         subiekt_agent_url: integration.api_config?.agent_url || "",
-        subiekt_api_key: "",
+        subiekt_api_key: integration.api_config?.api_key || "",
         subiekt_erp_sales_reference_template: integration.sync_config?.erp_sales_reference_template || "",
         // KSeF
         nip: integration.sync_config?.nip || "",
         environment: integration.sync_config?.environment || "test",
-        ksef_token: "",
+        ksef_token: integration.api_config?.token || "",
+        ksef_auto_sync_enabled: !!integration.sync_config?.ksef_auto_sync_enabled,
+        ksef_sync_interval: integration.sync_config?.ksef_sync_interval || 30,
         // Apaczka
         apaczka_app_id: integration.api_config?.app_id || "",
-        apaczka_app_secret: "",
+        apaczka_app_secret: integration.api_config?.app_secret || "",
         apaczka_bank_account: integration.api_config?.bank_account || "",
-        empik_token: "",
+        // Geis
+        geis_customer_code: integration.api_config?.customer_code || "",
+        geis_password: integration.api_config?.password || "",
+        geis_is_test: integration.api_config?.is_test !== false,
+        geis_iban: integration.api_config?.iban || "",
+        geis_pdf_format: integration.api_config?.pdf_format || "PDFO",
+        // Geodis
+        geodis_client_id: integration.api_config?.client_id || "",
+        geodis_client_secret: integration.api_config?.client_secret || "",
+        geodis_customer_id: integration.api_config?.customer_id || "",
+        geodis_warehouse_id: integration.api_config?.warehouse_id || "",
+        geodis_is_test: integration.api_config?.is_test !== false,
+        empik_token: integration.api_config?.api_token || "",
+        raben_username: integration.api_config?.username || "",
+        raben_password: integration.api_config?.password || "",
+        raben_edi_sender: integration.api_config?.edi_sender || "",
+        raben_edi_receiver: integration.api_config?.edi_receiver || "",
+        raben_department: integration.api_config?.raben_department || "",
+        raben_payer_identifier: integration.api_config?.payer_identifier || "",
+        raben_is_test: integration.api_config?.is_test !== false,
+        raben_product_type: integration.api_config?.product_type || "PROD02",
+        raben_service_level: integration.api_config?.service_level || "",
         sync_config: integration.sync_config || {},
       });
     }
@@ -144,6 +193,7 @@ export function ManageIntegrationDialog({
       api_token,
       suus_login,
       suus_password,
+      suus_order_type,
       ab_client_code,
       ab_login,
       ab_password,
@@ -153,17 +203,38 @@ export function ManageIntegrationDialog({
       nip,
       environment,
       ksef_token,
+      ksef_auto_sync_enabled,
+      ksef_sync_interval,
       apaczka_app_id,
       apaczka_app_secret,
       apaczka_bank_account,
+      geis_customer_code,
+      geis_password,
+      geis_is_test,
+      geis_iban,
+      geis_pdf_format,
+      geodis_client_id,
+      geodis_client_secret,
+      geodis_customer_id,
+      geodis_warehouse_id,
+      geodis_is_test,
       empik_token,
+      raben_username,
+      raben_password,
+      raben_edi_sender,
+      raben_edi_receiver,
+      raben_department,
+      raben_payer_identifier,
+      raben_is_test,
+      raben_product_type,
+      raben_service_level,
       sync_config,
       ...baseValues
     } = values;
 
     const payload: Record<string, any> = { ...baseValues, api_config: {} };
 
-    if (["ALLEGRO", "BASELINKER", "EMPIK"].includes(integration.provider_type)) {
+    if (["ALLEGRO", "BASELINKER", "EMPIK", "GEIS", "GEODIS", "RABEN"].includes(integration.provider_type)) {
       payload.sync_config = sync_config || {};
     }
 
@@ -177,6 +248,32 @@ export function ManageIntegrationDialog({
       case "SUUS":
         if (suus_login) payload.api_config.login = suus_login;
         if (suus_password) payload.api_config.password = suus_password;
+        if (suus_order_type) payload.api_config.order_type = suus_order_type;
+        break;
+      case "GEIS":
+        if (geis_customer_code) payload.api_config.customer_code = geis_customer_code;
+        if (geis_password) payload.api_config.password = geis_password;
+        if (geis_is_test !== undefined) payload.api_config.is_test = geis_is_test;
+        if (geis_iban !== undefined) payload.api_config.iban = geis_iban;
+        if (geis_pdf_format) payload.api_config.pdf_format = geis_pdf_format;
+        break;
+      case "GEODIS":
+        if (geodis_client_id) payload.api_config.client_id = geodis_client_id;
+        if (geodis_client_secret) payload.api_config.client_secret = geodis_client_secret;
+        if (geodis_customer_id) payload.api_config.customer_id = geodis_customer_id;
+        if (geodis_warehouse_id) payload.api_config.warehouse_id = geodis_warehouse_id;
+        if (geodis_is_test !== undefined) payload.api_config.is_test = geodis_is_test;
+        break;
+      case "RABEN":
+        if (raben_username) payload.api_config.username = raben_username;
+        if (raben_password) payload.api_config.password = raben_password;
+        if (raben_edi_sender) payload.api_config.edi_sender = raben_edi_sender;
+        if (raben_edi_receiver) payload.api_config.edi_receiver = raben_edi_receiver;
+        if (raben_department) payload.api_config.raben_department = raben_department;
+        if (raben_payer_identifier) payload.api_config.payer_identifier = raben_payer_identifier;
+        if (raben_is_test !== undefined) payload.api_config.is_test = raben_is_test;
+        if (raben_product_type) payload.api_config.product_type = raben_product_type;
+        if (raben_service_level !== undefined) payload.api_config.service_level = raben_service_level;
         break;
       case "AB":
         if (ab_client_code) payload.api_config.client_code = ab_client_code;
@@ -203,7 +300,9 @@ export function ManageIntegrationDialog({
         payload.sync_config = { 
           ...integration.sync_config, // Preserve other possible config
           nip, 
-          environment 
+          environment,
+          ksef_auto_sync_enabled: !!ksef_auto_sync_enabled,
+          ksef_sync_interval: parseInt(ksef_sync_interval as any) || 30
         };
         break;
     }
@@ -249,6 +348,12 @@ export function ManageIntegrationDialog({
         return <ApaczkaManageTab />;
       case "KSEF":
         return <KsefFormFields />;
+      case "GEIS":
+        return <GeisManageTab />;
+      case "GEODIS":
+        return <GeodisManageTab />;
+      case "RABEN":
+        return <RabenManageTab />;
       default:
         // Removed useFormContext() call, passing control directly isn't needed here 
         // if we just render standarized fields for unknown provider.

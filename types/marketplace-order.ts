@@ -6,6 +6,7 @@ interface LineItem {
   quantity: number;
   price: { amount: string; currency: string };
   offer: { id: string | null; name: string };
+  offer_id?: string | null;
 }
 
 interface Address {
@@ -67,6 +68,7 @@ export interface MarketplaceOrder {
   purchased_at?: string;
   total_to_pay?: number | null;
   service_integration?: ServiceIntegration | null;
+  service_integration_id?: number | null;
   details_payload?: any;
   line_items?: LineItem[];
   delivery_address?: Address | null;

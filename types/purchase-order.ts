@@ -1,3 +1,5 @@
+import { MarketplaceOrder } from "./marketplace-order";
+
 export type PurchaseOrderStatus =
   | "DRAFT"
   | "SENT_TO_SUPPLIER"
@@ -47,23 +49,5 @@ export interface PurchaseOrder {
   supplier_integration?: { id: number; name: string; provider_type?: string };
 
   // Zagnieżdżone pełne dane zamówienia marketplace (z Enriched)
-  marketplace_order?: {
-    id: string;
-    external_order_id?: string;
-    buyer_login?: string;
-    buyer_first_name?: string;
-    buyer_last_name?: string;
-    buyer_email?: string;
-    delivery_address?: {
-      first_name?: string;
-      last_name?: string;
-      street?: string;
-      zip_code?: string;
-      city?: string;
-      phone_number?: string;
-    };
-    line_items?: Array<{ offer?: { name?: string }; quantity?: number }>;
-    details_payload?: Record<string, any>;
-    total_to_pay?: number;
-  };
+  marketplace_order?: MarketplaceOrder;
 }

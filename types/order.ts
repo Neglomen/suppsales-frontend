@@ -23,11 +23,13 @@ export interface OrderDetailsApiResponse {
   buyer_last_name: string | null;
   buyer_phone_number?: string | null;
   tracking_numbers: string[] | null;
+  is_printed: boolean;
   purchased_at: string; // ISO date string
   erp_sales_document_number?: string | null;
   erp_sales_document_sync_status?: string | null;
   erp_sales_document_synced_at?: string | null;
   flags?: string[] | null;
+  pickup_point?: any | null;
 
   service_integration: ServiceIntegration | null;
   // alias używany na stronie szczegółów
@@ -75,6 +77,62 @@ export interface OrderDetailsApiResponse {
 
   // Dołączamy też listę logów zdarzeń
   event_logs: OrderEventLog[];
+
+  returns?: {
+    id: string;
+    external_return_id: string | null;
+    reference_number: string | null;
+    status: string;
+    buyer_login: string | null;
+    created_at_external: string;
+  }[];
+
+  threads?: {
+    id: string;
+    read: boolean;
+    last_message_at: string;
+    interlocutor_login: string;
+    order_id?: string | null;
+    integration_id: number;
+  }[];
+  disputes?: Dispute[];
+  related_orders?: {
+    id: string;
+    external_order_id: string | null;
+    status: string;
+    buyer_login: string | null;
+    buyer_first_name: string | null;
+    buyer_last_name: string | null;
+    purchased_at: string;
+    total_to_pay: number | null;
+    payment_type?: string | null;
+    payment_status?: string | null;
+    tracking_numbers?: string[] | null;
+    service_integration?: ServiceIntegration | null;
+  }[];
+}
+
+export interface DisputeMessage {
+  id: string;
+  dispute_id: string;
+  text: string;
+  author_login: string;
+  author_role: string;
+  created_at: string;
+}
+
+export interface Dispute {
+  id: string;
+  integration_id: number;
+  organization_id: string;
+  type: string;
+  status: string;
+  subject: string;
+  opened_date: string;
+  decision_due_date?: string | null;
+  buyer_login: string;
+  order_id?: string | null;
+  messages: DisputeMessage[];
 }
 
 // Typ dla zmapowanych, przetworzonych danych używanych w UI
@@ -122,6 +180,7 @@ export interface MappedOrderDetails {
     imageUrl?: string;
     sku?: string;
     ean?: string;
+    selectedAdditionalServices?: any[];
   }[];
   buyerComments?: string;
 }

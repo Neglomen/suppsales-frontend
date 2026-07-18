@@ -9,6 +9,13 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const SuusFormFields = () => (
   <>
@@ -51,5 +58,30 @@ export const SuusFormFields = () => (
         </FormItem>
       )}
     />
+    <FormField
+      name="suus_order_type"
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>Domyślny typ zlecenia (orderType)</FormLabel>
+          <Select onValueChange={field.onChange} defaultValue={field.value || "B2B"}>
+            <FormControl>
+              <SelectTrigger>
+                <SelectValue placeholder="Wybierz domyślny typ zlecenia" />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              <SelectItem value="B2B">B2B (Krajowe i zagraniczne)</SelectItem>
+              <SelectItem value="B2C">B2C (Tylko krajowe)</SelectItem>
+              <SelectItem value="DYNAMIC">Automatyczny (B2B dla firm, inaczej B2C)</SelectItem>
+            </SelectContent>
+          </Select>
+          <FormDescription>
+            SUUS wymaga B2B dla zleceń międzynarodowych.
+          </FormDescription>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   </>
 );
+

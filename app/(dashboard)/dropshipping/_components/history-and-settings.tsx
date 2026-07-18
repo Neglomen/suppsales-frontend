@@ -53,6 +53,9 @@ import {
 } from "@/components/ui/dialog";
 import { PurchaseOrder } from "@/types/purchase-order";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropshippingOrdersTab } from "./dropshipping-orders-tab";
+import { ShoppingBag } from "lucide-react";
 
 // --- Sekcja Ustawień ---
 
@@ -165,17 +168,19 @@ function SettingsForm() {
   }
 
   return (
-    <section>
-      <div className="mb-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <Settings className="h-5 w-5 text-primary" />
-          Ustawienia Wysyłki Dropshipping
-        </h3>
-        <p className="text-sm text-muted-foreground pl-7">
-          Skonfiguruj domyślnego odbiorcę (handlowca) i konto e-mail.
-        </p>
+    <div className="rounded-2xl border border-border/15 bg-card/60 glass-dark p-6 shadow-sm">
+      <div className="flex items-center gap-2.5 mb-6 border-b border-border/10 pb-4">
+        <Settings className="h-5 w-5 text-primary" />
+        <div>
+          <h3 className="text-base font-semibold text-foreground">
+            Ustawienia Wysyłki Dropshipping
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Skonfiguruj domyślnego odbiorcę (handlowca) i konto e-mail.
+          </p>
+        </div>
       </div>
-      <div className="pl-7">
+      <div>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
@@ -253,7 +258,7 @@ function SettingsForm() {
           </form>
         </Form>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -445,17 +450,19 @@ function HistoryTable() {
 
   return (
     <>
-      <section>
-        <div className="mb-4">
-          <h3 className="flex items-center gap-2 text-lg font-semibold">
-            <History className="h-5 w-5 text-primary" />
-            Historia wysłanych partii
-          </h3>
-          <p className="text-sm text-muted-foreground pl-7">
-            Partie pogrupowane dziennie. Kliknij wiersz, aby zobaczyć szczegóły.
-          </p>
+      <div className="rounded-2xl border border-border/15 bg-card/60 glass-dark p-6 shadow-sm">
+        <div className="flex items-center gap-2.5 mb-6 border-b border-border/10 pb-4">
+          <History className="h-5 w-5 text-primary" />
+          <div>
+            <h3 className="text-base font-semibold text-foreground">
+              Historia wysłanych partii
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Partie pogrupowane dziennie. Kliknij wiersz, aby zobaczyć szczegóły.
+            </p>
+          </div>
         </div>
-        <div className="pl-7 space-y-4">
+        <div className="space-y-4">
           {isLoading && !data && (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
@@ -464,7 +471,7 @@ function HistoryTable() {
             </div>
           )}
           {groupedByDay.map(([day, group]) => (
-            <div key={day} className="rounded-xl border border-border/40 overflow-hidden">
+            <div key={day} className="rounded-xl border border-border/40 overflow-hidden bg-background/25">
               {/* Nagłówek dnia */}
               <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border/30">
                 <div className="flex items-center gap-3">
@@ -521,7 +528,7 @@ function HistoryTable() {
             </p>
           )}
         </div>
-      </section>
+      </div>
       <BatchDetailsDialog
         isOpen={!!selectedBatchId}
         onClose={() => setSelectedBatchId(null)}
@@ -536,10 +543,44 @@ function HistoryTable() {
 
 export function HistoryAndSettings() {
   return (
-    <div className="p-4 space-y-8">
-      <SettingsForm />
-      <Separator />
-      <HistoryTable />
+    <div className="p-6 space-y-6">
+      <Tabs defaultValue="orders" className="w-full space-y-6">
+        <TabsList className="border border-border bg-muted/40 p-1 rounded-2xl glass shadow-sm flex h-auto gap-1 self-start shrink-0">
+          <TabsTrigger 
+            value="orders" 
+            className="rounded-xl gap-2 px-5 py-2 text-xs font-semibold data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all duration-300"
+          >
+            <ShoppingBag className="h-3.5 w-3.5" />
+            Zarządzanie zleceniami
+          </TabsTrigger>
+          <TabsTrigger 
+            value="batches" 
+            className="rounded-xl gap-2 px-5 py-2 text-xs font-semibold data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all duration-300"
+          >
+            <History className="h-3.5 w-3.5" />
+            Partie wysyłek
+          </TabsTrigger>
+          <TabsTrigger 
+            value="settings" 
+            className="rounded-xl gap-2 px-5 py-2 text-xs font-semibold data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all duration-300"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Ustawienia integracji
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="orders" className="mt-0 focus:outline-none">
+          <DropshippingOrdersTab />
+        </TabsContent>
+
+        <TabsContent value="batches" className="mt-0 focus:outline-none">
+          <HistoryTable />
+        </TabsContent>
+
+        <TabsContent value="settings" className="mt-0 focus:outline-none">
+          <SettingsForm />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

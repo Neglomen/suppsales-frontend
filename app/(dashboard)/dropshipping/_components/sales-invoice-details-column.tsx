@@ -55,8 +55,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { ServiceIntegration } from "@/types/service-integration";
 import { ProductErpMapping } from "@/types/product-erp-mapping";
+import { ServiceIntegration } from "@/types/service-integration";
+import { usePrintHub } from "@/hooks/use-print-hub";
+import { printHubService } from "@/lib/print-hub-service";
 
 // ========================================================================
 // === KOMPONENTY POMOCNICZE (BEZ ZMIAN) ==================================
@@ -257,6 +259,23 @@ export function SalesInvoiceDetailsColumn({
     return erpIntegrations?.find((int) => int.provider_type === "SUBIEKT_GT");
   }, [erpIntegrations]);
 
+  const { isEnabled: printHubEnabled, status: printHubStatus, printHubExcludeNip, printHubExcludeB2c } = usePrintHub();
+
+  const { data: subiektAgentConfig } = useQuery<{ agent_url: string; api_key: string } | null>({
+    queryKey: ["subiektAgentConfig"],
+    queryFn: async () => {
+      try {
+        const res = await api.get("/service-integrations/subiekt-gt/agent-config");
+        return res.data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!subiektIntegration && printHubEnabled,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
+
   const subiektIntegrationId = subiektIntegration?.id;
 
   useEffect(() => {
@@ -418,8 +437,45 @@ export function SalesInvoiceDetailsColumn({
     });
   };
 
+  const pollTaskStatus = (taskId: string): Promise<{ document_number: string }> => {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      const timeout = 5 * 60 * 1000; // 5 minutes timeout
+      const interval = setInterval(async () => {
+        try {
+          if (Date.now() - startTime > timeout) {
+            clearInterval(interval);
+            reject(new Error("Przekroczono limit czasu oczekiwania na wystawienie faktury."));
+            return;
+          }
+          const statusRes = await api.get(`/tasks/${taskId}/status`);
+          const data = statusRes.data;
+          if (data.status === "SUCCESS") {
+            clearInterval(interval);
+            const docNumber = data.result?.result?.document_number || data.result?.document_number;
+            if (!docNumber) {
+              reject(new Error("Faktura wystawiona, ale brak numeru dokumentu w odpowiedzi serwera."));
+              return;
+            }
+            resolve({
+              document_number: docNumber,
+            });
+          } else if (data.status === "FAILURE" || data.status === "FAILED") {
+            clearInterval(interval);
+            const errMsg = data.result?.result?.error || data.result?.error || "Błąd podczas tworzenia faktury w Subiekcie GT.";
+            reject(new Error(errMsg));
+          }
+        } catch (err: any) {
+          clearInterval(interval);
+          const errMsg = getErrorMessage(err);
+          reject(new Error(errMsg));
+        }
+      }, 2000);
+    });
+  };
+
   const createInvoiceMutation = useMutation({
-    mutationFn: (mappings: Record<string, string>) => {
+    mutationFn: async (mappings: Record<string, string>) => {
       if (!selectedOrderId) throw new Error("Nie wybrano zamówienia!");
 
       // Walidacja używa teraz `mappedDetails`, które ma bezpieczne `offerId`
@@ -430,23 +486,59 @@ export function SalesInvoiceDetailsColumn({
 
       if (!allItemsMapped) {
         toast.error("Wprowadź symbole Subiekta dla wszystkich pozycji.");
-        return Promise.reject(new Error("Validation failed"));
+        throw new Error("Validation failed");
       }
 
       const payload = { product_mappings: mappings };
       const url = `/sales-invoices/orders/${selectedOrderId}/create-sales-invoice`;
-      return api.post(url, payload);
+      
+      const res = await api.post(url, payload);
+      const taskId = res.data.task_id;
+      if (!taskId) {
+        throw new Error("Nie otrzymano identyfikatora zadania z serwera.");
+      }
+      
+      const pollResult = await pollTaskStatus(taskId);
+      
+      // ── Automatyczny wydruk faktury FS przez PrintHub ──
+      const taxId = order?.invoice_address?.tax_id || (order as any)?.invoiceAddress?.tax_id || (order as any)?.invoiceAddress?.taxId;
+      const hasNip = !!(taxId && taxId.trim());
+      const isExcluded = (hasNip && printHubExcludeNip) || (!hasNip && printHubExcludeB2c);
+
+      if (printHubEnabled && printHubStatus === "connected" && pollResult.document_number && !isExcluded) {
+        try {
+          const configRes = await api.get("/service-integrations/subiekt-gt/agent-config");
+          const config = configRes.data;
+          if (config?.agent_url && config?.api_key) {
+            printHubService.printSalesInvoice(
+              pollResult.document_number,
+              config.agent_url,
+              config.api_key
+            );
+            console.log(
+              `[DetailsColumn] Zlecono wydruk faktury FS: ${pollResult.document_number}`
+            );
+          } else {
+            console.warn("[DetailsColumn] Brak konfiguracji agenta Subiekta dla wydruku.");
+          }
+        } catch (printErr) {
+          console.warn("[DetailsColumn] Nie udało się zlecić wydruku faktury FS:", printErr);
+        }
+      }
+      
+      return pollResult;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast.success(
-        "Zlecono tworzenie faktury. Status zostanie wkrótce zaktualizowany."
+        `Faktura ${data.document_number} wystawiona pomyślnie!`
       );
       queryClient.invalidateQueries({
         queryKey: ["orderDetails", selectedOrderId],
       });
+      refetchOrder();
     },
-    onError: (error) => {
-      if ((error as Error).message !== "Validation failed") {
+    onError: (error: any) => {
+      if (error.message !== "Validation failed") {
         toast.error(`Błąd: ${getErrorMessage(error)}`);
       }
     },

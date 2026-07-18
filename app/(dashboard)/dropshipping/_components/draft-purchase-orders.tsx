@@ -20,26 +20,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Card } from "@/components/ui/card";
 import {
   Loader2,
   Send,
   PackageSearch,
-  Info,
   Save,
   Trash2,
   MapPin,
-  ChevronDown,
-  User,
   Package,
   Building2,
   Pencil,
+  Sparkles,
 } from "lucide-react";
 import { EditAddressDialog } from "../../shipping/_components/EditAddressDialog";
+import { cn } from "@/lib/utils";
 
 // Pomocnik do pobierania danych z PO (obsługa camelCase i snake_case)
 function getPOData(po: PurchaseOrder) {
@@ -72,7 +67,7 @@ function getPOData(po: PurchaseOrder) {
   return { buyerLogin, firstItemName, externalId, address, supplierName, lineItems, moId };
 }
 
-// Karta pojedynczego zlecenia roboczego
+// Karta pojedynczego zlecenia roboczego - Kompaktowy Design
 const DraftPOCard = ({
   po,
   onLineItemChange,
@@ -84,121 +79,111 @@ const DraftPOCard = ({
   onEditAddress: (po: PurchaseOrder) => void;
   onCancel: (poId: string) => void;
 }) => {
-  const [erpOpen, setErpOpen] = useState(false);
   const { buyerLogin, firstItemName, externalId, address, supplierName, lineItems } = getPOData(po);
 
   const areAllIndexesFilled = lineItems.every(
     (item) => !!(item.supplierProductIndex || item.supplier_product_index)?.trim()
   );
 
-  return (
-    <div className="rounded-2xl border border-border/15 bg-card/60 glass-dark shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md hover:shadow-primary/10 hover:border-primary/20">
-      {/* Header karty */}
-      <div className="px-4 py-3 flex items-start justify-between gap-3 bg-muted/20 border-b border-border/10">
-        <div className="flex items-start gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <Package className="h-4 w-4 text-primary" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-sm text-foreground truncate" title={firstItemName || undefined}>
-              {firstItemName || "Brak nazwy produktu"}
-            </p>
-            {externalId && (
-              <p className="text-xs text-muted-foreground font-mono">#{externalId}</p>
-            )}
+  return (    <Card className="rounded-xl border border-border/30 bg-slate-900/40 backdrop-blur-md shadow-sm overflow-hidden transition-all duration-300 hover:border-indigo-500/20 p-3 flex flex-col gap-2">
+      {/* Górna linia: Nagłówek i Akcje */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <Package className="h-4 w-4 text-indigo-400 flex-shrink-0" />
+          <span className="font-bold text-xs text-foreground truncate max-w-[220px] sm:max-w-[320px]" title={firstItemName || undefined}>
+            {firstItemName || "Brak nazwy"}
+          </span>
+          {externalId && (
+            <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+              #{externalId}
+            </span>
+          )}
+          {buyerLogin && (
+            <span className="text-[10px] text-indigo-500 dark:text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/25 font-medium shrink-0">
+              {buyerLogin}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {!areAllIndexesFilled ? (
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-rose-500/10 text-rose-500 border-rose-500/20 font-bold uppercase tracking-wide">
+              Brak indeksu ⚠️
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 border-emerald-500/20 font-bold uppercase tracking-wide">
+              Gotowe ✨
+            </Badge>
+          )}
+          {/* Akcje jako ikony w nagłówku */}
+          <div className="flex items-center border-l border-border/30 pl-2 ml-1 gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-accent/10 rounded-lg"
+              onClick={() => onEditAddress(po)}
+              title="Edytuj adres dostawy"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-rose-550 hover:bg-rose-500/10 rounded-lg"
+              onClick={() => onCancel(po.id)}
+              title="Usuń zlecenie"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {!areAllIndexesFilled && (
-            <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Brak indeksu</Badge>
-          )}
-          {areAllIndexesFilled && (
-            <Badge className="text-[10px] px-1.5 py-0 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Gotowe do wysłania</Badge>
-          )}
+      </div> {/* Druga linia: Kompaktowe informacje o dostawie */}
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-muted-foreground border-t border-border/30 pt-1.5">
+        <div className="flex items-center gap-1">
+          <Building2 className="h-3.5 w-3.5 text-muted-foreground/60" />
+          <span>Hurtownia: <strong className="text-foreground font-semibold">{supplierName || "Nieznana"}</strong></span>
+        </div>
+        <span className="text-muted-foreground/40">•</span>
+        <div className="flex items-center gap-1 min-w-0">
+          <MapPin className="h-3.5 w-3.5 text-muted-foreground/60" />
+          <span className="truncate">
+            Odbiorca: <strong className="text-foreground font-semibold">{address ? `${address.first_name} ${address.last_name} (${address.city})` : "Brak adresu"}</strong>
+          </span>
         </div>
       </div>
 
-      {/* Informacje o zamówieniu */}
-      <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-        {buyerLogin && (
-          <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
-            <User className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="font-medium text-foreground/80">{buyerLogin}</span>
-          </div>
-        )}
-        {supplierName && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Building2 className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="truncate">{supplierName}</span>
-          </div>
-        )}
-        {address && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="truncate">
-              {address.first_name} {address.last_name}, {address.city}
-            </span>
-          </div>
-        )}
-        <div className="text-muted-foreground/60 col-span-2 flex items-center gap-1.5">
-          <Package className="h-3 w-3" />
-          <span>{lineItems.length} produkt{lineItems.length !== 1 ? "y" : ""}</span>
-        </div>
-      </div>
-
-      {/* Rozwijana sekcja ERP */}
-      <Collapsible open={erpOpen} onOpenChange={setErpOpen}>
-        <CollapsibleTrigger asChild>
-          <button
-            className="w-full px-4 py-2.5 flex items-center justify-between text-xs font-medium border-t border-border/10 bg-muted/10 hover:bg-primary/5 transition-colors duration-200 group"
-          >
-            <span className="text-muted-foreground group-hover:text-primary transition-colors">
-              Indeksy hurtowni ({lineItems.filter(i => !!(i.supplierProductIndex || i.supplier_product_index)?.trim()).length}/{lineItems.length} uzupełnione)
-            </span>
-            <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${erpOpen ? "rotate-180" : ""}`} />
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="px-4 pb-3 pt-2 space-y-2.5 bg-background/30 border-t border-border/5">
-            {lineItems.map((item, index) => (
-              <div key={`${item.marketplaceLineItemId || item.marketplace_line_item_id}-${index}`} className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">
-                  {item.name} <span className="text-primary/70">×{item.quantity}</span>
-                </Label>
+      {/* Pozycje zamówienia */}
+      <div className="space-y-1 border-t border-border/30 pt-1.5 bg-slate-950/5 dark:bg-slate-950/40 rounded-lg p-2">
+        {lineItems.map((item, index) => {
+          const hasIndex = !!(item.supplierProductIndex || item.supplier_product_index)?.trim();
+          return (
+            <div key={`${item.marketplaceLineItemId || item.marketplace_line_item_id}-${index}`} className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-500/10 px-1 py-0.2 rounded border border-indigo-500/20 shrink-0">
+                  {item.quantity}x
+                </span>
+                <span className="font-semibold text-muted-foreground truncate" title={item.name}>
+                  {item.name}
+                </span>
+              </div>
+              <div className="relative w-44 sm:w-52 flex-shrink-0">
                 <Input
-                  placeholder="Indeks produktu w hurtowni..."
+                  placeholder="Indeks hurtowni..."
                   defaultValue={item.supplierProductIndex || item.supplier_product_index || ""}
                   onChange={(e) => onLineItemChange(po.id, index, e.target.value)}
-                  className="h-8 text-xs bg-background/60 border-border/20 focus-visible:ring-primary/30"
+                  className={cn(
+                    "h-7 text-[11px] bg-background border-border rounded-md pr-6 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500 transition-all duration-200",
+                    hasIndex ? "border-emerald-500/30" : "border-rose-500/30"
+                  )}
                 />
+                <span className="absolute right-2 top-1.5 select-none pointer-events-none text-[10px]">
+                  {hasIndex ? <span className="text-emerald-500">✓</span> : <span className="text-rose-500">✗</span>}
+                </span>
               </div>
-            ))}
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      {/* Akcje */}
-      <div className="px-4 py-2.5 flex items-center justify-end gap-2 border-t border-border/10 bg-background/20">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 px-3 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10"
-          onClick={() => onEditAddress(po)}
-        >
-          <Pencil className="h-3.5 w-3.5 mr-1.5" />
-          Edytuj adres
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 px-3 text-xs text-destructive/80 hover:text-destructive hover:bg-destructive/10"
-          onClick={() => onCancel(po.id)}
-        >
-          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-          Usuń
-        </Button>
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </Card>
   );
 };
 
@@ -215,7 +200,6 @@ export function DraftPurchaseOrders() {
       (await api.get("/service-integrations?category=WHOLESALE")).data,
   });
 
-  // Ładuj WSZYSTKIE zlecenia robocze bez potrzeby wybrania hurtowni
   const queryKeyForDrafts = ["purchaseOrders", { status: "DRAFT" }];
 
   const {
@@ -246,7 +230,7 @@ export function DraftPurchaseOrders() {
 
   const { mutate: cancelPO } = useMutation({
     mutationFn: (poId: string) => api.delete(`/purchase-orders/${poId}`),
-    onSuccess: (_, poId) => {
+    onSuccess: () => {
       toast.success("Zlecenie zostało usunięte z listy roboczej.");
       queryClient.invalidateQueries({ queryKey: queryKeyForDrafts });
       queryClient.invalidateQueries({
@@ -299,7 +283,7 @@ export function DraftPurchaseOrders() {
     value: string
   ) => {
     setDraftPOs((prev) =>
-            prev.map((po) =>
+      prev.map((po) =>
         po.id === poId
           ? {
               ...po,
@@ -365,7 +349,6 @@ export function DraftPurchaseOrders() {
     });
   };
 
-  // Filtrowanie po wybranej hurtowni (opcjonalne)
   const filteredPOs = selectedSupplierId
     ? draftPOs.filter(
         (po) =>
@@ -376,21 +359,22 @@ export function DraftPurchaseOrders() {
   return (
     <>
       <div className="p-4 space-y-4">
+        
         {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1">
-            <Label htmlFor="supplier-select" className="text-xs text-muted-foreground mb-1.5 block">
-              Filtruj po hurtowni (lub zostaw puste by zobaczyć wszystkie)
+        <div className="p-3 rounded-xl border border-border/30 bg-muted/20 flex flex-col md:flex-row gap-3 items-stretch justify-between">
+          <div className="flex-1 max-w-sm">
+            <Label htmlFor="supplier-select" className="text-2xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">
+              Filtruj po hurtowni
             </Label>
             <Select
               value={selectedSupplierId}
               onValueChange={(v) => setSelectedSupplierId(v === "all" ? "" : v)}
             >
-              <SelectTrigger id="supplier-select" className="h-9 text-sm">
-                <SelectValue placeholder="Wszystkie hurtownie" />
+              <SelectTrigger id="supplier-select" className="h-8 text-xs bg-background border-border rounded-lg focus:ring-indigo-500/20 text-foreground">
+                <SelectValue placeholder="Pokaż wszystkie hurtownie" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Wszystkie</SelectItem>
+              <SelectContent className="rounded-lg border-border">
+                <SelectItem value="all">Wszystkie hurtownie</SelectItem>
                 {suppliers?.map((s) => (
                   <SelectItem key={s.id} value={String(s.id)}>
                     {s.name}
@@ -405,23 +389,27 @@ export function DraftPurchaseOrders() {
               size="sm"
               onClick={handleSaveAllChanges}
               disabled={isUpdating}
-              className="h-9"
+              className="h-8 rounded-lg border-border hover:bg-accent/10 text-xs font-semibold px-3 text-foreground"
             >
-              {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <Save className="mr-2 h-4 w-4" />
+              {isUpdating ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="mr-1.5 h-3.5 w-3.5 text-indigo-500" />
+              )}
               Zapisz indeksy
             </Button>
             <Button
               size="sm"
               onClick={handleSendBulk}
               disabled={isSendingBulk || filteredPOs.length === 0 || !selectedSupplierId}
-              className="h-9"
-              title={!selectedSupplierId ? "Wybierz hurtownię by wysłać" : ""}
+              className="h-8 rounded-lg bg-gradient-to-r from-primary to-indigo-650 hover:from-primary/95 hover:to-indigo-650/95 text-white font-semibold text-xs shadow-md shadow-indigo-500/5 px-3"
+              title={!selectedSupplierId ? "Wybierz hurtownię, aby wysłać" : ""}
             >
-              {isSendingBulk && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {isSendingBulk ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="mr-1.5 h-3.5 w-3.5" />
               )}
-              <Send className="mr-2 h-4 w-4" />
               Wyślij ({filteredPOs.length})
             </Button>
           </div>
@@ -429,39 +417,43 @@ export function DraftPurchaseOrders() {
 
         {/* Loading */}
         {(isLoading || isFetching) && (
-          <div className="flex justify-center py-8">
-            <Loader2 className="animate-spin text-primary" />
+          <div className="flex justify-center py-10">
+            <Loader2 className="animate-spin text-indigo-500 h-6 w-6" />
           </div>
         )}
 
         {/* Empty state */}
         {!isLoading && !isFetching && draftPOs.length === 0 && (
-          <div className="text-center py-16 border-2 border-dashed rounded-2xl border-border/30">
-            <PackageSearch className="mx-auto h-12 w-12 text-muted-foreground/40" />
-            <h3 className="mt-4 text-base font-semibold text-muted-foreground">
+          <div className="text-center py-14 border-2 border-dashed rounded-2xl border-border bg-muted/10 flex flex-col items-center justify-center">
+            <div className="p-3 bg-muted rounded-full border border-border mb-3 text-muted-foreground">
+              <PackageSearch className="h-8 w-8" />
+            </div>
+            <h3 className="text-xs font-bold text-foreground">
               Brak zleceń roboczych
             </h3>
-            <p className="mt-2 text-sm text-muted-foreground/60">
-              Aby dodać zlecenie, wybierz zamówienia z listy po prawej i kliknij "Utwórz zlecenia robocze".
+            <p className="mt-1.5 text-[11px] text-slate-450 max-w-xs">
+              Zlecenia dropshippingowe pojawią się tutaj po oznaczeniu zamówień flagą dropship w Stacji Nabijania lub po ich ręcznym wygenerowaniu.
             </p>
           </div>
         )}
 
         {/* Info banner */}
         {filteredPOs.length > 0 && (
-          <Alert className="border-primary/20 bg-primary/5 rounded-xl py-2.5">
-            <Info className="h-4 w-4 text-primary" />
-            <AlertTitle className="text-primary font-semibold text-sm">
-              {filteredPOs.length} zlecenie{filteredPOs.length > 1 ? "ń" : ""} robocze{filteredPOs.length > 1 ? "" : ""}
-            </AlertTitle>
-            <AlertDescription className="text-muted-foreground text-xs">
-              Uzupełnij indeksy produktów (z katalogu hurtowni) i użyj "Wyślij" po wybraniu hurtowni.
-            </AlertDescription>
+          <Alert className="border-indigo-500/10 bg-indigo-500/5 rounded-xl py-2 flex items-start gap-2.5">
+            <Sparkles className="h-3.5 w-3.5 text-indigo-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <AlertTitle className="text-indigo-300 font-bold text-xs">
+                Wersje robocze ({filteredPOs.length} zleceń)
+              </AlertTitle>
+              <AlertDescription className="text-slate-350 text-[10px] mt-0.5">
+                Wpisz brakujące indeksy hurtowni (oznaczone ramką i krzyżykiem) bezpośrednio w kartach zleceń.
+              </AlertDescription>
+            </div>
           </Alert>
         )}
 
         {/* Lista kart */}
-        <div className="space-y-3">
+        <div className="space-y-2.5 max-h-[65vh] overflow-y-auto pr-2 scrollbar-thin">
           {filteredPOs.map((po) => (
             <DraftPOCard
               key={po.id}
@@ -475,10 +467,10 @@ export function DraftPurchaseOrders() {
 
         {/* Loading indicator dla edycji adresu */}
         {loadingAddressForPoId && (
-          <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
-            <div className="bg-card rounded-xl p-6 flex items-center gap-3 shadow-2xl">
-              <Loader2 className="animate-spin text-primary h-5 w-5" />
-              <span className="text-sm">Ładowanie danych adresu...</span>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50">
+            <div className="bg-background border border-border rounded-xl p-4 flex items-center gap-2.5 shadow-2xl">
+              <Loader2 className="animate-spin text-indigo-500 h-4 w-4" />
+              <span className="text-xs font-semibold text-foreground">Ładowanie danych adresu...</span>
             </div>
           </div>
         )}

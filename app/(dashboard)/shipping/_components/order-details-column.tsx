@@ -85,7 +85,7 @@ import { AdditionalServiceMapping } from "@/types/additional-service-mapping";
 import { useOrderShipments } from "../_hooks/use-order-shipments";
 import { ShipmentHistory } from "./ShipmentHistory";
 import { cn, downloadFileFromBase64 } from "@/lib/utils";
-import { SUUS_PACKAGE_CODES } from "@/lib/courier-data";
+import { SUUS_PACKAGE_CODES, RABEN_PACKAGE_CODES } from "@/lib/courier-data";
 import {
   FormControl,
   FormField,
@@ -107,6 +107,9 @@ import { EditInvoiceDialog } from "./EditInvoiceDialog";
 import { usePrintHub } from "@/hooks/use-print-hub";
 import { printHubService } from "@/lib/print-hub-service";
 import { AllegroIcon, BaseLinkerIcon, EmpikIcon } from "@/components/shared/icons";
+import { useMobile } from "@/hooks/use-mobile";
+import { useOrderLiveCheck } from "@/hooks/use-order-live-check";
+import { OrderLiveCheckBanner } from "@/components/shared/order-live-check-banner";
 
 interface OrderInfoProps {
   order: MarketplaceOrder;
@@ -123,6 +126,11 @@ interface OrderInfoProps {
   overridePointId?: string;
   setOverridePointId?: (id: string) => void;
   subiektStock?: any;
+  printHubEnabled?: boolean;
+  printHubStatus?: string;
+  printHubExcludeNip?: boolean;
+  printHubExcludeB2c?: boolean;
+  subiektAgentConfig?: { agent_url: string; api_key: string } | null;
 }
 
 const OrderInfoCard = ({
@@ -140,7 +148,46 @@ const OrderInfoCard = ({
   overridePointId = "",
   setOverridePointId,
   subiektStock,
+  printHubEnabled,
+  printHubStatus,
+  printHubExcludeNip,
+  printHubExcludeB2c,
+  subiektAgentConfig,
 }: OrderInfoProps) => {
+  const isMobile = useMobile(768);
+  const isCodOrder = useMemo(
+    () =>
+      order?.payment_type === "CASH_ON_DELIVERY" ||
+      order?.details_payload?.payment?.type === "CASH_ON_DELIVERY" ||
+      (order?.service_integration?.provider_type === "EMPIK" && 
+        !!((order?.details_payload?.payment_type || order?.details_payload?.paymentType) && 
+           String(order?.details_payload?.payment_type || order?.details_payload?.paymentType).toLowerCase().includes("pobran"))) ||
+      String(order?.details_payload?.payment_method_cod) === "1",
+    [order]
+  );
+
+  const shippingCost = useMemo(() => {
+    if (!order || !order.details_payload) return "0.00";
+    const payload = order.details_payload;
+    if (order.service_integration?.provider_type === "EMPIK") {
+      return payload.shipping_price !== undefined && payload.shipping_price !== null 
+        ? parseFloat(payload.shipping_price).toFixed(2)
+        : "0.00";
+    }
+    if (order.service_integration?.provider_type === "ALLEGRO") {
+      return payload.delivery?.cost?.amount !== undefined && payload.delivery?.cost?.amount !== null
+        ? parseFloat(payload.delivery.cost.amount).toFixed(2)
+        : "0.00";
+    }
+    return payload.delivery_price !== undefined && payload.delivery_price !== null
+      ? parseFloat(payload.delivery_price).toFixed(2)
+      : "0.00";
+  }, [order]);
+
+  const hasShippingCost = useMemo(() => {
+    return shippingCost && parseFloat(shippingCost) > 0;
+  }, [shippingCost]);
+
   const [isEditAddressOpen, setIsEditAddressOpen] = useState(false);
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
@@ -183,12 +230,18 @@ const OrderInfoCard = ({
               const data = statusRes.data;
               if (data.status === "SUCCESS") {
                 clearInterval(interval);
+                const docNumber = data.result?.result?.document_number || data.result?.document_number;
+                if (!docNumber) {
+                  reject(new Error("Faktura wystawiona, ale brak numeru dokumentu w odpowiedzi serwera."));
+                  return;
+                }
                 resolve({
-                  document_number: data.result?.document_number || "Dokument sprzedaży",
+                  document_number: docNumber,
                 });
               } else if (data.status === "FAILURE" || data.status === "FAILED") {
                 clearInterval(interval);
-                reject(new Error(data.result?.error || "Nieznany błąd podczas tworzenia faktury w Subiekcie GT."));
+                const errMsg = data.result?.result?.error || data.result?.error || "Nieznany błąd podczas tworzenia faktury w Subiekcie GT.";
+                reject(new Error(errMsg));
               }
             } catch (err: any) {
               clearInterval(interval);
@@ -223,6 +276,27 @@ const OrderInfoCard = ({
         }
         if (onOrderUpdate && updatedOrder) {
           onOrderUpdate(updatedOrder);
+        }
+
+        // ── Automatyczny wydruk faktury FS przez PrintHub ──
+        const freshOrder = updatedOrder || order;
+        const taxId = freshOrder?.invoice_address?.tax_id || (freshOrder as any)?.invoiceAddress?.tax_id || (freshOrder as any)?.invoiceAddress?.taxId;
+        const hasNip = !!(taxId && taxId.trim());
+        const isExcluded = (hasNip && printHubExcludeNip) || (!hasNip && printHubExcludeB2c);
+
+        if (printHubEnabled && printHubStatus === "connected" && pollResult.document_number && !isExcluded) {
+          try {
+            printHubService.printSalesInvoice(
+              pollResult.document_number,
+              subiektAgentConfig?.agent_url,
+              subiektAgentConfig?.api_key
+            );
+            console.log(
+              `[OrderDetailsColumn] Zlecono wydruk faktury FS: ${pollResult.document_number}`
+            );
+          } catch (printErr) {
+            console.warn("[OrderDetailsColumn] Nie udało się zlecić wydruku faktury FS:", printErr);
+          }
         }
 
         return pollResult;
@@ -322,6 +396,25 @@ const OrderInfoCard = ({
         }
       };
     }
+    
+    // Check if it's Empik (Mirakl) legacy payload
+    if (payload.shipping_type_code === "PACKSTATION" || payload.shipping_pudo_id) {
+      const pudoId = payload.shipping_pudo_id || 
+          (payload.order_additional_fields as any[])?.find((f: any) => f.code === "delivery-point-name")?.value ||
+          payload.customer?.shipping_address?.lastname;
+          
+      if (pudoId) {
+        return {
+          name: pudoId,
+          address: {
+            street: ((payload.customer?.shipping_address?.street_1 || "") + 
+                     (payload.customer?.shipping_address?.street_2 ? " " + payload.customer?.shipping_address?.street_2 : "")).trim(),
+            zipCode: payload.customer?.shipping_address?.zip_code,
+            city: payload.customer?.shipping_address?.city,
+          }
+        };
+      }
+    }
     return null;
   }, [order.pickup_point, payload]);
 
@@ -368,10 +461,10 @@ const OrderInfoCard = ({
 
     if (isCod) {
       const amount = order.total_to_pay || payload.cashOnDelivery?.amount || payload.payment_done;
-      return { type: "cod", label: "Pobranie", amount, variant: "warning" as const, icon: <CreditCard className="h-3.5 w-3.5" />, color: "text-amber-400" };
+      return { type: "cod", label: "Pobranie", amount, variant: "warning" as const, icon: <CreditCard className="h-3.5 w-3.5" />, color: "text-amber-600 dark:text-amber-400" };
     }
     const amount = order.total_to_pay || payload.summary?.totalToPay?.amount || payload.payment_done;
-    return { type: "paid", label: "Opłacone", amount, variant: "success" as const, icon: <CheckCircle className="h-3.5 w-3.5" />, color: "text-emerald-400" };
+    return { type: "paid", label: "Opłacone", amount, variant: "success" as const, icon: <CheckCircle className="h-3.5 w-3.5" />, color: "text-emerald-600 dark:text-emerald-400" };
   }, [order.payment_type, order.total_to_pay, payload]);
 
   const lineItems = useMemo(() => {
@@ -400,37 +493,52 @@ const OrderInfoCard = ({
     return order.line_items || payload.lineItems || payload.products || [];
   }, [order.line_items, payload, providerType]);
 
-  const message = payload.messageToSeller?.text || payload.user_comments || payload.message_to_seller;
+  const message = (() => {
+    if (!payload) return null;
+    if (payload.messageToSeller) {
+      if (typeof payload.messageToSeller === "object" && payload.messageToSeller.text) {
+        return payload.messageToSeller.text;
+      }
+      if (typeof payload.messageToSeller === "string") {
+        return payload.messageToSeller;
+      }
+    }
+    if (payload.customer_message) return payload.customer_message;
+    if (payload.delivery_comments) return payload.delivery_comments;
+    if (payload.user_comments) return payload.user_comments;
+    if (payload.message_to_seller) return payload.message_to_seller;
+    return null;
+  })();
 
   return (
     <div className={cn(!onlyHeader && "space-y-6")}>
       {/* ── HERO HEADER (Premium Design) ── */}
       {!hideHeader && (
-        <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800/90 to-slate-900 shadow-xl shrink-0">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent pointer-events-none" />
+        <div className="relative rounded-2xl overflow-hidden border border-border/30 bg-slate-900/40 backdrop-blur-md shadow-xl shrink-0">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none" />
           <div className="relative p-5">
             <div className="flex flex-col md:flex-row md:items-start gap-5">
               {/* Icon + integration */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-lg">
-                  {!providerType && <Package className="h-6 w-6 text-white/70" />}
-                  {providerType === "ALLEGRO" && <AllegroIcon className="h-9 w-9" />}
-                  {providerType === "BASELINKER" && <BaseLinkerIcon className="h-9 w-9 rounded" />}
-                  {providerType === "EMPIK" && <EmpikIcon className="h-9 w-9 rounded" />}
+                <div className="w-12 h-12 rounded-xl bg-slate-950/10 dark:bg-white/10 border border-border/30 flex items-center justify-center shadow-lg">
+                  {!providerType && <Package className="h-6 w-6 text-foreground/70" />}
+                  {providerType === "ALLEGRO" && <AllegroIcon className="max-h-6 max-w-[80%] w-auto shrink-0" />}
+                  {providerType === "BASELINKER" && <BaseLinkerIcon className="max-h-6 max-w-[80%] w-auto shrink-0" />}
+                  {providerType === "EMPIK" && <EmpikIcon className="max-h-6 max-w-[80%] w-auto rounded shrink-0" />}
                 </div>
                 <div>
-                  <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
                     {order.service_integration?.name || "Zamówienie ręczne"}
                   </p>
                   <div className="flex items-center gap-2">
-                    <h1 className="text-lg font-bold text-white leading-tight">
+                    <h1 className="text-lg font-bold text-foreground leading-tight">
                       #{order.external_order_id}
                     </h1>
                     {refetchOrder && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors"
                         onClick={() => refetchOrder()}
                         disabled={isFetchingOrder}
                         title="Odśwież zamówienie"
@@ -439,24 +547,24 @@ const OrderInfoCard = ({
                       </Button>
                     )}
                   </div>
-                  <p className="text-[10px] text-white/30 font-mono mt-0.5">{order.buyer_login}</p>
+                  <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{order.buyer_login}</p>
                 </div>
               </div>
 
               {/* Stats pills */}
               <div className="flex flex-wrap gap-2 md:ml-auto">
-                <div className="flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10">
-                  <span className="text-white/50"><CreditCard className="h-3 w-3" /></span>
+                <div className="flex items-center gap-2 bg-slate-950/5 dark:bg-white/5 rounded-lg px-2.5 py-1.5 border border-border/30">
+                  <span className="text-muted-foreground"><CreditCard className="h-3 w-3" /></span>
                   <div className="min-w-0">
-                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Kwota</p>
-                    <p className="text-xs font-semibold text-white truncate">{paymentInfo.amount} {payload.currency || "PLN"}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Kwota</p>
+                    <p className="text-xs font-semibold text-foreground truncate">{paymentInfo.amount} {payload.currency || "PLN"}</p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10 ${paymentInfo.color}`}>
+                <div className={`flex items-center gap-2 bg-slate-950/5 dark:bg-white/5 rounded-lg px-2.5 py-1.5 border border-border/30 ${paymentInfo.color}`}>
                   <span className={paymentInfo.color}>{paymentInfo.icon}</span>
                   <div>
-                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Status</p>
-                    <p className="text-xs font-semibold truncate">{paymentInfo.label}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Status</p>
+                    <p className="text-xs font-semibold text-foreground truncate">{paymentInfo.label}</p>
                   </div>
                 </div>
               </div>
@@ -476,9 +584,11 @@ const OrderInfoCard = ({
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                     <Home className="h-3.5 w-3.5" /> Adres Dostawy
                   </p>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditAddressOpen(true)}>
-                    <Edit className="h-3 w-3" />
-                  </Button>
+                  {!isMobile && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditAddressOpen(true)}>
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
                 <div className="text-sm space-y-3">
                   {/* Dane odbiorcy - zawsze widoczne i czytelne */}
@@ -550,9 +660,11 @@ const OrderInfoCard = ({
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
                     <FileText className="h-3.5 w-3.5" /> Dane do Faktury
                   </p>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditInvoiceOpen(true)}>
-                    <Edit className="h-3 w-3" />
-                  </Button>
+                  {!isMobile && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary" onClick={() => setIsEditInvoiceOpen(true)}>
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
                 <div className="text-sm">
                   {invoiceInfo.hasInvoice ? (
@@ -584,10 +696,11 @@ const OrderInfoCard = ({
                     </div>
                   ) : (
                     <div className="mt-3 pt-3 border-t border-border/40">
-                      <Button
+                       <Button
                         className="w-full h-8 text-xs font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg transition-all duration-300 gap-1.5"
                         onClick={handleCreateInvoice}
-                        disabled={isCreatingInvoice}
+                        disabled={isCreatingInvoice || isMobile}
+                        title={isMobile ? "Wystawianie faktur zablokowane na mobile" : "Wystaw fakturę w Subiekt GT"}
                       >
                         {isCreatingInvoice ? (
                           <>
@@ -597,7 +710,7 @@ const OrderInfoCard = ({
                         ) : (
                           <>
                             <FileText className="h-3.5 w-3.5" />
-                            Wystaw fakturę w Subiekt GT
+                            {isMobile ? "Wystawianie FV zablokowane na mobile" : "Wystaw fakturę w Subiekt GT"}
                           </>
                         )}
                       </Button>
@@ -628,23 +741,58 @@ const OrderInfoCard = ({
               </div>
               <div className="divide-y divide-border/40">
                 {lineItems.map((item: any, index: number) => {
-                  const offerId = item.offer?.id || item.product_id;
+                  const offerId = item.offer?.id || item.product_id || item.auction_id || item.offer_id;
                   const mapping = productMappings?.[offerId];
                   const stockInfo = subiektStock?.items?.find((s: any) => s.offer_id === offerId);
+                  
+                  const getItemPrice = (i: any) => {
+                    if (!i) return null;
+                    if (typeof i.price === "string") return i.price;
+                    if (typeof i.price === "number") return `${i.price.toFixed(2)} PLN`;
+                    if (i.price?.amount) {
+                      const curr = i.price?.currency || "PLN";
+                      return `${parseFloat(i.price.amount).toFixed(2)} ${curr}`;
+                    }
+                    if (i.price_gross) return `${parseFloat(i.price_gross).toFixed(2)} PLN`;
+                    if (i.unit_price) return `${parseFloat(i.unit_price).toFixed(2)} PLN`;
+                    if (i.price_unit) return `${parseFloat(i.price_unit).toFixed(2)} PLN`;
+                    return null;
+                  };
+
+                  const priceFormatted = getItemPrice(item);
+
                   return (
-                    <div key={`${item.id || item.order_product_id}-${index}`} className="p-3 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div key={`${item.id || item.order_product_id}-${index}`} className="p-3 flex items-start justify-between gap-4 hover:bg-muted/10 transition-colors border-b border-border/20 last:border-b-0">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
                         {item.imageUrl ? (
-                          <img src={item.imageUrl} alt={item.offer?.name || item.name} className="w-10 h-10 rounded-md object-contain bg-white p-0.5 border border-border/60 shrink-0" />
+                          <img src={item.imageUrl} alt={item.offer?.name || item.name} className="w-10 h-10 rounded-md object-contain bg-white p-0.5 border border-border/60 shrink-0 mt-0.5" />
                         ) : (
-                          <div className="w-10 h-10 rounded-md border border-border/60 bg-muted/30 flex items-center justify-center shrink-0">
+                          <div className="w-10 h-10 rounded-md border border-border/60 bg-muted/30 flex items-center justify-center shrink-0 mt-0.5">
                             <Package className="h-4 w-4 text-muted-foreground" />
                           </div>
                         )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium leading-snug line-clamp-1">{item.offer?.name || item.name}</p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-[10px] text-muted-foreground font-mono">SKU: {item.sku || offerId || 'Brak'}</span>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className="text-sm font-semibold leading-snug break-words whitespace-normal text-foreground">
+                            {item.offer?.name || item.name}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs flex-wrap pt-0.5">
+                            {offerId && (
+                              <span className="font-mono text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 font-medium">
+                                ID aukcji: {offerId}
+                              </span>
+                            )}
+                            {priceFormatted && (
+                              <span className="font-semibold text-xs text-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/40">
+                                Cena: {priceFormatted}
+                              </span>
+                            )}
+                            {item.sku && (
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                SKU: {item.sku}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 pt-0.5 flex-wrap">
                             {mapping ? (
                               <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
                                 ERP: {mapping.erp_product_symbol}
@@ -683,7 +831,7 @@ const OrderInfoCard = ({
                           erpIntegrationId={erpIntegration?.id}
                           onMappingUpdated={refetchMappings || (() => {})}
                         />
-                        <Badge variant="secondary" className="font-mono bg-background shadow-sm border border-border/60">
+                        <Badge variant="secondary" className="font-mono text-xs font-bold bg-background shadow-sm border border-border/60">
                           x{item.quantity}
                         </Badge>
                       </div>
@@ -691,6 +839,19 @@ const OrderInfoCard = ({
                   );
                 })}
               </div>
+              {hasShippingCost && (
+                <div className="border-t border-border/40 px-4 py-2 flex justify-between items-center text-xs bg-muted/10">
+                  <span className="text-muted-foreground font-medium">Koszt transportu:</span>
+                  <span className={cn(
+                    "font-mono font-bold px-2 py-0.5 rounded transition-all",
+                    isCodOrder 
+                      ? "bg-yellow-500/20 text-yellow-600 border border-yellow-500/30 font-semibold" 
+                      : "bg-muted text-muted-foreground border border-border/40"
+                  )}>
+                    {shippingCost} PLN {isCodOrder && " (POBRANIE)"}
+                  </span>
+                </div>
+              )}
             </Card>
           )}
 
@@ -772,6 +933,7 @@ export function OrderDetailsColumn({
   onShipmentCreated,
   onOrderUpdate,
 }: OrderDetailsColumnProps) {
+  const isMobile = useMobile(768);
   const queryClient = useQueryClient();
 
   const { data: freshOrder, refetch: refetchOrder, isFetching: isFetchingOrder } = useQuery<MarketplaceOrder | null>({
@@ -787,13 +949,37 @@ export function OrderDetailsColumn({
 
   const order = freshOrder || propOrder;
 
+  const liveCheckEnabled = !!order?.service_integration?.sync_config?.live_check_enabled;
+  const { isChecking: isLiveChecking, result: liveCheckResult } = useOrderLiveCheck(order, liveCheckEnabled);
+
+  useEffect(() => {
+    if (liveCheckResult?.has_data_changes || liveCheckResult?.status_changed) {
+      refetchOrder();
+    }
+  }, [liveCheckResult, refetchOrder]);
+
   const { data: integrations } = useQuery<ServiceIntegration[]>({
     queryKey: ["serviceIntegrations"],
     queryFn: async () => (await api.get("/service-integrations")).data,
   });
   const erpIntegration = integrations?.find(i => i.provider_type === "SUBIEKT_GT");
 
-  const { isEnabled: printHubEnabled, status: printHubStatus, defaultLabelPrinter, printErpSymbolOnLabel, labelItemsPerPage } = usePrintHub();
+  const { isEnabled: printHubEnabled, status: printHubStatus, defaultLabelPrinter, printErpSymbolOnLabel, printFullNameOnLabel, labelItemsPerPage, printHubExcludeNip, printHubExcludeB2c } = usePrintHub();
+
+  const { data: subiektAgentConfig } = useQuery<{ agent_url: string; api_key: string } | null>({
+    queryKey: ["subiektAgentConfig"],
+    queryFn: async () => {
+      try {
+        const res = await api.get("/service-integrations/subiekt-gt/agent-config");
+        return res.data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!erpIntegration && printHubEnabled,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+  });
 
   const offerIds = useMemo(() => {
     if (!order) return [];
@@ -844,6 +1030,7 @@ export function OrderDetailsColumn({
   const [isManualCourier, setIsManualCourier] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState<number | null>(null);
   const [selectedServiceCode, setSelectedServiceCode] = useState<string>("");
+  const [suggestedPackageInfo, setSuggestedPackageInfo] = useState<{ id: string | null; isNstd: boolean } | null>(null);
   const [apaczkaServices, setApaczkaServices] = useState<ApaczkaService[]>([]);
   const [isFetchingServices, setIsFetchingServices] = useState(false);
   const [valuationItems, setValuationItems] = useState<ValuationItem[]>([]);
@@ -920,6 +1107,16 @@ export function OrderDetailsColumn({
       return `${order.details_payload?.delivery?.address?.firstName || ""} ${
         order.details_payload?.delivery?.address?.lastName || ""
       }`.trim();
+    }
+    if (order.service_integration?.provider_type === "EMPIK") {
+      const da = order.delivery_address;
+      if (da) {
+        return `${da.first_name || ""} ${da.last_name || ""}`.trim();
+      }
+      const customer = order.details_payload?.customer;
+      if (customer) {
+        return `${customer.firstname || ""} ${customer.lastname || ""}`.trim();
+      }
     }
     return order.details_payload?.delivery_fullname || "Brak";
   }, [order]);
@@ -1015,6 +1212,8 @@ export function OrderDetailsColumn({
   }, [order?.id, order?.pickup_point?.id]);
 
   const apaczkaIntegrations = integrations?.filter(i => i.provider_type === "APACZKA") ?? [];
+  const COURIER_PROVIDER_TYPES = ["APACZKA", "SUUS", "GEIS", "GEODIS", "RABEN"];
+  const courierIntegrations = integrations?.filter(i => COURIER_PROVIDER_TYPES.includes(i.provider_type)) ?? [];
 
   const {
     data: shipments,
@@ -1030,10 +1229,32 @@ export function OrderDetailsColumn({
 
   const isCodOrder = useMemo(
     () =>
+      order?.payment_type === "CASH_ON_DELIVERY" ||
       order?.details_payload?.payment?.type === "CASH_ON_DELIVERY" ||
+      (order?.service_integration?.provider_type === "EMPIK" && 
+        !!((order?.details_payload?.payment_type || order?.details_payload?.paymentType) && 
+           String(order?.details_payload?.payment_type || order?.details_payload?.paymentType).toLowerCase().includes("pobran"))) ||
       String(order?.details_payload?.payment_method_cod) === "1",
     [order]
   );
+
+  const shippingCost = useMemo(() => {
+    if (!order || !order.details_payload) return "0.00";
+    const payload = order.details_payload;
+    if (order.service_integration?.provider_type === "EMPIK") {
+      return payload.shipping_price !== undefined && payload.shipping_price !== null 
+        ? parseFloat(payload.shipping_price).toFixed(2)
+        : "0.00";
+    }
+    if (order.service_integration?.provider_type === "ALLEGRO") {
+      return payload.delivery?.cost?.amount !== undefined && payload.delivery?.cost?.amount !== null
+        ? parseFloat(payload.delivery.cost.amount).toFixed(2)
+        : "0.00";
+    }
+    return payload.delivery_price !== undefined && payload.delivery_price !== null
+      ? parseFloat(payload.delivery_price).toFixed(2)
+      : "0.00";
+  }, [order]);
   const totalCodAmount = useMemo(() => {
     if (!isCodOrder || !order) return 0;
     const payload = order.details_payload;
@@ -1052,6 +1273,58 @@ export function OrderDetailsColumn({
         mappedPackageId: undefined,
         mappingWarning: null,
       };
+
+    // 1. Sprawdź, czy usługi dodatkowe w zamówieniu wymuszają konkretnego kuriera
+    if (serviceMappings && serviceMappings.length > 0) {
+      const details = order.details_payload || {};
+      const orderServices: string[] = [];
+
+      // Sprawdź w details_payload.delivery.additionalServices
+      const deliveryServices = details.delivery?.additionalServices || [];
+      deliveryServices.forEach((s: any) => {
+        if (s && s.definitionId) {
+          orderServices.push(s.definitionId);
+        }
+      });
+
+      // Sprawdź w lineItems
+      const lineItemsList = details.lineItems || details.line_items || [];
+      lineItemsList.forEach((item: any) => {
+        if (item && item.selectedAdditionalServices) {
+          item.selectedAdditionalServices.forEach((s: any) => {
+            if (s && s.definitionId) {
+              orderServices.push(s.definitionId);
+            }
+          });
+        }
+      });
+
+      const providerType = order.service_integration?.provider_type || "";
+
+      for (const serviceId of orderServices) {
+        const matchedSrv = serviceMappings.find(
+          (m) =>
+            m.marketplace_service_id === serviceId &&
+            m.source_integration_provider === providerType
+        );
+        if (matchedSrv) {
+          // Szukamy integracji dla tego kuriera
+          const courier = config.couriers.find(
+            (c) => c.provider_type === matchedSrv.courier_provider && c.is_active !== false
+          );
+          if (courier) {
+            const defaultPackage = config.packages.find((p) => p.is_default);
+            return {
+              mappedCourier: courier,
+              mappedPackageId: defaultPackage?.id,
+              mappingWarning: null,
+            };
+          }
+        }
+      }
+    }
+
+    // 2. Normalna ścieżka na podstawie metody dostawy
     const deliveryMethodName =
       order.details_payload?.delivery?.method?.name ||
       order.details_payload?.delivery_method ||
@@ -1082,16 +1355,66 @@ export function OrderDetailsColumn({
         mapping.default_package_definition_id || defaultPackage?.id,
       mappingWarning: null,
     };
-  }, [order, config]);
+  }, [order, config, serviceMappings]);
+
+  const courierProvider = useMemo(() => {
+    if (isManualCourier) {
+      return config?.couriers.find((c) => c.id === selectedCourierId)?.provider_type;
+    }
+    return mappedCourier?.provider_type;
+  }, [isManualCourier, selectedCourierId, mappedCourier, config]);
 
   useEffect(() => {
-    if (order) {
+    if (!order) {
+      setSuggestedPackageInfo(null);
+      return;
+    }
+
+    const currentCourierId = isManualCourier ? selectedCourierId : mappedCourier?.id;
+    const currentServiceCode = isManualCourier ? selectedServiceCode : undefined;
+
+    const controller = new AbortController();
+
+    api
+      .get<{ package_definition_id: string | null; is_nstd: boolean }>("/shipping/suggest-packages", {
+        params: {
+          order_id: order.id,
+          courier_integration_id: currentCourierId || undefined,
+          service_code: currentServiceCode || undefined,
+        },
+        signal: controller.signal,
+      })
+      .then((res) => {
+        setSuggestedPackageInfo({
+          id: res.data.package_definition_id,
+          isNstd: res.data.is_nstd,
+        });
+      })
+      .catch((err) => {
+        // Ignorujemy błędy przerwania zapytania
+        if (err.name !== "CanceledError" && err.message !== "canceled") {
+          console.error("Failed to fetch suggested package:", err);
+          // Fallback to static mapped package
+          setSuggestedPackageInfo({
+            id: mappedPackageId || null,
+            isNstd: false,
+          });
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [order, isManualCourier, selectedCourierId, selectedServiceCode, mappedCourier, mappedPackageId]);
+
+  useEffect(() => {
+    if (order && suggestedPackageInfo) {
       const initialCodAmount = isCodOrder ? totalCodAmount.toFixed(2) : "";
       setPackages([
         {
           id: crypto.randomUUID(),
           mode: "predefined",
-          selectedPackageId: mappedPackageId,
+          selectedPackageId: suggestedPackageInfo.id || undefined,
           customPackage: {
             length_cm: "",
             width_cm: "",
@@ -1100,13 +1423,13 @@ export function OrderDetailsColumn({
           },
           codAmount: initialCodAmount,
           courier_code: "COL",
-          is_nstd: false,
+          is_nstd: suggestedPackageInfo.isNstd,
         },
       ]);
-    } else {
+    } else if (!order) {
       setPackages([]);
     }
-  }, [order, mappedPackageId, isCodOrder, totalCodAmount]);
+  }, [order, suggestedPackageInfo, isCodOrder, totalCodAmount]);
 
   useEffect(() => {
     if (order?.buyer_login && order.service_integration) {
@@ -1125,7 +1448,7 @@ export function OrderDetailsColumn({
 
   useEffect(() => {
     const autoSelected = new Set<string>();
-    if (order && serviceMappings && mappedCourier) {
+    if (order && serviceMappings && courierProvider) {
       const lineItems = order.details_payload?.lineItems || [];
       for (const item of lineItems) {
         const allegroServices = item.selectedAdditionalServices || [];
@@ -1133,27 +1456,46 @@ export function OrderDetailsColumn({
           const serviceMap = serviceMappings.find(
             (m) =>
               m.marketplace_service_id === service.definitionId &&
-              m.courier_provider === mappedCourier.provider_type
+              m.courier_provider === courierProvider
           );
           if (serviceMap) {
             autoSelected.add(serviceMap.courier_service_code);
+          } else if (courierProvider === "SUUS" && service.definitionId === "CARRY_IN") {
+            autoSelected.add("StdWniesienie2");
           }
         }
       }
     }
     setSelectedServices(autoSelected);
-  }, [order, serviceMappings, mappedCourier]);
+  }, [order, serviceMappings, courierProvider]);
 
   const totalMessages = useMemo(
     () => threads.reduce((sum, thread) => sum + thread.messages.length, 0),
     [threads]
   );
   const availableServicesForCourier = useMemo(() => {
-    if (!serviceMappings || !mappedCourier) return [];
-    return serviceMappings.filter(
-      (m) => m.courier_provider === mappedCourier.provider_type
+    if (!serviceMappings) return [];
+    const filtered = serviceMappings.filter(
+      (m) => m.courier_provider === courierProvider
     );
-  }, [serviceMappings, mappedCourier]);
+
+    // Add default SUUS carry-in service if it's SUUS and not already mapped
+    if (courierProvider === "SUUS") {
+      const hasWniesienie = filtered.some((m) => m.courier_service_code === "StdWniesienie2");
+      if (!hasWniesienie) {
+        filtered.push({
+          id: "default-suus-wniesienie",
+          marketplace_service_id: "CARRY_IN",
+          marketplace_service_name: "Wniesienie",
+          source_integration_provider: "ALLEGRO",
+          courier_provider: "SUUS",
+          courier_service_code: "StdWniesienie2",
+        });
+      }
+    }
+
+    return filtered;
+  }, [serviceMappings, courierProvider]);
 
   const handlePackageChange = (
     index: number,
@@ -1337,6 +1679,7 @@ export function OrderDetailsColumn({
           : undefined,
         package_definition: packageDef,
         is_nstd: pkg.is_nstd,
+        courier_code: pkg.courier_code || undefined,
       };
       if (pkg.mode === "predefined") {
         currentPayload.package_definition_id = pkg.selectedPackageId;
@@ -1430,6 +1773,7 @@ export function OrderDetailsColumn({
               printHubService.printPdf(label_data, fileName, {
                 printerName: defaultLabelPrinter || undefined,
                 printErpSymbols: printErpSymbolOnLabel,
+                printFullName: printFullNameOnLabel,
                 labelItemsPerPage: labelItemsPerPage,
                 erpItems: erpItems,
               });
@@ -1483,7 +1827,7 @@ export function OrderDetailsColumn({
         (isCodOrder && (p.codAmount === "" || isNaN(parseFloat(p.codAmount))))
     );
 
-  const isApaczkaSelected = isManualCourier ? !!selectedCourierId : mappedCourier?.provider_type === "APACZKA";
+  const isApaczkaSelected = courierProvider === "APACZKA";
   const hasPickupPoint = !!(order?.pickup_point || order?.pickupPoint || order?.details_payload?.delivery?.pickupPoint || order?.detailsPayload?.delivery?.pickupPoint);
 
   const isPickupPointService = (() => {
@@ -1514,12 +1858,53 @@ export function OrderDetailsColumn({
 
   const showPickupPoint = isApaczkaSelected ? isPickupPointService : hasPickupPoint;
 
-  const buyerMessage = order.details_payload?.messageToSeller?.text || 
-                       order.details_payload?.user_comments || 
-                       order.details_payload?.message_to_seller;
+  const buyerMessage = (() => {
+    const payload = order.details_payload;
+    if (!payload) return null;
+
+    if (payload.messageToSeller) {
+      if (typeof payload.messageToSeller === "object" && payload.messageToSeller.text) {
+        return payload.messageToSeller.text;
+      }
+      if (typeof payload.messageToSeller === "string") {
+        return payload.messageToSeller;
+      }
+    }
+    
+    if (payload.customer_message) return payload.customer_message;
+    if (payload.delivery_comments) return payload.delivery_comments;
+    if (payload.user_comments) return payload.user_comments;
+    if (payload.message_to_seller) return payload.message_to_seller;
+    
+    return null;
+  })();
+
+  const sellerNote = (() => {
+    const payload = order.details_payload;
+    if (!payload) return undefined;
+
+    if (payload.admin_comments) return payload.admin_comments;
+    if (payload.adminComments) return payload.adminComments;
+    
+    if (payload.note) {
+      if (typeof payload.note === "object" && payload.note.text) {
+        return payload.note.text;
+      }
+      if (typeof payload.note === "string") {
+        return payload.note;
+      }
+    }
+
+    if (payload.seller_note) return payload.seller_note;
+    if (payload.seller_comment) return payload.seller_comment;
+    if (payload.notes && typeof payload.notes === "string") return payload.notes;
+
+    return undefined;
+  })();
 
   return (
-    <div className="h-full flex flex-col overflow-hidden glass border-none rounded-2xl p-6 gap-4 bg-slate-900/40 backdrop-blur-md shadow-2xl">
+    <div className="h-full flex flex-col overflow-hidden glass border border-border/40 rounded-2xl p-6 gap-4 bg-card/90 backdrop-blur-md shadow-xl">
+      <OrderLiveCheckBanner isChecking={isLiveChecking} result={liveCheckResult} />
       <OrderInfoCard 
         order={order} 
         productMappings={productMappings}
@@ -1536,6 +1921,11 @@ export function OrderDetailsColumn({
         isFetchingOrder={isFetchingOrder}
         onlyHeader={true}
         subiektStock={subiektStock}
+        printHubEnabled={printHubEnabled}
+        printHubStatus={printHubStatus}
+        printHubExcludeNip={printHubExcludeNip}
+        printHubExcludeB2c={printHubExcludeB2c}
+        subiektAgentConfig={subiektAgentConfig}
       />
 
       {buyerMessage && (
@@ -1546,6 +1936,72 @@ export function OrderDetailsColumn({
           </AlertTitle>
           <AlertDescription className="mt-1 text-sm font-semibold italic">
             "{buyerMessage}"
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Warning: Invoice already exists */}
+      {organization?.warn_invoice_exists && (order.erp_sales_document_number || order.erpSalesDocumentNumber) && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[11px] text-amber-200 font-medium shrink-0">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+          <span>
+            Faktura już istnieje w ERP: <strong className="font-mono bg-amber-500/20 px-1.5 py-0.5 rounded text-white ml-0.5">{order.erp_sales_document_number || order.erpSalesDocumentNumber}</strong>
+          </span>
+        </div>
+      )}
+
+      {/* Warning: Waybill already exists */}
+      {organization?.warn_waybill_exists && order.tracking_numbers && order.tracking_numbers.length > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[11px] text-amber-200 font-medium shrink-0">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+          <span>
+            Wygenerowano już list przewozowy: <strong className="font-mono bg-amber-500/20 px-1.5 py-0.5 rounded text-white ml-0.5">{order.tracking_numbers.join(", ")}</strong>
+          </span>
+        </div>
+      )}
+
+      {/* Warning: COD Mismatch */}
+      {organization?.warn_cod_mismatch && (() => {
+        const orderTotal = order.total_to_pay || 0;
+        const packagesCodSum = packages.reduce((sum, pkg) => {
+          const amt = pkg.codAmount ? parseFloat(pkg.codAmount.replace(",", ".")) : 0;
+          return sum + (isNaN(amt) ? 0 : amt);
+        }, 0);
+
+        if (isCodOrder) {
+          if (Math.abs(packagesCodSum - orderTotal) > 0.01) {
+            return (
+              <div className="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-1.5 text-[11px] text-rose-200 font-medium shrink-0">
+                <AlertCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                <span>
+                  Niezgodność pobrania (COD): suma w paczkach (<strong className="text-white">{packagesCodSum.toFixed(2)} PLN</strong>) różni się od wartości zamówienia (<strong className="text-white">{orderTotal.toFixed(2)} PLN</strong>)
+                </span>
+              </div>
+            );
+          }
+        } else {
+          if (packagesCodSum > 0.01) {
+            return (
+              <div className="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-1.5 text-[11px] text-rose-200 font-medium shrink-0">
+                <AlertCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                <span>
+                  Zamówienie opłacone, ale w paczkach zdefiniowano kwotę pobrania (<strong className="text-white">{packagesCodSum.toFixed(2)} PLN</strong>)
+                </span>
+              </div>
+            );
+          }
+        }
+        return null;
+      })()}
+
+      {sellerNote && (
+        <Alert className="border-indigo-500/30 bg-indigo-500/10 text-indigo-200 shrink-0">
+          <AlertCircle className="h-4 w-4 text-indigo-400" />
+          <AlertTitle className="text-xs font-semibold flex items-center gap-1.5">
+            <StickyNote className="h-3.5 w-3.5 text-indigo-400" /> Uwaga do zakupu (sprzedawca)
+          </AlertTitle>
+          <AlertDescription className="mt-1 text-sm font-semibold italic">
+            "{sellerNote}"
           </AlertDescription>
         </Alert>
       )}
@@ -1598,6 +2054,11 @@ export function OrderDetailsColumn({
             overridePointId={overridePointId}
             setOverridePointId={setOverridePointId}
             subiektStock={subiektStock}
+            printHubEnabled={printHubEnabled}
+            printHubStatus={printHubStatus}
+            printHubExcludeNip={printHubExcludeNip}
+            printHubExcludeB2c={printHubExcludeB2c}
+            subiektAgentConfig={subiektAgentConfig}
           />
 
       {/* ── METODA WYSYŁKI ── */}
@@ -1648,41 +2109,52 @@ export function OrderDetailsColumn({
           ) : (
             // Tryb ręczny
             <div className="space-y-4">
-              {/* Wybór integracji Apaczka */}
-              {apaczkaIntegrations.length === 0 ? (
+              {/* Wybór integracji kurierskiej */}
+              {courierIntegrations.length === 0 ? (
                 <Alert className="py-2">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription className="text-xs">
-                    Brak skonfigurowanej integracji Apaczka. Dodaj ją w Ustawieniach → Integracje.
+                    Brak skonfigurowanych integracji kurierskich. Dodaj kuriera w Ustawieniach → Integracje.
                   </AlertDescription>
                 </Alert>
               ) : (
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Integracja Apaczka</Label>
+                  <Label className="text-xs text-muted-foreground">Kurier</Label>
                   <Select
                     value={selectedCourierId?.toString() ?? ""}
                     onValueChange={(val) => {
                       const id = parseInt(val);
                       setSelectedCourierId(id);
-                      fetchApaczkaServices(id);
+                      setSelectedServiceCode("");
+                      setApaczkaServices([]);
+                      setValuationItems([]);
+                      const chosen = courierIntegrations.find(i => i.id === id);
+                      if (chosen?.provider_type === "APACZKA") {
+                        fetchApaczkaServices(id);
+                      }
                     }}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Wybierz konto Apaczka…" />
+                      <SelectValue placeholder="Wybierz kuriera…" />
                     </SelectTrigger>
                     <SelectContent>
-                      {apaczkaIntegrations.map(i => (
-                        <SelectItem key={i.id} value={i.id.toString()}>{i.name}</SelectItem>
+                      {courierIntegrations.map(i => (
+                        <SelectItem key={i.id} value={i.id.toString()}>
+                          <span className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{i.provider_type}</span>
+                            {i.name}
+                          </span>
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
 
-              {/* Wybór serwisu — grupowany po kurierze */}
-              {selectedCourierId && (
+              {/* Wybór serwisu — tylko dla Apaczka */}
+              {selectedCourierId && courierIntegrations.find(i => i.id === selectedCourierId)?.provider_type === "APACZKA" && (
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Serwis kurierski</Label>
+                  <Label className="text-xs text-muted-foreground">Serwis kurierski (Apaczka)</Label>
                   {isFetchingServices ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" /> Ładowanie serwisów…
@@ -1732,6 +2204,14 @@ export function OrderDetailsColumn({
                       })()}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Informacja dla kurierów bez listy serwisów (SUUS, GEIS, GEODIS) */}
+              {selectedCourierId && courierIntegrations.find(i => i.id === selectedCourierId)?.provider_type !== "APACZKA" && (
+                <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-muted/10 px-3 py-2.5 text-xs text-muted-foreground">
+                  <Truck className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary/60" />
+                  <span>Usługa kurierska zostanie przypisana automatycznie na podstawie konfiguracji integracji. Możesz wygenerować list przewozowy poniżej.</span>
                 </div>
               )}
 
@@ -1927,20 +2407,43 @@ export function OrderDetailsColumn({
                       </div>
                     </div>
 
-                    {mappedCourier?.provider_type === "SUUS" && (
+                    {courierProvider === "SUUS" && (
                       <div className="space-y-1 mt-1">
                         <Label className="text-[10px] text-muted-foreground">Typ opakowania SUUS</Label>
                         <Select
                           onValueChange={(value) =>
                             handlePackageChange(index, "courier_code", value)
                           }
-                          value={pkg.courier_code}
+                          value={pkg.courier_code || ""}
                         >
                           <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-lg">
                             <SelectValue placeholder="Wybierz typ opakowania..." />
                           </SelectTrigger>
                           <SelectContent>
                             {Object.entries(SUUS_PACKAGE_CODES).map(([code, name]) => (
+                              <SelectItem key={code} value={code} className="text-xs">
+                                {code} - {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {courierProvider === "RABEN" && (
+                      <div className="space-y-1 mt-1">
+                        <Label className="text-[10px] text-muted-foreground">Typ opakowania Raben</Label>
+                        <Select
+                          onValueChange={(value) =>
+                            handlePackageChange(index, "courier_code", value)
+                          }
+                          value={pkg.courier_code || ""}
+                        >
+                          <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-lg">
+                            <SelectValue placeholder="Wybierz typ opakowania..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(RABEN_PACKAGE_CODES).map(([code, name]) => (
                               <SelectItem key={code} value={code} className="text-xs">
                                 {code} - {name}
                               </SelectItem>
@@ -2142,7 +2645,8 @@ export function OrderDetailsColumn({
             <Button
               onClick={handleGenerateLabels}
               className="w-full h-10 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-bold text-xs shadow-lg hover:shadow-primary/10 transition-all duration-300 rounded-xl gap-2 mt-2"
-              disabled={isGenerateButtonDisabled}
+              disabled={isGenerateButtonDisabled || isMobile}
+              title={isMobile ? "Generowanie etykiet zablokowane na mobile" : "Generuj etykiety"}
             >
               {isGenerating ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -2151,6 +2655,8 @@ export function OrderDetailsColumn({
               )}
               {isGenerating
                 ? "Generowanie etykiet..."
+                : isMobile
+                ? "Generowanie etykiet zablokowane na mobile"
                 : `Generuj Etykiety (${packages.length})`}
             </Button>
           </div>

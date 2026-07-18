@@ -23,4 +23,13 @@ export interface Organization {
   default_iban: string | null;
   default_label_format: LabelFormat;
   default_reference_number_template?: string;
+  print_hub_enabled?: boolean;
+  print_hub_default_invoice_printer?: string | null;
+  print_hub_default_label_printer?: string | null;
+  print_erp_symbol_on_label?: boolean;
+  print_full_name_on_label?: boolean;
+  label_items_per_page?: number;
+  warn_invoice_exists?: boolean;
+  warn_waybill_exists?: boolean;
+  warn_cod_mismatch?: boolean;
 }

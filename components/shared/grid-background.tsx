@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ThreeDGlobe } from "./three-d-globe";
 
 export function AnimatedBackground({
   children,
@@ -8,17 +9,21 @@ export function AnimatedBackground({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex items-center justify-center h-screen w-full overflow-hidden bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 dark:from-gray-900 dark:via-black dark:to-gray-950">
-      {/* animowane gradientowe fale */}
-      <div className="absolute inset-0">
-        <div className="absolute w-[200%] h-[200%] -left-1/2 -top-1/2 animate-wave bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.08),transparent_70%)]" />
+    <div className="relative flex items-center justify-center min-h-screen w-full overflow-hidden bg-slate-950">
+      {/* Animated background radial glows */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(99,102,241,0.15),transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_75%,rgba(236,72,153,0.08),transparent_60%)]" />
+
+      {/* Grid pattern overlay */}
+      <div className="absolute inset-0 bg-grid-premium opacity-25" />
+
+      {/* Interactive 3D Sphere */}
+      <ThreeDGlobe />
+
+      {/* Content container */}
+      <div className="relative z-20 w-full flex items-center justify-center p-4">
+        {children}
       </div>
-
-      {/* maska żeby środek był bardziej czytelny */}
-      <div className="absolute inset-0 [mask-image:radial-gradient(circle_at_center,black_60%,transparent)]" />
-
-      {/* content */}
-      <div className="relative z-20">{children}</div>
     </div>
   );
 }

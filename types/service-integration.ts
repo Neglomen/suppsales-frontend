@@ -12,8 +12,8 @@ export interface SenderConfig {
 export interface ServiceIntegration {
   id: number;
   name: string;
-  category: "MARKETPLACE" | "COURIER" | "ACCOUNTING" | "ERP" | "GOVERNMENT";
-  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "AB" | "EMPIK";
+  category: "MARKETPLACE" | "COURIER" | "ACCOUNTING" | "ERP" | "GOVERNMENT" | "WHOLESALE";
+  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "AB" | "EMPIK" | "GEIS" | "GEODIS" | "INPOST_BUY" | "RABEN";
   is_active: boolean;
   external_user_id: string | null;
   sync_orders: boolean;

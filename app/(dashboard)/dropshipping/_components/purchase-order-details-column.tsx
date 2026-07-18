@@ -412,10 +412,10 @@ export function PurchaseOrderDetailsColumn({
   const paymentInfo = (() => {
     if (payload.payment?.type === "CASH_ON_DELIVERY" || String(payload.payment_method_cod) === "1") {
       const amount = payload.cashOnDelivery?.amount || payload.payment_done || order.totalToPay || (order as any).total_to_pay;
-      return { type: "cod", label: "Pobranie", amount, color: "text-amber-400" };
+      return { type: "cod", label: "Pobranie", amount, color: "text-amber-600 dark:text-amber-400" };
     }
     const amount = payload.summary?.totalToPay?.amount || payload.payment_done || order.totalToPay || (order as any).total_to_pay;
-    return { type: "paid", label: "Opłacone", amount, color: "text-emerald-400" };
+    return { type: "paid", label: "Opłacone", amount, color: "text-emerald-600 dark:text-emerald-400" };
   })();
 
   const providerType = (order.serviceIntegration || (order as any).service_integration)?.provider_type;
@@ -424,40 +424,40 @@ export function PurchaseOrderDetailsColumn({
     <>
       <div className="p-4 space-y-4 h-full overflow-y-auto w-full">
         {/* ── HERO HEADER (Premium Design) ── */}
-        <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800/90 to-slate-900 shadow-xl shrink-0">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent pointer-events-none" />
+        <div className="relative rounded-2xl overflow-hidden border border-border/30 bg-slate-900/40 backdrop-blur-md shadow-xl shrink-0">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none" />
           <div className="relative p-5">
             <div className="flex flex-col md:flex-row md:items-start gap-5">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center shadow-lg">
-                  {!providerType && <Package className="h-6 w-6 text-white/70" />}
-                  {providerType === "ALLEGRO" && <span className="text-white font-bold text-xs uppercase">ALL</span>}
-                  {providerType === "BASELINKER" && <span className="text-white font-bold text-xs uppercase">BL</span>}
+                <div className="w-12 h-12 rounded-xl bg-slate-950/10 dark:bg-white/10 border border-border/30 flex items-center justify-center shadow-lg">
+                  {!providerType && <Package className="h-6 w-6 text-foreground/70" />}
+                  {providerType === "ALLEGRO" && <span className="text-foreground font-bold text-xs uppercase">ALL</span>}
+                  {providerType === "BASELINKER" && <span className="text-foreground font-bold text-xs uppercase">BL</span>}
                 </div>
                 <div>
-                  <p className="text-[10px] text-white/40 uppercase tracking-widest">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
                     {(order.serviceIntegration || (order as any).service_integration)?.name || "Zamówienie ręczne"}
                   </p>
-                  <h1 className="text-lg font-bold text-white leading-tight">
+                  <h1 className="text-lg font-bold text-foreground leading-tight">
                     #{order.externalOrderId || (order as any).external_order_id}
                   </h1>
-                  <p className="text-[10px] text-white/30 font-mono mt-0.5">{order.buyerLogin || (order as any).buyer_login}</p>
+                  <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{order.buyerLogin || (order as any).buyer_login}</p>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2 md:ml-auto mt-2 md:mt-0">
-                <div className="flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10">
-                  <span className="text-white/50"><CreditCard className="h-4 w-4" /></span>
+                <div className="flex items-center gap-2 bg-slate-950/5 dark:bg-white/5 rounded-lg px-2.5 py-1.5 border border-border/30">
+                  <span className="text-muted-foreground"><CreditCard className="h-4 w-4" /></span>
                   <div className="min-w-0">
-                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Kwota</p>
-                    <p className="text-xs font-semibold text-white truncate">{paymentInfo.amount} {payload.currency || "PLN"}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Kwota</p>
+                    <p className="text-xs font-semibold text-foreground truncate">{paymentInfo.amount} {payload.currency || "PLN"}</p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-2 bg-white/5 rounded-lg px-2.5 py-1.5 border border-white/10 ${paymentInfo.color}`}>
+                <div className={`flex items-center gap-2 bg-slate-950/5 dark:bg-white/5 rounded-lg px-2.5 py-1.5 border border-border/30 ${paymentInfo.color}`}>
                   {paymentInfo.type === "paid" ? <CheckCircle className={`h-4 w-4 ${paymentInfo.color}`} /> : <AlertCircle className={`h-4 w-4 ${paymentInfo.color}`} />}
                   <div>
-                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Status</p>
-                    <p className="text-xs font-semibold truncate">{paymentInfo.label}</p>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Status</p>
+                    <p className="text-xs font-semibold text-foreground truncate">{paymentInfo.label}</p>
                   </div>
                 </div>
               </div>

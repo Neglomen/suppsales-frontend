@@ -36,10 +36,11 @@ import { TooltipTrigger } from "@radix-ui/react-tooltip";
 import { cn } from "@/lib/utils";
 import { ServiceIntegration } from "@/types/service-integration";
 import { IntegrationCard } from "./_components/integration-card";
-
-// Definicja typu, który otrzymamy z API (bez zmian)
+import { useMobile } from "@/hooks/use-mobile";
+import { MobileLock } from "@/components/shared/mobile-lock";
 
 export default function IntegrationsPage() {
+  const isMobile = useMobile(768);
   const [integrations, setIntegrations] = useState<ServiceIntegration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setDialogOpen] = useState(false);
@@ -153,6 +154,15 @@ export default function IntegrationsPage() {
   const onIntegrationAdded = (newIntegration: ServiceIntegration) => {
     setIntegrations([newIntegration, ...integrations]);
   };
+
+  if (isMobile) {
+    return (
+      <MobileLock
+        title="Zarządzanie Integracjami Zablokowane"
+        description="Konfiguracja połączeń Allegro, Subiekt ERP oraz kurierów jest niedostępna na smartfonach ze względów bezpieczeństwa i wygody konfiguracji. Skonfiguruj te ustawienia na komputerze."
+      />
+    );
+  }
 
   if (isLoading) {
     return (

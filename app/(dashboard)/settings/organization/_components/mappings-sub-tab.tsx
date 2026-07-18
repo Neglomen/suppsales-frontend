@@ -42,6 +42,8 @@ import {
   BaseLinkerIcon,
   SuusIcon,
   EmpikIcon,
+  GeisIcon,
+  RabenIcon,
 } from "@/components/shared/icons";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -151,12 +153,12 @@ export function MappingsSubTab() {
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
             {row.original.source_integration?.provider_type === "ALLEGRO" && (
-              <AllegroIcon className="h-5 w-5" />
+              <AllegroIcon className="h-5 w-auto shrink-0" />
             )}
             {row.original.source_integration?.provider_type ===
-              "BASELINKER" && <BaseLinkerIcon className="h-5 w-5 rounded-sm" />}
+              "BASELINKER" && <BaseLinkerIcon className="h-5 w-auto rounded-sm shrink-0" />}
             {row.original.source_integration?.provider_type === "EMPIK" && (
-              <EmpikIcon className="h-5 w-5 rounded-sm" />
+              <EmpikIcon className="h-5 w-auto rounded-sm shrink-0" />
             )}
             <div className="flex flex-col">
               <span className="font-medium">
@@ -190,10 +192,16 @@ export function MappingsSubTab() {
             // === NOWA LOGIKA Z IKONAMI ===
             <div className="flex items-center gap-2">
               {courier.provider_type === "ALLEGRO" && (
-                <AllegroIcon className="h-5 w-5 flex-shrink-0" />
+                <AllegroIcon className="h-5 w-auto flex-shrink-0" />
               )}
               {courier.provider_type === "SUUS" && (
                 <SuusIcon className="h-auto w-10 flex-shrink-0" />
+              )}
+              {courier.provider_type === "GEIS" && (
+                <GeisIcon className="h-auto w-10 flex-shrink-0" />
+              )}
+              {courier.provider_type === "RABEN" && (
+                <RabenIcon className="h-auto w-10 flex-shrink-0" />
               )}
               <div className="flex flex-col">
                 <span className="font-medium">{courier.name}</span>

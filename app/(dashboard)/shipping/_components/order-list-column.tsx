@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { AllegroIcon, BaseLinkerIcon } from "@/components/shared/icons";
+import { AllegroIcon, BaseLinkerIcon, EmpikIcon } from "@/components/shared/icons";
 
 interface OrderListColumnProps {
   selectedOrder: MarketplaceOrder | null;
@@ -83,6 +83,17 @@ const parseOrderRowData = (order: MarketplaceOrder) => {
     deliveryMethod = details_payload.delivery_method || "Nie określono";
     isCod = String(details_payload.payment_method_cod) === "1";
     isPickupPoint = !!details_payload.delivery_point_id;
+  } else if (service_integration.provider_type === "EMPIK") {
+    const da = order.delivery_address;
+    if (da) {
+      receiverFullName = `${da.first_name || ""} ${da.last_name || ""}`.trim();
+    } else {
+      const cust = details_payload.customer;
+      receiverFullName = cust ? `${cust.firstname || ""} ${cust.lastname || ""}`.trim() : "Brak";
+    }
+    deliveryMethod = details_payload.shipping_type_label || details_payload.shipping_type_code || "Nie określono";
+    isCod = order.payment_type === "CASH_ON_DELIVERY";
+    isPickupPoint = !!order.pickup_point;
   }
 
   // Wykryj czy zamówienie ma fakturę
@@ -131,7 +142,9 @@ export function OrderListColumn({
         lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
     });
 
-  const allOrders = data?.pages.flatMap((page) => page.items) ?? [];
+  const rawOrders = data?.pages.flatMap((page) => page.items) ?? [];
+  // Eliminacja ewentualnych duplikatów po ID zamówienia w celu uniknięcia błędów kluczy w React
+  const allOrders = Array.from(new Map(rawOrders.map((order) => [order.id, order])).values());
   const parentRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
     count: hasNextPage ? allOrders.length + 1 : allOrders.length,
@@ -269,10 +282,14 @@ export function OrderListColumn({
                   <div className="flex justify-between text-xs">
                     <span className="flex items-center gap-1.5">
                       {order.service_integration?.provider_type ===
-                        "ALLEGRO" && <AllegroIcon className="h-4 w-4" />}
+                        "ALLEGRO" && <AllegroIcon className="h-[18px] w-auto shrink-0" />}
                       {order.service_integration?.provider_type ===
                         "BASELINKER" && (
-                        <BaseLinkerIcon className="h-4 w-4 rounded-sm" />
+                        <BaseLinkerIcon className="h-[18px] w-auto shrink-0" />
+                      )}
+                      {order.service_integration?.provider_type ===
+                        "EMPIK" && (
+                        <EmpikIcon className="h-[18px] w-auto rounded-sm shrink-0" />
                       )}
                       {order.service_integration?.name || "Brak integracji"}
                     </span>

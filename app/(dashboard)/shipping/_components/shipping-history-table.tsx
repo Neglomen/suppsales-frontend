@@ -111,7 +111,14 @@ export function ShippingHistoryTable() {
     try {
       const toastId = toast.loading("Przygotowywanie wydruku...");
       const response = await api.get(`/shipping/shipments/${shipmentId}/label`);
-      const { label_data, label_format } = response.data;
+      const {
+        label_data,
+        label_format,
+        print_erp_symbols,
+        print_full_name,
+        label_items_per_page,
+        erp_items,
+      } = response.data;
       
       // Jeżeli Print Hub jest połączony, używamy go to druku
       if (printHubEnabled && printHubStatus === "connected") {
@@ -120,7 +127,13 @@ export function ShippingHistoryTable() {
            toast.success("Wysłano etykietę (ZPL/EPL) do Print Hub", { id: toastId });
            return;
         } else {
-           printHubService.printPdf(label_data, `Etykieta_${shipmentId}`, { printerName: defaultLabelPrinter || undefined });
+           printHubService.printPdf(label_data, `Etykieta_${shipmentId}`, {
+             printerName: defaultLabelPrinter || undefined,
+             printErpSymbols: print_erp_symbols,
+             printFullName: print_full_name,
+             labelItemsPerPage: label_items_per_page,
+             erpItems: erp_items || [],
+           });
            toast.success("Wysłano etykietę (PDF) do Print Hub", { id: toastId });
            return;
         }

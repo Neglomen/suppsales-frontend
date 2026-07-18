@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Loader2, Printer, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface KsefVisualizerProps {
   xml: string;
@@ -33,6 +34,7 @@ interface InvoiceData {
   currency: string;
   seller: InvoiceParty;
   buyer: InvoiceParty;
+  recipient?: InvoiceParty;
   lines: InvoiceLine[];
   totalNet: number;
   totalVat: number;
@@ -122,7 +124,51 @@ const parseKsefXml = (xmlStr: string): InvoiceData | null => {
     // Linie faktury
     const lines: InvoiceLine[] = [];
     const allElements = doc.getElementsByTagName("*");
-    
+
+    const findIn = (node: Element, tag: string) => {
+         const els = node.getElementsByTagName("*");
+         for (let i = 0; i < els.length; i++) {
+             if (els[i].localName === tag) return els[i].textContent || "";
+         }
+         return "";
+    };
+
+    // Odbiorca (Podmiot3, Podmiot4, itd. z Rolą == 2)
+    let recipient: InvoiceParty | undefined = undefined;
+    for (let i = 0; i < allElements.length; i++) {
+        const tag = allElements[i].localName;
+        if (tag.startsWith("Podmiot") && tag.length > 7 && /^\d+$/.test(tag.substring(7))) {
+            const num = parseInt(tag.substring(7), 10);
+            if (num >= 3) {
+                const rola = findIn(allElements[i], "Rola");
+                if (rola === "2") {
+                    const nip = findIn(allElements[i], "NIP");
+                    const name = findIn(allElements[i], "PelnaNazwa") || findIn(allElements[i], "Nazwa") || (findIn(allElements[i], "Imie") + " " + findIn(allElements[i], "Nazwisko")).trim();
+                    
+                    // Adres
+                    const adresNode = Array.from(allElements[i].getElementsByTagName("*")).find(el => el.localName === "Adres");
+                    let address = "";
+                    if (adresNode) {
+                         const line1 = findIn(adresNode, "AdresL1");
+                         const line2 = findIn(adresNode, "AdresL2");
+                         if (line1 || line2) {
+                             address = `${line1} ${line2}`.trim();
+                         } else {
+                             const ulica = findIn(adresNode, "Ulica");
+                             const nrDomu = findIn(adresNode, "NrDomu");
+                             const nrLok = findIn(adresNode, "NrLokalu");
+                             const kod = findIn(adresNode, "KodPocztowy");
+                             const miasto = findIn(adresNode, "Miejscowosc");
+                             address = `${ulica} ${nrDomu}${nrLok ? '/' + nrLok : ''}, ${kod} ${miasto}`;
+                         }
+                    }
+                    recipient = { nip, name, address };
+                    break;
+                }
+            }
+        }
+    }
+
     // Znajdź wszystkie FaWiersz
     const lineNodes: Element[] = [];
     for (let i = 0; i < allElements.length; i++) {
@@ -131,15 +177,9 @@ const parseKsefXml = (xmlStr: string): InvoiceData | null => {
         }
     }
 
-    let totalNetLines = 0;
-    
     lineNodes.forEach((node, index) => {
         const find = (tag: string) => {
-             const els = node.getElementsByTagName("*");
-             for (let i=0; i<els.length; i++) {
-                 if(els[i].localName === tag) return els[i].textContent || "";
-             }
-             return "";
+             return findIn(node, tag);
         };
 
         const name = find("P_7");
@@ -157,8 +197,6 @@ const parseKsefXml = (xmlStr: string): InvoiceData | null => {
         // Wyliczamy brutto dla linii (Dla uproszczenia visualizacji, w KSeF sumy są w stopce)
         const vatMult = vatRate === "23%" ? 1.23 : (vatRate === "8%" ? 1.08 : 1.0); // Uproszczenie
         const grossValue = netValue * vatMult;
-
-        totalNetLines += netValue;
 
         if (name) {
             lines.push({
@@ -178,13 +216,9 @@ const parseKsefXml = (xmlStr: string): InvoiceData | null => {
     // P_15 = Do zapłaty
     const totalGross = parseFloat(parseValue(doc, "P_15") || "0");
     const totalNet = parseFloat(parseValue(doc, "P_13_1") || "0") + parseFloat(parseValue(doc, "P_13_2") || "0"); // Suma podstaw
-    // Jeśli Net z linii się różni, bierzemy z linii (dla podglądu)
-    // Ale ważniejsze co w stopce
     
     // Płatność
     const bankAccount = parseValue(doc, "NrRachunku");
-    // Termin
-    // Metoda płatności (opisowa w Adnotacjach lub Kod)
 
     return {
         invoiceNumber,
@@ -193,9 +227,10 @@ const parseKsefXml = (xmlStr: string): InvoiceData | null => {
         currency,
         seller,
         buyer,
+        recipient,
         lines,
-        totalNet: totalNet || totalNetLines,
-        totalVat: totalGross - (totalNetLines || totalNet || 0), // Przybliżenie
+        totalNet,
+        totalVat: totalGross - totalNet, 
         totalGross,
         paymentMethod: "Przelew", // Default
         bankAccount
@@ -317,20 +352,28 @@ export function KsefVisualizer({ xml }: KsefVisualizerProps) {
                </div>
             </div>
             
-            <div class="parties">
-               <div class="party">
-                 <div class="party-title">Sprzedawca</div>
-                 <div class="party-name">${data.seller.name}</div>
-                 <div>${data.seller.address}</div>
-                 <div style="margin-top: 5px">NIP: ${data.seller.nip}</div>
-               </div>
-               <div class="party">
-                 <div class="party-title">Nabywca</div>
-                 <div class="party-name">${data.buyer.name}</div>
-                 <div>${data.buyer.address}</div>
-                 <div style="margin-top: 5px">NIP: ${data.buyer.nip}</div>
-               </div>
-            </div>
+             <div class="parties">
+                <div class="party">
+                  <div class="party-title">Sprzedawca</div>
+                  <div class="party-name">${data.seller.name}</div>
+                  <div>${data.seller.address}</div>
+                  <div style="margin-top: 5px">NIP: ${data.seller.nip}</div>
+                </div>
+                <div class="party">
+                  <div class="party-title">Nabywca</div>
+                  <div class="party-name">${data.buyer.name}</div>
+                  <div>${data.buyer.address}</div>
+                  <div style="margin-top: 5px">NIP: ${data.buyer.nip}</div>
+                </div>
+                ${data.recipient ? `
+                <div class="party">
+                  <div class="party-title">Odbiorca</div>
+                  <div class="party-name">${data.recipient.name}</div>
+                  <div>${data.recipient.address}</div>
+                  ${data.recipient.nip ? `<div style="margin-top: 5px">NIP: ${data.recipient.nip}</div>` : ''}
+                </div>
+                ` : ''}
+             </div>
             
             <table>
                <thead>
@@ -424,21 +467,31 @@ export function KsefVisualizer({ xml }: KsefVisualizerProps) {
                     </div>
                 </div>
                 
-                {/* Sprzedawca / Nabywca */}
-                <div className="grid grid-cols-2 gap-10 mb-10 bg-muted/30 p-6 rounded-lg">
-                    <div>
-                        <div className="text-xs uppercase font-bold text-muted-foreground mb-2">Sprzedawca</div>
-                        <div className="font-bold text-base mb-1">{data.seller.name}</div>
-                        <div className="whitespace-pre-wrap text-sm">{data.seller.address}</div>
-                        <div className="mt-2 text-sm">NIP: <span className="font-mono">{data.seller.nip}</span></div>
-                    </div>
-                    <div>
-                        <div className="text-xs uppercase font-bold text-muted-foreground mb-2">Nabywca</div>
-                        <div className="font-bold text-base mb-1">{data.buyer.name}</div>
-                        <div className="whitespace-pre-wrap text-sm">{data.buyer.address}</div>
-                        <div className="mt-2 text-sm">NIP: <span className="font-mono">{data.buyer.nip}</span></div>
-                    </div>
-                </div>
+                {/* Sprzedawca / Nabywca / Odbiorca */}
+                 <div className={cn("grid gap-10 mb-10 bg-muted/30 p-6 rounded-lg", data.recipient ? "grid-cols-3" : "grid-cols-2")}>
+                     <div>
+                         <div className="text-xs uppercase font-bold text-muted-foreground mb-2">Sprzedawca</div>
+                         <div className="font-bold text-base mb-1">{data.seller.name}</div>
+                         <div className="whitespace-pre-wrap text-sm">{data.seller.address}</div>
+                         <div className="mt-2 text-sm">NIP: <span className="font-mono">{data.seller.nip}</span></div>
+                     </div>
+                     <div>
+                         <div className="text-xs uppercase font-bold text-muted-foreground mb-2">Nabywca</div>
+                         <div className="font-bold text-base mb-1">{data.buyer.name}</div>
+                         <div className="whitespace-pre-wrap text-sm">{data.buyer.address}</div>
+                         <div className="mt-2 text-sm">NIP: <span className="font-mono">{data.buyer.nip}</span></div>
+                     </div>
+                     {data.recipient && (
+                         <div>
+                             <div className="text-xs uppercase font-bold text-muted-foreground mb-2">Odbiorca</div>
+                             <div className="font-bold text-base mb-1">{data.recipient.name}</div>
+                             <div className="whitespace-pre-wrap text-sm">{data.recipient.address}</div>
+                             {data.recipient.nip && (
+                                 <div className="mt-2 text-sm">NIP: <span className="font-mono">{data.recipient.nip}</span></div>
+                             )}
+                         </div>
+                     )}
+                 </div>
 
                 {/* Tabela */}
                 <table className="w-full mb-8 text-sm">

@@ -131,6 +131,7 @@ class PrintHubService {
     options?: { 
       printerName?: string;
       printErpSymbols?: boolean;
+      printFullName?: boolean;
       labelItemsPerPage?: number;
       erpItems?: Array<{ erpSymbol: string; name: string; quantity: number }>;
     }
@@ -142,6 +143,7 @@ class PrintHubService {
       options: {
         printer: options?.printerName,
         printErpSymbols: options?.printErpSymbols,
+        printFullName: options?.printFullName,
         labelItemsPerPage: options?.labelItemsPerPage,
         erpItems: options?.erpItems,
       },
