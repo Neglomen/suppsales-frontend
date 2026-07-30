@@ -29,6 +29,7 @@ import {
   Save,
   CheckCircle2,
   XCircle,
+  RefreshCw,
 } from "lucide-react";
 
 interface UserMember {
@@ -45,11 +46,18 @@ interface Membership {
 }
 
 interface ServiceIntegration {
-  id: string;
+  id: number;
   name: string;
   provider_type: string;
   category: string;
   is_active: boolean;
+  sync_orders: boolean;
+  sync_messages: boolean;
+  sync_returns: boolean;
+  sync_config?: {
+    sync_interval_minutes?: number;
+    [key: string]: any;
+  } | null;
 }
 
 interface ActivityLog {
@@ -189,6 +197,28 @@ export default function OrganizationDetailsPage({ params }: PageProps) {
     } catch (err) {
       toast.error("Nie udało się wcielić w klienta.");
       setIsImpersonating(false);
+    }
+  };
+
+  const handleUpdateIntegration = async (intgId: number, payload: any) => {
+    try {
+      toast.loading("Zapisywanie ustawień integracji...", { id: "update-intg" });
+      const res = await api.patch(`/superadmin/organizations/${id}/integrations/${intgId}`, payload);
+      setIntegrations((prev) => prev.map((item) => (item.id === intgId ? res.data : item)));
+      toast.success("Ustawienia integracji zostały zaktualizowane!", { id: "update-intg" });
+    } catch (err: any) {
+      toast.error("Błąd podczas aktualizacji integracji.", { id: "update-intg" });
+    }
+  };
+
+  const handleTriggerSync = async (intgId: number, type: "orders" | "messages" | "returns" | "erp") => {
+    try {
+      const label = type === "erp" ? "ERP Subiekt GT" : type;
+      toast.loading(`Zlecanie synchronizacji (${label})...`, { id: `sync-${type}` });
+      await api.post(`/superadmin/organizations/${id}/integrations/${intgId}/sync-${type}`);
+      toast.success(`Synchronizacja (${label}) została pomyślnie zlecona!`, { id: `sync-${type}` });
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || `Błąd zlecenia synchronizacji.`, { id: `sync-${type}` });
     }
   };
 
@@ -437,52 +467,159 @@ export default function OrganizationDetailsPage({ params }: PageProps) {
             <Table>
               <TableHeader className="bg-slate-950/40 border-b border-white/5">
                 <TableRow>
-                  <TableHead className="text-slate-300">Integracja / Nazwa</TableHead>
-                  <TableHead className="text-slate-300">Typ providera</TableHead>
-                  <TableHead className="text-slate-300">Kategoria</TableHead>
-                  <TableHead className="text-slate-300">Status</TableHead>
+                  <TableHead className="text-slate-300">Integracja / Typ</TableHead>
+                  <TableHead className="text-slate-300">Interwał Synchronizacji</TableHead>
+                  <TableHead className="text-slate-300">Ustawienia & Flagi Sync</TableHead>
+                  <TableHead className="text-slate-300 text-right">Wyzwolenie Ręczne (Superadmin)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {integrations.length > 0 ? (
-                  integrations.map((intg) => (
-                    <TableRow key={intg.id} className="border-b border-white/5 hover:bg-white/5">
-                      <TableCell className="font-bold text-slate-200 flex items-center gap-2">
-                        <div className="h-6 w-6 rounded bg-slate-950/60 border border-white/5 text-xs font-semibold flex items-center justify-center text-slate-300 uppercase">
-                          {(intg.name || "").slice(0, 2)}
-                        </div>
-                        {intg.name}
-                      </TableCell>
-                      <TableCell className="text-slate-300 text-xs font-semibold uppercase">
-                        {intg.provider_type}
-                      </TableCell>
-                      <TableCell className="text-slate-400 text-xs">
-                        {intg.category}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`rounded-lg text-[10px] px-2 py-0.5 border ${
-                            intg.is_active
-                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                              : "border-destructive/30 bg-destructive/10 text-destructive"
-                          }`}
-                        >
-                          <div className="flex items-center gap-1">
-                            {intg.is_active ? (
+                  integrations.map((intg) => {
+                    const currentInterval = intg.sync_config?.sync_interval_minutes || 5;
+                    const isMarketplace = intg.category === "MARKETPLACE" || ["ALLEGRO", "EMPIK", "BASELINKER"].includes(intg.provider_type);
+
+                    return (
+                      <TableRow key={intg.id} className="border-b border-white/5 hover:bg-white/5">
+                        <TableCell className="align-middle">
+                          <div className="font-bold text-slate-200 flex items-center gap-2">
+                            <div className="h-7 w-7 rounded-lg bg-slate-950/60 border border-white/10 text-xs font-bold flex items-center justify-center text-slate-300 uppercase">
+                              {(intg.name || "").slice(0, 2)}
+                            </div>
+                            <div>
+                              <div>{intg.name}</div>
+                              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                                {intg.provider_type} ({intg.category})
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* Interwał synchronizacji */}
+                        <TableCell className="align-middle">
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={String(currentInterval)}
+                              onValueChange={(val) => {
+                                const minutes = parseInt(val, 10);
+                                handleUpdateIntegration(intg.id, {
+                                  sync_config: {
+                                    ...(intg.sync_config || {}),
+                                    sync_interval_minutes: minutes,
+                                  },
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="w-[140px] h-8 text-xs rounded-xl border-white/10 bg-slate-950/40 text-slate-200">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="glass">
+                                <SelectItem value="5">Co 5 minut</SelectItem>
+                                <SelectItem value="10">Co 10 minut</SelectItem>
+                                <SelectItem value="15">Co 15 minut</SelectItem>
+                                <SelectItem value="30">Co 30 minut</SelectItem>
+                                <SelectItem value="60">Co 60 minut</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
+
+                        {/* Status & Flagi */}
+                        <TableCell className="align-middle space-y-2">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex items-center gap-1.5 bg-slate-950/40 border border-white/5 rounded-lg px-2 py-1">
+                              <span className="text-[11px] text-slate-300 font-medium">Aktywna:</span>
+                              <Switch
+                                checked={intg.is_active}
+                                onCheckedChange={(val) => handleUpdateIntegration(intg.id, { is_active: val })}
+                              />
+                            </div>
+
+                            {isMarketplace && (
+                              <div className="flex items-center gap-1.5 bg-slate-950/40 border border-white/5 rounded-lg px-2 py-1">
+                                <span className="text-[11px] text-slate-300 font-medium">Zamówienia:</span>
+                                <Switch
+                                  checked={intg.sync_orders}
+                                  onCheckedChange={(val) => handleUpdateIntegration(intg.id, { sync_orders: val })}
+                                />
+                              </div>
+                            )}
+
+                            {intg.provider_type === "ALLEGRO" && (
                               <>
-                                <CheckCircle2 className="h-3 w-3 shrink-0" /> Aktywna
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="h-3 w-3 shrink-0" /> Nieaktywna
+                                <div className="flex items-center gap-1.5 bg-slate-950/40 border border-white/5 rounded-lg px-2 py-1">
+                                  <span className="text-[11px] text-slate-300 font-medium">Wiadomości:</span>
+                                  <Switch
+                                    checked={intg.sync_messages}
+                                    onCheckedChange={(val) => handleUpdateIntegration(intg.id, { sync_messages: val })}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1.5 bg-slate-950/40 border border-white/5 rounded-lg px-2 py-1">
+                                  <span className="text-[11px] text-slate-300 font-medium">Zwroty:</span>
+                                  <Switch
+                                    checked={intg.sync_returns}
+                                    onCheckedChange={(val) => handleUpdateIntegration(intg.id, { sync_returns: val })}
+                                  />
+                                </div>
                               </>
                             )}
                           </div>
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+
+                        {/* Akcje Ręczne */}
+                        <TableCell className="align-middle text-right">
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            {isMarketplace && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={!intg.is_active || !intg.sync_orders}
+                                onClick={() => handleTriggerSync(intg.id, "orders")}
+                                className="h-7 text-xs rounded-lg border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary font-semibold flex items-center gap-1"
+                              >
+                                <RefreshCw className="h-3 w-3" /> Sync Zamówień
+                              </Button>
+                            )}
+
+                            {intg.provider_type === "ALLEGRO" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={!intg.is_active || !intg.sync_messages}
+                                  onClick={() => handleTriggerSync(intg.id, "messages")}
+                                  className="h-7 text-xs rounded-lg border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-semibold flex items-center gap-1"
+                                >
+                                  <RefreshCw className="h-3 w-3" /> Sync Wiadomości
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={!intg.is_active || !intg.sync_returns}
+                                  onClick={() => handleTriggerSync(intg.id, "returns")}
+                                  className="h-7 text-xs rounded-lg border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 font-semibold flex items-center gap-1"
+                                >
+                                  <RefreshCw className="h-3 w-3" /> Sync Zwrotów
+                                </Button>
+                              </>
+                            )}
+
+                            {intg.provider_type === "SUBIEKT_GT" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={!intg.is_active}
+                                onClick={() => handleTriggerSync(intg.id, "erp")}
+                                className="h-7 text-xs rounded-lg border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 font-semibold flex items-center gap-1"
+                              >
+                                <RefreshCw className="h-3 w-3" /> Zsynchronizuj stany z ERP
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center py-12 text-slate-500">
