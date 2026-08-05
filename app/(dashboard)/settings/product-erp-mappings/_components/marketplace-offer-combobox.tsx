@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2, Search, PlusCircle, Tag } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
 
 interface MarketplaceOffer {
   id: string;
   name: string;
   image_url?: string;
+  price?: number;
+  channel_sku?: string;
 }
 
 interface MarketplaceOfferComboboxProps {
@@ -32,6 +35,7 @@ interface MarketplaceOfferComboboxProps {
   value: string;
   onValueChange: (offerId: string, offerName: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 export function MarketplaceOfferCombobox({
@@ -39,13 +43,14 @@ export function MarketplaceOfferCombobox({
   value,
   onValueChange,
   disabled,
+  placeholder = "Wyszukaj lub wybierz ofertę (po tytule, ID lub SKU)...",
 }: MarketplaceOfferComboboxProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 
   useEffect(() => {
-    const handler = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    const handler = setTimeout(() => setDebouncedSearchQuery(searchQuery), 250);
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
@@ -73,7 +78,6 @@ export function MarketplaceOfferCombobox({
     return offers.find((offer) => offer.id === value);
   }, [offers, value]);
 
-  // Gdy popover się zamyka, a nie wybrano wartości, resetujemy wyszukiwanie
   useEffect(() => {
     if (!open) {
       setSearchQuery("");
@@ -87,56 +91,106 @@ export function MarketplaceOfferCombobox({
           variant="outline"
           role="combobox"
           disabled={disabled}
-          className="w-full justify-between font-normal"
+          className="w-full justify-between font-normal h-11 px-3 bg-card hover:bg-muted/40 transition-colors"
         >
-          <span className="truncate">
-            {selectedOffer?.name || value || "Wybierz ofertę..."}
-          </span>
+          <div className="flex items-center gap-2 truncate">
+            {selectedOffer?.image_url ? (
+              <img
+                src={selectedOffer.image_url}
+                alt={selectedOffer.name}
+                className="w-7 h-7 object-contain bg-white rounded border shrink-0"
+              />
+            ) : value ? (
+              <Tag className="h-4 w-4 text-primary shrink-0" />
+            ) : (
+              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            )}
+            <span className="truncate text-sm font-medium">
+              {selectedOffer?.name || (value ? `Oferta ID: ${value}` : placeholder)}
+            </span>
+          </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[500px] p-0">
-        <Command>
+      <PopoverContent className="w-[550px] p-0" align="start">
+        <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Szukaj po nazwie oferty..."
+            placeholder="Wpisz tytuł, ID aukcji lub SKU sprzedawcy..."
             value={searchQuery}
             onValueChange={setSearchQuery}
+            className="h-11 text-sm"
           />
-          <CommandList>
-            <CommandEmpty>
+          <CommandList className="max-h-[350px]">
+            <CommandEmpty className="p-4 text-center text-xs text-muted-foreground">
               {isLoading ? (
-                <div className="p-2 flex items-center justify-center">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span>Przeszukiwanie bazy aukcji w serwisie...</span>
                 </div>
               ) : (
-                "Brak ofert."
+                <div className="space-y-2">
+                  <p>Brak wyników pasujących do &quot;{searchQuery}&quot;.</p>
+                  {searchQuery.trim() && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        onValueChange(searchQuery.trim(), `Custom ID: ${searchQuery.trim()}`);
+                        setOpen(false);
+                      }}
+                      className="text-xs text-primary hover:bg-primary/10"
+                    >
+                      <PlusCircle className="mr-1.5 h-3.5 w-3.5" /> Użyj wpisanej wartości jako ID &quot;{searchQuery}&quot;
+                    </Button>
+                  )}
+                </div>
               )}
             </CommandEmpty>
             <CommandGroup>
               {offers.map((offer) => (
                 <CommandItem
                   key={offer.id}
-                  value={offer.id} // `value` w CommandItem jest używane do filtrowania i identyfikacji
+                  value={offer.id}
                   onSelect={() => {
-                    // Używamy onSelect do pewnego przekazania wartości
                     onValueChange(offer.id, offer.name);
                     setOpen(false);
                   }}
+                  className="py-2.5 px-3 flex items-center justify-between cursor-pointer border-b border-border/30 last:border-0 hover:bg-muted/60"
                 >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4 shrink-0",
-                      value === offer.id ? "opacity-100" : "opacity-0"
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <Check
+                      className={cn(
+                        "h-4 w-4 shrink-0 text-primary transition-opacity",
+                        value === offer.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {offer.image_url ? (
+                      <img
+                        src={offer.image_url}
+                        alt={offer.name}
+                        className="w-9 h-9 object-contain bg-white rounded border border-border/60 p-0.5 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 bg-muted rounded border flex items-center justify-center text-[10px] text-muted-foreground shrink-0 font-mono">
+                        AUKCJA
+                      </div>
                     )}
-                  />
-                  {offer.image_url ? (
-                    <img src={offer.image_url} alt={offer.name} className="w-8 h-8 object-contain bg-white p-0.5 rounded mr-2 shrink-0" />
-                  ) : (
-                    <div className="w-8 h-8 bg-muted rounded mr-2 shrink-0 flex items-center justify-center text-xs">
-                      Brak
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-semibold truncate text-foreground leading-tight">
+                        {offer.name}
+                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-mono">
+                          ID: {offer.id}
+                        </Badge>
+                        {offer.channel_sku && offer.channel_sku !== offer.id && (
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-mono text-muted-foreground">
+                            SKU: {offer.channel_sku}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  <span className="truncate">{offer.name}</span>
+                  </div>
                 </CommandItem>
               ))}
             </CommandGroup>

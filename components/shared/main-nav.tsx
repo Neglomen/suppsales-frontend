@@ -21,6 +21,7 @@ import {
   Boxes,
   PackageCheck,
   Headphones,
+  TrendingDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
@@ -39,8 +40,10 @@ import { usePermissions } from "@/hooks/use-permissions";
 const toolItems = [
   { href: "/dashboard", icon: Home, label: "Panel główny", adminOnly: false },
   { href: "/orders", icon: Package, label: "Zamówienia", adminOnly: false, permission: "orders" },
+  { href: "/communication", icon: MessagesSquare, label: "Komunikacja", adminOnly: false, permission: "orders" },
   { href: "/shipping/fulfillment", icon: PackageCheck, label: "Nabijarka", adminOnly: false, permission: "shipping", isSpecial: true, mobileHidden: true },
   { href: "/inventory", icon: Boxes, label: "Magazyn", adminOnly: false, permission: "inventory" },
+  { href: "/repricer", icon: TrendingDown, label: "Automat cenowy", adminOnly: false, permission: "inventory" },
   { href: "/shipping", icon: Ship, label: "Wysyłki", adminOnly: false, permission: "shipping", mobileHidden: true },
   { href: "/dropshipping", icon: Package, label: "Dropshipping", adminOnly: false, permission: "inventory", mobileHidden: true },
   { href: "/invoices", icon: Receipt, label: "Faktury", adminOnly: false, permission: "invoices" },
@@ -78,7 +81,7 @@ export function MainNav({ forceExpand = false }: MainNavProps) {
         const response = await api.get<{ unread_count: number }>("/support/unread-count");
         setUnreadSupportCount(response.data.unread_count);
       } catch (error) {
-        console.error("Failed to fetch unread support count", error);
+        // Silently ignore network errors during dev restarts/polling
       }
     };
 
@@ -88,7 +91,7 @@ export function MainNav({ forceExpand = false }: MainNavProps) {
         const response = await api.get<{ unread_count: number }>("/superadmin/support/unread-count");
         setUnreadAdminCount(response.data.unread_count);
       } catch (error) {
-        console.error("Failed to fetch admin unread support count", error);
+        // Silently ignore network errors during dev restarts/polling
       }
     };
 

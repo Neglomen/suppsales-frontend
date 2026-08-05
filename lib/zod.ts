@@ -162,12 +162,6 @@ export const serviceIntegrationFormSchema = z
     raben_is_test: z.boolean().optional(),
     raben_product_type: z.string().optional(),
     raben_service_level: z.string().optional(),
-    geodis_warehouse_id: z.string().optional(),
-    geodis_is_test: z.boolean().optional(),
-    inpost_buy_client_id: z.string().optional(),
-    inpost_buy_client_secret: z.string().optional(),
-    inpost_buy_organization_id: z.string().optional(),
-    inpost_buy_sandbox: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.provider_type === "BASELINKER") {
@@ -364,7 +358,9 @@ export const IntegrationUpdateSchema = z.object({
   sync_messages: z.boolean().optional(),
   sync_returns: z.boolean().optional(),
   autoresponder_enabled: z.boolean().optional(),
+  autoresponder_type: z.string().optional(),
   autoresponder_message: z.string().optional(),
+  autoresponder_mode: z.string().optional(),
 
   // Pole dla BaseLinker (opcjonalne)
   api_token: z.string().optional(),
@@ -452,6 +448,7 @@ export const ManualOrderLineItemSchema = z.object({
   name: z.string().min(3, "Nazwa produktu jest wymagana."),
   quantity: z.number().min(1, "Ilość musi być większa od 0."),
   price: z.number().min(0.01, "Cena musi być większa od 0."),
+  sku: z.string().optional(),
 });
 
 export const ManualOrderInvoiceSchema = z
@@ -480,60 +477,114 @@ export const ManualOrderSchema = z
   .object({
     reference_number: z.string().optional(),
     buyer_login: z.string().optional(),
-    buyer_email: z.string().email("Nieprawidłowy adres email."),
+    buyer_email: z.string().optional().refine(v => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), { message: "Nieprawidłowy adres email." }),
 
     deliveryType: z.enum(["address", "pickup_point"]),
-    delivery_address: ManualOrderAddressSchema.optional(),
-    pickup_point: ManualOrderPickupPointSchema.optional(),
+    
+    delivery_address: z.object({
+      first_name: z.string().optional(),
+      last_name: z.string().optional(),
+      street: z.string().optional(),
+      city: z.string().optional(),
+      postal_code: z.string().optional(),
+      country: z.string().optional(),
+      phone_number: z.string().optional(),
+    }).optional(),
+
+    pickup_point: z.object({
+      point_id: z.string().optional(),
+      name: z.string().optional(),
+      street: z.string().optional(),
+      city: z.string().optional(),
+      postal_code: z.string().optional(),
+      description: z.string().optional(),
+    }).optional(),
 
     line_items: z
       .array(ManualOrderLineItemSchema)
       .min(1, "Zamówienie musi zawierać co najmniej jeden produkt."),
 
     has_invoice_address: z.boolean(),
-    invoice_address: ManualOrderInvoiceSchema.optional(),
+    
+    invoice_address: z.object({
+      company_name: z.string().optional(),
+      first_name: z.string().optional(),
+      last_name: z.string().optional(),
+      tax_id: z.string().optional(),
+      street: z.string().optional(),
+      city: z.string().optional(),
+      postal_code: z.string().optional(),
+      country: z.string().optional(),
+    }).optional(),
 
     note: z.string().optional(),
+    payment_type: z.string().optional(),
+    payment_status: z.string().optional(),
+    integration_id: z.number().optional(),
   })
-  .refine(
-    (data) => {
-      if (data.deliveryType === "address") return !!data.delivery_address;
-      if (data.deliveryType === "pickup_point") return !!data.pickup_point;
-      return false;
-    },
-    {
-      message: "Proszę uzupełnić dane dla wybranego typu dostawy.",
-      path: ["deliveryType"],
-    }
-  )
   .superRefine((data, ctx) => {
     if (data.deliveryType === "address") {
-      // Jeśli wybrano adres, sprawdź, czy został podany
-      if (!data.delivery_address) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Adres dostawy jest wymagany.",
-          path: ["delivery_address"],
-        });
+      const addr = data.delivery_address;
+      if (addr) {
+        // Tylko krytyczne pola – imię/nazwisko/ulica/miasto. Telefon i kraj opcjonalne.
+        if (addr.first_name !== undefined && addr.first_name.trim().length > 0 && addr.first_name.trim().length < 2) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Imię jest zbyt krótkie.", path: ["delivery_address", "first_name"] });
+        }
+        if (addr.postal_code && !/^\d{2}-\d{3}$/.test(addr.postal_code)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Nieprawidłowy kod pocztowy (np. 00-000).", path: ["delivery_address", "postal_code"] });
+        }
       }
     } else if (data.deliveryType === "pickup_point") {
-      // Jeśli wybrano punkt odbioru, sprawdź, czy został podany
-      if (!data.pickup_point) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Punkt odbioru jest wymagany.",
-          path: ["pickup_point"],
-        });
+      const pt = data.pickup_point;
+      if (pt && pt.postal_code && !/^\d{2}-\d{3}$/.test(pt.postal_code)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Nieprawidłowy kod pocztowy.", path: ["pickup_point", "postal_code"] });
       }
     }
 
     if (data.has_invoice_address) {
-      if (!data.invoice_address) {
+      const addr = data.invoice_address;
+      if (!addr) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "Dane do faktury są wymagane.",
           path: ["has_invoice_address"],
         });
+      } else {
+        if (!addr.company_name && (!addr.first_name || !addr.last_name)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Należy podać nazwę firmy lub imię i nazwisko.",
+            path: ["invoice_address", "company_name"],
+          });
+        }
+        if (!addr.street || addr.street.trim().length < 3) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Ulica jest wymagana (min. 3 znaki).",
+            path: ["invoice_address", "street"],
+          });
+        }
+        if (!addr.city || addr.city.trim().length < 2) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Miasto jest wymagane.",
+            path: ["invoice_address", "city"],
+          });
+        }
+        if (!addr.postal_code || !/^\d{2}-\d{3}$/.test(addr.postal_code)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Nieprawidłowy kod pocztowy.",
+            path: ["invoice_address", "postal_code"],
+          });
+        }
+        if (!addr.country || addr.country.trim().length < 2) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Kraj jest wymagany.",
+            path: ["invoice_address", "country"],
+          });
+        }
       }
     }
   });

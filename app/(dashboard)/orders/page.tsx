@@ -25,6 +25,7 @@ import {
   Receipt,
   Sparkles,
   AlertTriangle,
+  User,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
@@ -677,6 +678,7 @@ export default function OrdersPage() {
           const buyerComment = getBuyerComment(order);
           const sellerNote = getSellerNote(order);
           const isCompact = viewMode === "compact";
+          const buyerFullName = `${order.buyer_first_name || ""} ${order.buyer_last_name || ""}`.trim();
 
           const mapped = mapOrderPayloadToDetails(order);
           
@@ -699,25 +701,27 @@ export default function OrdersPage() {
           const hiddenItems = hasMore ? displayItems.slice(maxVisible) : [];
 
           return (
-            <div className="space-y-1">
-              <div className="space-y-0.5">
+            <div className="space-y-1.5 max-w-[480px]">
+              <div className="space-y-1">
                 {visibleItems.map((item: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-1.5 max-w-[280px]">
-                    <span className="text-[9px] font-extrabold text-muted-foreground bg-muted px-1 py-0.5 rounded border border-border/20 shrink-0 leading-none">
+                  <div key={idx} className="flex items-start gap-1.5">
+                    <span className="text-[9px] font-bold text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/10 shrink-0 leading-none mt-0.5 font-mono">
                       x{item.quantity}
                     </span>
-                    <p
-                      className={cn(
-                        idx === 0 ? "font-bold text-foreground premium-gradient-text" : "text-muted-foreground font-semibold text-[11px]",
-                        "truncate",
-                        isCompact ? "text-xs" : (idx === 0 ? "text-sm" : "text-xs")
-                      )}
-                      title={item.offer?.name}
-                    >
-                      {item.offer?.name || "Towar bez nazwy"}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={cn(
+                          idx === 0 ? "font-semibold text-foreground" : "text-muted-foreground font-medium text-[11px]",
+                          "break-words whitespace-normal leading-snug",
+                          isCompact ? "text-xs animate-none" : (idx === 0 ? "text-sm" : "text-xs")
+                        )}
+                        title={item.offer?.name}
+                      >
+                        {item.offer?.name || "Towar bez nazwy"}
+                      </p>
+                    </div>
                     {idx === 0 && hasMissingStock && (
-                      <Badge variant="destructive" className="text-[9px] h-4 px-1.5 whitespace-nowrap bg-red-500/10 text-red-600 border-red-500/20 font-bold shrink-0">
+                      <Badge variant="destructive" className="text-[9px] h-4 px-1.5 whitespace-nowrap bg-red-500/10 text-red-600 border-red-500/20 font-bold shrink-0 mt-0.5">
                         BRAK TOWARU
                       </Badge>
                     )}
@@ -735,11 +739,11 @@ export default function OrdersPage() {
                       <TooltipContent className="max-w-[320px] p-2 space-y-1 bg-popover border border-border rounded-xl shadow-xl">
                         <p className="font-extrabold text-[11px] text-foreground border-b border-border/40 pb-1 mb-1 uppercase tracking-wide">Pozostałe przedmioty:</p>
                         {hiddenItems.map((item: any, idx: number) => (
-                          <div key={idx} className="flex items-center gap-1.5">
-                            <span className="text-[9px] font-extrabold bg-muted px-1.5 py-0.5 rounded text-muted-foreground border border-border/10">
+                          <div key={idx} className="flex items-start gap-1.5">
+                            <span className="text-[9px] font-bold bg-muted px-1.5 py-0.5 rounded text-muted-foreground border border-border/10 font-mono mt-0.5">
                               x{item.quantity}
                             </span>
-                            <p className="text-xs text-foreground font-medium truncate max-w-[240px]" title={item.offer?.name}>
+                            <p className="text-xs text-foreground font-medium break-words whitespace-normal max-w-[240px]" title={item.offer?.name}>
                               {item.offer?.name || "Towar bez nazwy"}
                             </p>
                           </div>
@@ -749,23 +753,22 @@ export default function OrdersPage() {
                   </TooltipProvider>
                 )}
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-x-2 gap-y-1">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-medium bg-primary/5 text-primary border-primary/10">
-                    {order.external_order_id.split("-").pop()}
-                  </Badge>
-                  <p className="text-xs text-muted-foreground font-medium">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium bg-muted/20 px-2 py-0.5 rounded-lg border border-border/5">
+                  <User className="h-3.5 w-3.5 opacity-60" />
+                  <span>
                     {order.buyer_login || "Brak loginu"}
-                  </p>
+                    {buyerFullName && ` (${buyerFullName})`}
+                  </span>
                 </div>
                 
                 {/* Ikonki dla Wiadomości, Zwrotów, Dyskusji */}
                 <TooltipProvider>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     {buyerComment && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center h-4 w-4 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 cursor-help transition-all hover:bg-amber-500/20">
+                          <div className="flex items-center justify-center h-4.5 w-4.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 cursor-help transition-all hover:bg-amber-500/20">
                             <Mail className="h-2.5 w-2.5" />
                           </div>
                         </TooltipTrigger>
@@ -778,7 +781,7 @@ export default function OrdersPage() {
                     {sellerNote && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center h-4 w-4 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20 cursor-help transition-all hover:bg-purple-500/20">
+                          <div className="flex items-center justify-center h-4.5 w-4.5 rounded-md bg-purple-500/10 text-purple-500 border border-purple-500/20 cursor-help transition-all hover:bg-purple-500/20">
                             <StickyNote className="h-2.5 w-2.5" />
                           </div>
                         </TooltipTrigger>
@@ -791,8 +794,8 @@ export default function OrdersPage() {
                     {order.has_returns && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center h-4 w-4 rounded bg-rose-500/10 text-rose-500 border border-rose-500/20 cursor-help transition-all hover:bg-rose-500/20">
-                            <ArrowRightLeft className="h-2.5 w-2.5 animate-pulse" />
+                          <div className="flex items-center justify-center h-4.5 w-4.5 rounded-md bg-rose-500/10 text-rose-500 border border-rose-500/20 cursor-help transition-all hover:bg-rose-500/20">
+                            <ArrowRightLeft className="h-2.5 w-2.5" />
                           </div>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -803,7 +806,7 @@ export default function OrdersPage() {
                     {order.has_threads && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center h-4 w-4 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 cursor-help transition-all hover:bg-blue-500/20">
+                          <div className="flex items-center justify-center h-4.5 w-4.5 rounded-md bg-blue-500/10 text-blue-500 border border-blue-500/20 cursor-help transition-all hover:bg-blue-500/20">
                             <MessageSquare className="h-2.5 w-2.5" />
                           </div>
                         </TooltipTrigger>
@@ -815,7 +818,7 @@ export default function OrdersPage() {
                     {order.has_disputes && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center h-4 w-4 rounded bg-red-500/10 text-red-500 border border-red-500/20 cursor-help transition-all hover:bg-red-500/20 animate-pulse">
+                          <div className="flex items-center justify-center h-4.5 w-4.5 rounded-md bg-red-500/10 text-red-500 border border-red-500/20 cursor-help transition-all hover:bg-red-500/20 animate-pulse">
                             <AlertTriangle className="h-2.5 w-2.5" />
                           </div>
                         </TooltipTrigger>
@@ -949,8 +952,8 @@ export default function OrdersPage() {
         header: () => <div className="text-right">Wpłata / Wysyłka</div>,
         cell: ({ row }) => {
           const order = row.original;
-          const isPaid = order.payment_status === "COMPLETED";
           const isCashOnDelivery = order.payment_type === "CASH_ON_DELIVERY";
+          const isPaid = order.payment_status === "COMPLETED" && !isCashOnDelivery;
           const validTrackingNumbers = order.tracking_numbers?.filter((t) => t && t.trim() !== "") || [];
           const hasTracking = validTrackingNumbers.length > 0;
           return (
@@ -959,8 +962,12 @@ export default function OrdersPage() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className={cn(
-                      "h-8 w-8 rounded-full flex items-center justify-center transition-all",
-                      isPaid ? "bg-emerald-500/10 text-emerald-500" : isCashOnDelivery ? "bg-yellow-500/10 text-yellow-500" : "bg-muted text-muted-foreground"
+                      "h-8 w-8 rounded-full flex items-center justify-center transition-all border",
+                      isPaid 
+                        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" 
+                        : isCashOnDelivery 
+                          ? "bg-amber-500/10 text-amber-500 border-amber-500/20" 
+                          : "bg-muted text-muted-foreground border-border/10"
                     )}>
                       <DollarSign className="h-4 w-4" />
                     </div>
@@ -968,15 +975,15 @@ export default function OrdersPage() {
                   <TooltipContent>
                     <div className="font-bold">{order.total_to_pay} PLN</div>
                     <p className="text-xs opacity-80">
-                      {isPaid ? "Opłacone online" : isCashOnDelivery ? "Pobranie" : "Nieopłacone"}
+                      {isCashOnDelivery ? "Pobranie (COD)" : isPaid ? "Opłacone online" : "Nieopłacone"}
                     </p>
                   </TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className={cn(
-                      "h-8 w-8 rounded-full flex items-center justify-center transition-all",
-                      hasTracking ? "bg-blue-500/10 text-blue-500" : "bg-muted text-muted-foreground"
+                      "h-8 w-8 rounded-full flex items-center justify-center transition-all border",
+                      hasTracking ? "bg-blue-500/10 text-blue-500 border-blue-500/20" : "bg-muted text-muted-foreground border-border/10"
                     )}>
                       <Truck className="h-4 w-4" />
                     </div>

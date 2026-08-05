@@ -24,7 +24,11 @@ import { toast } from "react-hot-toast";
 import api, { getErrorMessage } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
-export function SupportWidget() {
+interface SupportWidgetProps {
+  inline?: boolean;
+}
+
+export function SupportWidget({ inline = false }: SupportWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState("");
@@ -82,21 +86,35 @@ export function SupportWidget() {
 
   return (
     <>
-      {/* Pływający przycisk widgetu */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <motion.div
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-        >
+      {inline ? (
+        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
           <Button
             onClick={() => setIsOpen(true)}
-            className="h-12 w-12 rounded-full bg-gradient-to-tr from-primary to-primary/80 text-primary-foreground shadow-lg hover:shadow-primary/20 hover:shadow-xl transition-all duration-300 ring-2 ring-primary/20"
+            variant="ghost"
+            className="h-10 w-10 rounded-xl bg-background/50 backdrop-blur-md border border-border/50 text-muted-foreground hover:text-foreground shadow-sm transition-all duration-300"
             size="icon"
+            title="Pomoc i kontakt z supportem"
           >
-            <Headphones className="h-5.5 w-5.5" />
+            <Headphones className="h-5 w-5" />
           </Button>
         </motion.div>
-      </div>
+      ) : (
+        /* Pływający przycisk widgetu */
+        <div className="fixed bottom-6 right-6 z-50">
+          <motion.div
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Button
+              onClick={() => setIsOpen(true)}
+              className="h-12 w-12 rounded-full bg-gradient-to-tr from-primary to-primary/80 text-primary-foreground shadow-lg hover:shadow-primary/20 hover:shadow-xl transition-all duration-300 ring-2 ring-primary/20"
+              size="icon"
+            >
+              <Headphones className="h-5.5 w-5.5" />
+            </Button>
+          </motion.div>
+        </div>
+      )}
 
       {/* Modal formularza zgłoszenia */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

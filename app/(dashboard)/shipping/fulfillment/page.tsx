@@ -60,7 +60,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AllegroIcon, BaseLinkerIcon, EmpikIcon } from "@/components/shared/icons";
+import {
+  AllegroIcon,
+  BaseLinkerIcon,
+  EmpikIcon,
+  InPostIcon,
+  SuusIcon,
+  RabenIcon,
+  GeisIcon,
+  GeodisIcon,
+  ABIcon,
+  SubiektIcon,
+} from "@/components/shared/icons";
 import {
   Select,
   SelectContent,
@@ -68,10 +79,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusCircle, Undo2 } from "lucide-react";
+import { PlusCircle, Undo2, Plus, Trash, ClipboardList, User, StickyNote } from "lucide-react";
 import { cn, explodeBundleItems } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { SUUS_PACKAGE_CODES, RABEN_PACKAGE_CODES } from "@/lib/courier-data";
 
 interface PackageState {
@@ -88,6 +101,48 @@ interface PackageState {
   courier_code?: string;
   is_nstd: boolean;
 }
+
+const getCourierIcon = (providerType?: string, name?: string, className: string = "h-5 w-auto") => {
+  const pType = (providerType || "").toUpperCase();
+  const cName = (name || "").toUpperCase();
+
+  if (pType === "SUUS" || cName.includes("SUUS")) {
+    return <SuusIcon className={cn("shrink-0 drop-shadow", className)} />;
+  }
+  if (pType === "RABEN" || cName.includes("RABEN")) {
+    return <RabenIcon className={cn("shrink-0 drop-shadow", className)} />;
+  }
+  if (pType === "GEIS" || cName.includes("GEIS")) {
+    return <GeisIcon className={cn("shrink-0 drop-shadow", className)} />;
+  }
+  if (pType === "GEODIS" || cName.includes("GEODIS")) {
+    return <GeodisIcon className={cn("shrink-0 drop-shadow", className)} />;
+  }
+  if (pType.includes("INPOST") || cName.includes("INPOST")) {
+    return <InPostIcon className={cn("shrink-0 drop-shadow", className)} />;
+  }
+  if (pType === "ALLEGRO" || cName.includes("ALLEGRO") || cName.includes("WZA")) {
+    return <AllegroIcon className={cn("shrink-0 drop-shadow", className)} />;
+  }
+  if (pType === "BASELINKER" || cName.includes("BASELINKER")) {
+    return <BaseLinkerIcon className={cn("shrink-0 rounded drop-shadow", className)} />;
+  }
+  if (pType === "EMPIK" || cName.includes("EMPIK")) {
+    return <EmpikIcon className={cn("shrink-0 drop-shadow", className)} />;
+  }
+  if (pType === "APACZKA" || cName.includes("APACZKA")) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-400 font-bold text-xs shrink-0 shadow-sm">
+        <Truck className="h-3.5 w-3.5" /> Apaczka
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 font-bold text-xs shrink-0 shadow-sm">
+      <Truck className="h-3.5 w-3.5" /> {name || providerType || "Kurier"}
+    </div>
+  );
+};
 
 export default function FulfillmentPage() {
   const isMobile = useMobile(1023);
@@ -305,9 +360,9 @@ export default function FulfillmentPage() {
 
 
   // 5. Package and courier mapping calculation
-  const { mappedCourier, mappedPackageId } = useMemo(() => {
+  const { mappedCourier, mappedPackageId, mappedServiceCode } = useMemo(() => {
     if (!currentOrder || !config) {
-      return { mappedCourier: null, mappedPackageId: null };
+      return { mappedCourier: null, mappedPackageId: null, mappedServiceCode: "" };
     }
 
     // 1. Sprawdź, czy usługi dodatkowe w zamówieniu wymuszają konkretnego kuriera
@@ -353,6 +408,7 @@ export default function FulfillmentPage() {
             return {
               mappedCourier: courier,
               mappedPackageId: defaultPackage?.id || null,
+              mappedServiceCode: matchedSrv.courier_service_code || "",
             };
           }
         }
@@ -367,7 +423,7 @@ export default function FulfillmentPage() {
     
     if (!deliveryMethodName) {
       const defaultPackage = config.packages.find((p) => p.is_default);
-      return { mappedCourier: null, mappedPackageId: defaultPackage?.id || null };
+      return { mappedCourier: null, mappedPackageId: defaultPackage?.id || null, mappedServiceCode: "" };
     }
 
     const mapping = config.mappings.find(
@@ -382,12 +438,14 @@ export default function FulfillmentPage() {
       return {
         mappedCourier: null,
         mappedPackageId: defaultPackage?.id || null,
+        mappedServiceCode: "",
       };
     }
     const courier = config.couriers.find((c) => c.id === mapping.service_integration_id);
     return {
       mappedCourier: courier,
       mappedPackageId: mapping.default_package_definition_id || defaultPackage?.id || null,
+      mappedServiceCode: mapping.courier_service_code || "",
     };
   }, [currentOrder, config, serviceMappings]);
 
@@ -583,6 +641,78 @@ export default function FulfillmentPage() {
   // Full order details (disputes, returns, related_orders) — fetched separately from queue data
   const [orderDetails, setOrderDetails] = useState<any>(null);
   const [isLoadingOrderDetails, setIsLoadingOrderDetails] = useState(false);
+
+  const [orderNotes, setOrderNotes] = useState<any[]>([]);
+  const [isNotesLoading, setIsNotesLoading] = useState(false);
+  const [orderTasks, setOrderTasks] = useState<any[]>([]);
+  const [isOrderTasksLoading, setIsOrderTasksLoading] = useState(false);
+  const [newNoteContent, setNewNoteContent] = useState("");
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+
+  const fetchOrderNotes = useCallback(async () => {
+    if (!orderDetails?.id) return;
+    setIsNotesLoading(true);
+    try {
+      const res = await api.get(`/orders/${orderDetails.id}/notes`);
+      setOrderNotes(res.data || []);
+    } catch {
+      // ignore
+    } finally {
+      setIsNotesLoading(false);
+    }
+  }, [orderDetails?.id]);
+
+  const fetchOrderTasks = useCallback(async () => {
+    if (!orderDetails?.id) return;
+    setIsOrderTasksLoading(true);
+    try {
+      const res = await api.get(`/internal-tasks/?order_id=${orderDetails.id}`);
+      setOrderTasks(res.data.items || []);
+    } catch {
+      // ignore
+    } finally {
+      setIsOrderTasksLoading(false);
+    }
+  }, [orderDetails?.id]);
+
+  useEffect(() => {
+    if (orderDetails?.id) {
+      fetchOrderNotes();
+      fetchOrderTasks();
+    } else {
+      setOrderNotes([]);
+      setOrderTasks([]);
+    }
+  }, [orderDetails?.id, fetchOrderNotes, fetchOrderTasks]);
+
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoteContent.trim() || !orderDetails?.id) return;
+    setIsSubmittingNote(true);
+    try {
+      await api.post(`/orders/${orderDetails.id}/notes`, { content: newNoteContent.trim() });
+      setNewNoteContent("");
+      toast.success("Notatka została dodana.");
+      fetchOrderNotes();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || "Błąd dodawania notatki.";
+      toast.error(msg);
+    } finally {
+      setIsSubmittingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!confirm("Czy na pewno chcesz usunąć tę notatkę?")) return;
+    try {
+      await api.delete(`/notes/${noteId}`);
+      toast.success("Notatka została usunięta.");
+      fetchOrderNotes();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || "Błąd usuwania notatki.";
+      toast.error(msg);
+    }
+  };
 
   const totalCodAmount = currentOrder?.total_to_pay || 0;
 
@@ -958,14 +1088,17 @@ export default function FulfillmentPage() {
         const res = await api.get(`/service-integrations/${selectedCourierId}/apaczka/services`);
         setApaczkaServices(res.data || []);
         if (res.data && res.data.length > 0) {
-          setSelectedServiceCode(res.data[0].id);
+          const defaultCode = (selectedCourierId === mappedCourier?.id && mappedServiceCode)
+            ? mappedServiceCode
+            : res.data[0].id;
+          setSelectedServiceCode(defaultCode);
         }
       } catch (err) {
         console.error("Error fetching services:", err);
       }
     };
     fetchServices();
-  }, [selectedCourierId, config?.couriers]);
+  }, [selectedCourierId, config?.couriers, mappedCourier?.id, mappedServiceCode]);
 
   // Sync index to stay within queue limits if items are processed/flagged
   useEffect(() => {
@@ -1191,6 +1324,12 @@ export default function FulfillmentPage() {
       toast.loading("Generowanie listu przewozowego kuriera...", { id: toastId });
 
       // 2. Shipping labels generation
+      const activeCourier = config?.couriers?.find((c) => c.id === selectedCourierId);
+      if (activeCourier?.provider_type === "APACZKA" && !selectedServiceCode) {
+        toast.error("Musisz wybrać usługę kurierską Apaczki.");
+        setIsProcessing(false);
+        return;
+      }
       const refToUse = referenceNumber.trim() || lineItems.map((item: any) => `${item.name} x${item.quantity}`).join(", ").substring(0, maxRefLength);
       
       const packagesPayload = [];
@@ -1238,7 +1377,9 @@ export default function FulfillmentPage() {
         manual_additional_services: Array.from(selectedServices),
       };
 
-      const isManual = selectedCourierId !== mappedCourier?.id;
+      const selectedCourier = config?.couriers?.find((c) => c.id === selectedCourierId);
+      const isManual = selectedCourierId !== mappedCourier?.id || 
+                       (selectedCourier?.provider_type === "APACZKA" && selectedServiceCode !== mappedServiceCode);
       if (isManual && selectedCourierId) {
         labelsPayload.override_courier_integration_id = selectedCourierId;
         if (selectedServiceCode) {
@@ -1820,6 +1961,14 @@ export default function FulfillmentPage() {
                   </span>
                 </TabsTrigger>
               )}
+              <TabsTrigger value="tasks" className="flex-1 min-w-0 text-xs py-2 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                <ClipboardList className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">Zadania & Notatki</span>
+                {(orderTasks.length + orderNotes.length) > 0 && (
+                  <span className="bg-indigo-500 text-white rounded-full text-[9px] px-1.5 py-0.5 font-bold shrink-0">
+                    {orderTasks.length + orderNotes.length}
+                  </span>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="mt-0 flex flex-col gap-4 focus:outline-none">
@@ -2127,65 +2276,135 @@ export default function FulfillmentPage() {
 
           {/* Configured Package Card (Editable, Stateful, and Multi-Package) */}
           <Card className="p-6 border border-border/30 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-4">
-            <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Box className="h-4 w-4 text-indigo-500" /> Konfiguracja Przesyłki:
-              </span>
-              {(selectedCourierId !== mappedCourier?.id || packages.length > 1 || packages[0]?.selectedPackageId !== mappedPackageId || packages[0]?.mode !== "predefined") && (
-                <button
-                  onClick={() => {
-                    setSelectedCourierId(mappedCourier?.id || null);
-                    if (currentOrder) {
-                      const initialCodAmount = isCod ? totalCodAmount.toFixed(2) : "";
-                      setPackages([
-                        {
-                          id: crypto.randomUUID(),
-                          mode: "predefined",
-                          selectedPackageId: mappedPackageId || undefined,
-                          customPackage: {
-                            length_cm: "",
-                            width_cm: "",
-                            height_cm: "",
-                            weight_kg: "",
-                          },
-                          codAmount: initialCodAmount,
-                          courier_code: "COL",
-                          is_nstd: false,
-                        },
-                      ]);
-                    }
-                    toast.success("Przywrócono domyślne ustawienia przesyłki.");
-                  }}
-                  className="text-[10px] text-indigo-500 hover:text-indigo-450 underline font-semibold transition-colors animate-pulse"
-                >
-                  Przywróć domyślne
-                </button>
-              )}
-            </h4>
-
-            {/* Courier Selection Row */}
+            
+            {/* Header Konfiguracji Przesyłki ze skonsolidowanym logotypem wybranego kuriera */}
             {(() => {
-              const selectedCourier = config?.couriers?.find((c) => c.id === selectedCourierId);
+              const activeCourierId = selectedCourierId !== null ? selectedCourierId : mappedCourier?.id;
+              const activeCourier = config?.couriers?.find((c) => c.id === activeCourierId);
+              const isOverridden = selectedCourierId !== null && (
+                selectedCourierId !== mappedCourier?.id ||
+                (activeCourier?.provider_type === "APACZKA" && selectedServiceCode !== mappedServiceCode)
+              );
+
+              return (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border/20 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                      <Truck className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                          Przesyłka
+                        </h4>
+                        {isOverridden ? (
+                          <Badge variant="outline" className="bg-amber-500/10 border-amber-500/30 text-amber-400 text-[9px] font-semibold">
+                            Ręczny wybór
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-indigo-500/10 border-indigo-500/30 text-indigo-400 text-[9px] font-semibold">
+                            Auto-mapowanie
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Gabaryty paczek, usługi i odbiorca etykiety
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Logo wybranego kuriera + Przycisk resetowania */}
+                  <div className="flex items-center gap-3 self-end sm:self-center">
+                    {activeCourier && (
+                      <div className="flex items-center gap-2 bg-slate-950/60 border border-border/30 px-3 py-1.5 rounded-xl shadow-inner backdrop-blur-sm">
+                        <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider select-none shrink-0">
+                          Kurier:
+                        </span>
+                        <div className="max-h-5 max-w-[130px] flex items-center justify-center shrink-0 overflow-hidden">
+                          {getCourierIcon(activeCourier.provider_type, activeCourier.name, "max-h-5 max-w-[120px] w-auto")}
+                        </div>
+                      </div>
+                    )}
+
+                    {(selectedCourierId !== mappedCourier?.id ||
+                      (activeCourier?.provider_type === "APACZKA" && selectedServiceCode !== mappedServiceCode) ||
+                      packages.length > 1 ||
+                      packages[0]?.selectedPackageId !== mappedPackageId ||
+                      packages[0]?.mode !== "predefined") && (
+                      <button
+                        onClick={() => {
+                          setSelectedCourierId(mappedCourier?.id || null);
+                          setSelectedServiceCode(mappedServiceCode || "");
+                          if (currentOrder) {
+                            const initialCodAmount = isCod ? totalCodAmount.toFixed(2) : "";
+                            setPackages([
+                              {
+                                id: crypto.randomUUID(),
+                                mode: "predefined",
+                                selectedPackageId: mappedPackageId || undefined,
+                                customPackage: {
+                                  length_cm: "",
+                                  width_cm: "",
+                                  height_cm: "",
+                                  weight_kg: "",
+                                },
+                                codAmount: initialCodAmount,
+                                courier_code: "COL",
+                                is_nstd: false,
+                              },
+                            ]);
+                          }
+                          toast.success("Przywrócono domyślne ustawienia przesyłki.");
+                        }}
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 underline font-semibold transition-colors animate-pulse"
+                      >
+                        Przywróć domyślne
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Courier Selection Row z dedykowanym boksem na logo obok selecta */}
+            {(() => {
+              const currentCourierId = selectedCourierId !== null ? selectedCourierId : mappedCourier?.id;
+              const selectedCourier = config?.couriers?.find((c) => c.id === currentCourierId);
               const isApaczka = selectedCourier?.provider_type === "APACZKA";
               return (
-                <div className={cn("grid gap-3 text-sm bg-slate-950/20 p-3.5 border border-border/30 rounded-xl", isApaczka ? "grid-cols-2" : "grid-cols-1")}>
+                <div className={cn("grid gap-3 text-sm bg-slate-950/30 p-3.5 border border-border/30 rounded-xl shadow-inner", isApaczka ? "grid-cols-2" : "grid-cols-1")}>
                   <div>
-                    <label className="text-[10px] text-muted-foreground block mb-1">Kurier (Odbiorca Etykiety):</label>
-                    <select
-                      value={selectedCourierId || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSelectedCourierId(val ? Number(val) : null);
-                      }}
-                      className="bg-slate-900 border border-border/30 rounded-lg text-foreground text-xs p-2 w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-                    >
-                      <option value="" className="bg-slate-950 text-foreground">-- Wybierz kuriera --</option>
-                      {config?.couriers?.map((courier) => (
-                        <option key={courier.id} value={courier.id} className="bg-slate-950 text-foreground">
-                          {courier.name}
-                        </option>
-                      ))}
-                    </select>
+                    <label className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block mb-1.5">
+                      Kurier (Odbiorca Etykiety):
+                    </label>
+                    
+                    <div className="flex items-center gap-2.5">
+                      {/* Dedykowany boks z logo kuriera - brak nachodzenia na tekst! */}
+                      <div className="h-10 px-3 min-w-[110px] max-w-[150px] bg-slate-900 border border-border/30 rounded-lg flex items-center justify-center shrink-0 shadow-inner overflow-hidden">
+                        {selectedCourier ? (
+                          getCourierIcon(selectedCourier.provider_type, selectedCourier.name, "max-h-6 max-w-[120px] w-auto")
+                        ) : (
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+
+                      {/* Dropdown wyboru kuriera z własnym paddingiem */}
+                      <select
+                        value={currentCourierId || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedCourierId(val ? Number(val) : null);
+                        }}
+                        className="flex-1 h-10 bg-slate-900 border border-border/30 rounded-lg text-foreground text-xs px-3 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-semibold hover:border-border/50 transition-colors min-w-0"
+                      >
+                        <option value="" className="bg-slate-950 text-foreground">-- Wybierz kuriera --</option>
+                        {config?.couriers?.map((courier) => (
+                          <option key={courier.id} value={courier.id} className="bg-slate-950 text-foreground">
+                            {courier.name} ({courier.provider_type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   {/* Dropdown usługi tylko dla Apaczka */}
@@ -2791,6 +3010,156 @@ export default function FulfillmentPage() {
                 </div>
               )}
             </Card>
+          </TabsContent>
+
+          <TabsContent value="tasks" className="mt-0 focus:outline-none flex flex-col gap-4">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 pb-4">
+              {/* Lewa kolumna: Notatki do zamówienia */}
+              <Card className="p-4 border border-border/30 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
+                    <StickyNote className="h-4 w-4 text-primary" /> Notatki wewnętrzne
+                  </h3>
+                  <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">{orderNotes.length}</Badge>
+                </div>
+                
+                {/* Formularz dodawania notatki */}
+                <form onSubmit={handleAddNote} className="space-y-2">
+                  <Textarea
+                    placeholder="Wpisz nową notatkę wewnętrzną..."
+                    value={newNoteContent}
+                    onChange={(e: any) => setNewNoteContent(e.target.value)}
+                    required
+                    rows={3}
+                    className="rounded-xl border-white/10 focus-visible:ring-indigo-500 bg-slate-950/40 text-xs text-slate-200"
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      disabled={isSubmittingNote || !newNoteContent.trim()}
+                      className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs h-8"
+                    >
+                      {isSubmittingNote ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                      ) : (
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Dodaj notatkę
+                    </Button>
+                  </div>
+                </form>
+
+                <Separator className="bg-white/5 my-2" />
+
+                {/* Lista notatek */}
+                <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                  {isNotesLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    </div>
+                  ) : orderNotes.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 italic text-xs">
+                      Brak notatek do tego zamówienia.
+                    </div>
+                  ) : (
+                    orderNotes.map((note) => (
+                      <div key={note.id} className="p-2.5 bg-slate-950/30 border border-white/5 rounded-xl relative group hover:bg-slate-900/30 transition-all duration-200">
+                        <div className="flex items-center justify-between text-[9px] font-semibold text-slate-500 mb-1.5">
+                          <span className="flex items-center gap-1">
+                            <User className="h-2.5 w-2.5" />
+                            {note.author.name || note.author.email}
+                          </span>
+                          <span>{new Date(note.created_at).toLocaleString("pl-PL")}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed pr-6">{note.content}</p>
+                        <Button
+                          onClick={() => handleDeleteNote(note.id)}
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 absolute right-2 bottom-2 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        >
+                          <Trash className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+
+              {/* Prawa kolumna: Zadania i decyzje */}
+              <Card className="p-4 border border-border/30 bg-slate-900/40 backdrop-blur-md rounded-2xl flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-xs text-indigo-400 flex items-center gap-1.5">
+                    <ClipboardList className="h-4 w-4 text-indigo-400" /> Zadania i decyzje
+                  </h3>
+                  <Badge variant="outline" className="text-xs bg-indigo-500/5 text-indigo-400 border-indigo-500/20">{orderTasks.length}</Badge>
+                </div>
+
+                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                  {isOrderTasksLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
+                    </div>
+                  ) : orderTasks.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 italic text-xs">
+                      Brak przypisanych zadań. Możesz utworzyć nowe zadanie z dymka na dole strony.
+                    </div>
+                  ) : (
+                    orderTasks.map((task) => {
+                      const priorityColor = 
+                        task.priority === "LOW" ? "border-slate-500/20 text-slate-400" :
+                        task.priority === "MEDIUM" ? "border-blue-500/20 text-blue-400" :
+                        task.priority === "HIGH" ? "border-orange-500/20 text-orange-400" :
+                        "border-rose-500/20 text-rose-400 bg-rose-500/5 animate-pulse";
+
+                      const statusColor = 
+                        task.status === "NEW" ? "bg-blue-500/10 text-blue-400" :
+                        task.status === "IN_PROGRESS" ? "bg-amber-500/10 text-amber-400" :
+                        task.status === "RESOLVED" ? "bg-emerald-500/10 text-emerald-400" :
+                        "bg-slate-500/10 text-slate-400";
+
+                      return (
+                        <div key={task.id} className="p-2.5 bg-slate-950/30 border border-white/5 rounded-xl hover:bg-slate-900/30 transition-all duration-200 flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between text-[9px]">
+                            <span className="font-semibold text-slate-500">
+                              Zleca: {task.created_by.name || task.created_by.email}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {task.type === "DECISION_REQUEST" && (
+                                <Badge className="bg-purple-500/10 text-purple-400 border-none text-[8px] h-4 font-bold">Decyzja</Badge>
+                              )}
+                              <Badge variant="outline" className={`text-[8px] h-4 ${priorityColor}`}>{task.priority}</Badge>
+                              <Badge className={`border-none text-[8px] h-4 ${statusColor}`}>{task.status}</Badge>
+                            </div>
+                          </div>
+                          
+                          <h4 className="text-xs font-bold text-slate-200 leading-normal">{task.title}</h4>
+                          {task.description && (
+                            <p className="text-[10px] text-slate-400 line-clamp-2">{task.description}</p>
+                          )}
+
+                          <Separator className="bg-white/5 my-0.5" />
+
+                          <div className="flex items-center justify-between text-[9px] text-slate-500">
+                            <span>Przypisane: <strong className="text-slate-300">{task.assigned_to ? (task.assigned_to.name || task.assigned_to.email) : "Każdy"}</strong></span>
+                            <Button
+                              onClick={() => {
+                                window.dispatchEvent(new CustomEvent("open-internal-task", { detail: { taskId: task.id } }));
+                              }}
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-[9px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/5 font-bold rounded-lg p-0 px-2"
+                            >
+                              Czat
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </Card>
+            </div>
           </TabsContent>
 
           </Tabs>

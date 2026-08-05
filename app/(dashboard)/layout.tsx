@@ -23,6 +23,8 @@ import {
 import { Pin, PinOff, ShieldAlert } from "lucide-react"; // Import ikon
 import { Logo } from "@/components/shared/logo";
 import { SupportWidget } from "@/components/shared/support-widget";
+import { GlobalSearch } from "@/components/shared/global-search";
+import { TasksBubble } from "@/components/shared/tasks-bubble";
 
 export default function DashboardLayout({
   children,
@@ -70,14 +72,13 @@ export default function DashboardLayout({
 
   return (
     <AuthCheck>
-      <div
-        className={cn(
-          "grid min-h-screen w-full transition-[grid-template-columns] duration-300 ease-in-out",
-          isCollapsed ? "md:grid-cols-[56px_1fr]" : "md:grid-cols-[280px_1fr]"
-        )}
-      >
+      <div className="flex min-h-screen w-full">
         <div
-          className="hidden glass sticky top-0 h-screen z-40 md:block transition-all duration-300"
+          className={cn(
+            "hidden glass fixed left-0 top-0 h-screen z-50 md:block transition-all duration-300 border-r border-border/10",
+            isCollapsed ? "w-[56px]" : "w-[280px]",
+            !isPinned && !isCollapsed ? "shadow-2xl shadow-indigo-500/10" : ""
+          )}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -145,7 +146,16 @@ export default function DashboardLayout({
           </div>
         </div>
 
-        <div className="flex flex-col relative z-30 min-w-0">
+        <div className={cn(
+          "flex flex-col relative z-30 min-w-0 w-full transition-[margin] duration-300 ease-in-out",
+          isPinned ? "md:ml-[280px]" : "md:ml-[56px]"
+        )}>
+          {/* Floating Search dla Desktopu - Maksymalnie po prawej */}
+          <div className="hidden md:flex absolute top-4 right-4 lg:top-6 lg:right-6 z-50 items-center gap-3">
+            <SupportWidget inline={true} />
+            <GlobalSearch />
+          </div>
+
           <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-8 lg:p-8 max-w-screen-2xl mx-auto w-full">
             {/* Przycisk menu mobilnego na górze strony (tylko na mobile) */}
             <div className="md:hidden flex items-center justify-between mb-4 glass p-2 rounded-xl gap-2 min-w-0 overflow-visible">
@@ -156,6 +166,11 @@ export default function DashboardLayout({
               <div className="shrink-0">
                 <UserNav />
               </div>
+            </div>
+
+            {/* Mobile search bar */}
+            <div className="md:hidden mb-4">
+              <GlobalSearch />
             </div>
             {isImpersonating && (
               <div className="mb-4 flex items-center justify-between gap-4 p-3 bg-gradient-to-r from-amber-600 to-amber-700 text-white rounded-xl shadow-lg border border-amber-500/20">
@@ -175,8 +190,8 @@ export default function DashboardLayout({
             )}
             {children}
           </main>
-          {/* Floating Support Widget */}
-          <SupportWidget />
+          {/* Wewnętrzny Dymek Zadań (TaskBubble) */}
+          <TasksBubble />
           {/* Premium Ambient Background */}
           <div className="fixed inset-0 bg-background -z-30 pointer-events-none" />
           <div className="fixed inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(99,102,241,0.06),transparent_50%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(99,102,241,0.08),transparent_50%)] -z-20 pointer-events-none" />

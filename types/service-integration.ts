@@ -20,7 +20,9 @@ export interface ServiceIntegration {
   sync_messages: boolean;
   sync_returns: boolean;
   autoresponder_enabled: boolean;
+  autoresponder_type: string | null;
   autoresponder_message: string | null;
+  autoresponder_mode: string | null;
   sender_config: SenderConfig | null;
   has_credentials: boolean;
   api_config?: Record<string, any> | null;

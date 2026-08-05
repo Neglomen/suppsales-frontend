@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import type { ServiceIntegration } from "@/types/service-integration";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import {
   Trash2,
@@ -47,6 +48,7 @@ import {
   Info,
   Package,
   Sparkles,
+  CreditCard,
 } from "lucide-react";
 
 interface ManualOrderDialogProps {
@@ -212,7 +214,15 @@ const PickupPointFields = ({ prefix }: { prefix: "pickup_point" }) => (
 );
 
 // Subcomponent: Invoice Address Fields
-const InvoiceFields = ({ prefix }: { prefix: "invoice_address" }) => (
+const InvoiceFields = ({
+  prefix,
+  isFetchingGus,
+  onGusLookup,
+}: {
+  prefix: "invoice_address";
+  isFetchingGus: boolean;
+  onGusLookup: (nip: string) => void;
+}) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     <FormField
       name={`${prefix}.company_name`}
@@ -255,9 +265,21 @@ const InvoiceFields = ({ prefix }: { prefix: "invoice_address" }) => (
       render={({ field }) => (
         <FormItem className="md:col-span-2">
           <FormLabel className="text-xs font-semibold text-muted-foreground">NIP</FormLabel>
-          <FormControl>
-            <Input placeholder="123-456-78-90" className="h-9 text-xs bg-slate-950/40 border-white/10 hover:bg-slate-950/60 focus:ring-primary/30 transition-all rounded-xl" {...field} />
-          </FormControl>
+          <div className="flex gap-2">
+            <FormControl className="flex-1">
+              <Input placeholder="1234567890" className="h-9 text-xs bg-slate-950/40 border-white/10 hover:bg-slate-950/60 focus:ring-primary/30 transition-all rounded-xl" {...field} />
+            </FormControl>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isFetchingGus || !field.value || field.value.replace(/\D/g, "").length !== 10}
+              onClick={() => onGusLookup(field.value)}
+              className="h-9 px-3 rounded-xl border-white/5 hover:bg-white/5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-all flex items-center gap-1 shrink-0"
+            >
+              {isFetchingGus ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+              Pobierz z GUS
+            </Button>
+          </div>
           <FormMessage className="text-[10px]" />
         </FormItem>
       )}
@@ -323,8 +345,29 @@ export function ManualOrderDialog({
         phone_number: "",
         country: "Polska",
       },
+      pickup_point: {
+        point_id: "",
+        name: "",
+        street: "",
+        city: "",
+        postal_code: "",
+        description: "",
+      },
       has_invoice_address: false,
+      invoice_address: {
+        company_name: "",
+        first_name: "",
+        last_name: "",
+        tax_id: "",
+        street: "",
+        city: "",
+        postal_code: "",
+        country: "Polska",
+      },
       note: "",
+      payment_type: "ONLINE",
+      payment_status: "PENDING",
+      integration_id: undefined,
     },
   });
 
@@ -341,23 +384,69 @@ export function ManualOrderDialog({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [subiektId, setSubiektId] = useState<number | null>(null);
+  const [isFetchingGus, setIsFetchingGus] = useState(false);
+  const [integrations, setIntegrations] = useState<ServiceIntegration[]>([]);
 
-  // Find Subiekt GT integration
+  const handleGusLookup = async (nip: string) => {
+    const cleanNip = nip.replace(/\D/g, "");
+    if (cleanNip.length !== 10) {
+      toast.error("NIP musi składać się z 10 cyfr.");
+      return;
+    }
+    setIsFetchingGus(true);
+    try {
+      const response = await api.get(`/orders/nip-lookup/${cleanNip}`);
+      const data = response.data;
+      
+      // Auto-fill form fields
+      methods.setValue("invoice_address.company_name", data.company_name || "");
+      methods.setValue("invoice_address.first_name", data.first_name || "");
+      methods.setValue("invoice_address.last_name", data.last_name || "");
+      methods.setValue("invoice_address.street", data.street || "");
+      methods.setValue("invoice_address.postal_code", data.postal_code || "");
+      methods.setValue("invoice_address.city", data.city || "");
+      methods.setValue("invoice_address.country", data.country || "Polska");
+      
+      toast.success("Dane firmy zostały pobrane z bazy MF/GUS!");
+    } catch (err: any) {
+      console.error("GUS lookup error:", err);
+      toast.error(err.response?.data?.detail || "Nie udało się pobrać danych firmy z bazy MF.");
+    } finally {
+      setIsFetchingGus(false);
+    }
+  };
+
+  // Find Subiekt GT and other marketplace integrations
   useEffect(() => {
     if (!isOpen) return;
-    const checkSubiekt = async () => {
+    const fetchIntegrations = async () => {
       try {
         const response = await api.get<ServiceIntegration[]>("/service-integrations");
+        
+        // Find Subiekt GT for autocompleting products
         const subiekt = response.data.find((i) => i.provider_type === "SUBIEKT_GT");
         if (subiekt) {
           setSubiektId(subiekt.id);
         }
+
+        // Filter active marketplace integrations (Allegro, Baselinker, Empik etc.)
+        const marketplaces = response.data.filter(
+          (i) => i.is_active && (i.category === "MARKETPLACE" || i.provider_type === "BASELINKER" || i.provider_type === "ALLEGRO" || i.provider_type === "EMPIK")
+        );
+        setIntegrations(marketplaces);
+
+        // Pre-select the first marketplace integration in the form
+        if (marketplaces.length > 0 && !methods.getValues("integration_id")) {
+          // Find if there's Baselinker first (as a popular default), otherwise first in list
+          const preferred = marketplaces.find((i) => i.provider_type === "BASELINKER") || marketplaces[0];
+          methods.setValue("integration_id", preferred.id);
+        }
       } catch (e) {
-        console.error("Nie udało się pobrać integracji dla autouzupełniania", e);
+        console.error("Nie udało się pobrać integracji", e);
       }
     };
-    checkSubiekt();
-  }, [isOpen]);
+    fetchIntegrations();
+  }, [isOpen, methods]);
 
   // Debounced search logic for ERP & Inventory
   useEffect(() => {
@@ -429,6 +518,7 @@ export function ManualOrderDialog({
         name: product.name,
         quantity: 1,
         price: product.price || 0.01,
+        sku: product.sku || "",
       });
     }
     setSearchQuery("");
@@ -486,14 +576,11 @@ export function ManualOrderDialog({
   }, [watchHasInvoice, methods]);
 
   // live cart summary calculation
-  const liveItems = methods.watch("line_items") || [];
-  const cartTotal = useMemo(() => {
-    return liveItems.reduce((acc, item) => {
-      const q = Number(item?.quantity) || 0;
-      const p = Number(item?.price) || 0;
-      return acc + q * p;
-    }, 0);
-  }, [liveItems]);
+  const cartTotal = fields.reduce((acc, field, index) => {
+    const qty = methods.watch(`line_items.${index}.quantity`) || 0;
+    const price = methods.watch(`line_items.${index}.price`) || 0;
+    return acc + qty * price;
+  }, 0);
 
   const onSubmit = async (values: ManualOrderSchemaType) => {
     if (values.line_items.length === 0) {
@@ -526,6 +613,11 @@ export function ManualOrderDialog({
     });
   };
 
+  const onInvalid = (errors: any) => {
+    console.error("Form validation failed:", JSON.stringify(errors, null, 2));
+    toast.error("Formularz zawiera błędy. Sprawdź komunikaty przy polach.");
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="max-w-6xl w-full bg-[#090b11]/98 border-white/10 backdrop-blur-3xl text-white shadow-2xl overflow-hidden p-0 rounded-3xl">
@@ -551,7 +643,7 @@ export function ManualOrderDialog({
         </div>
 
         <FormProvider {...methods}>
-          <form onSubmit={methods.handleSubmit(onSubmit)} className="relative z-10">
+          <form onSubmit={methods.handleSubmit(onSubmit, onInvalid)} className="relative z-10">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 md:p-8 max-h-[65vh] overflow-y-auto pr-4 scrollbar-thin">
               
               {/* LEWA KOLUMNA: Klient, Dostawa i Faktura (7/12) */}
@@ -660,7 +752,7 @@ export function ManualOrderDialog({
 
                   {watchHasInvoice && (
                     <div className="pt-2 border-t border-white/5 animate-in fade-in slide-in-from-top-4 duration-300">
-                      <InvoiceFields prefix="invoice_address" />
+                      <InvoiceFields prefix="invoice_address" isFetchingGus={isFetchingGus} onGusLookup={handleGusLookup} />
                     </div>
                   )}
                 </div>
@@ -835,8 +927,60 @@ export function ManualOrderDialog({
                     )}
                   </div>
 
+                  {/* Płatność pod pozycjami koszyka */}
+                  <div className="border-t border-white/5 pt-4 mt-2 space-y-3">
+                    <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                      <CreditCard className="h-3.5 w-3.5 text-emerald-400" />
+                      Płatność
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField
+                        control={methods.control}
+                        name="payment_type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[10px] text-slate-400">Typ płatności</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || "ONLINE"}>
+                              <FormControl>
+                                <SelectTrigger className="bg-slate-950/45 border-white/10 text-[11px] text-white h-8">
+                                  <SelectValue placeholder="Wybierz typ" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="bg-slate-950 border-white/10 text-white">
+                                <SelectItem value="ONLINE" className="text-xs">Przedpłata (przelew/karta)</SelectItem>
+                                <SelectItem value="CASH_ON_DELIVERY" className="text-xs">Za pobraniem (COD)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage className="text-[9px]" />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={methods.control}
+                        name="payment_status"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-[10px] text-slate-400">Status płatności</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || "PENDING"}>
+                              <FormControl>
+                                <SelectTrigger className="bg-slate-950/45 border-white/10 text-[11px] text-white h-8">
+                                  <SelectValue placeholder="Wybierz status" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="bg-slate-950 border-white/10 text-white">
+                                <SelectItem value="PENDING" className="text-xs">Oczekuje na wpłatę</SelectItem>
+                                <SelectItem value="COMPLETED" className="text-xs">Opłacone (zaksięgowane)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage className="text-[9px]" />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
                   {/* Summary Box */}
-                  <div className="bg-gradient-to-br from-primary/10 via-indigo-500/5 to-transparent border border-primary/20 rounded-2xl p-4 mt-auto">
+                  <div className="bg-gradient-to-br from-primary/10 via-indigo-500/5 to-transparent border border-primary/20 rounded-2xl p-4 mt-4">
                     <div className="flex justify-between items-center">
                       <div className="space-y-0.5">
                         <span className="text-[10px] text-indigo-300 font-extrabold uppercase tracking-widest">

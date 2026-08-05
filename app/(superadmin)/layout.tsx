@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/auth";
 import api from "@/lib/api";
 import { Logo } from "@/components/shared/logo";
 import { UserNav } from "@/components/shared/user-nav";
-import { Loader2, ShieldCheck, LayoutDashboard, Building2, Settings2, MessageSquare, HelpCircle } from "lucide-react";
+import { Loader2, ShieldCheck, LayoutDashboard, Building2, Settings2, MessageSquare, HelpCircle, Crown } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/superadmin", label: "Pulpit", icon: LayoutDashboard },
   { href: "/superadmin/organizations", label: "Organizacje", icon: Building2 },
   { href: "/superadmin/tickets", label: "Zgłoszenia", icon: MessageSquare },
+  { href: "/superadmin/plans", label: "Plany", icon: Crown },
   { href: "/superadmin/config", label: "Konfiguracja", icon: Settings2 },
   { href: "/superadmin/help", label: "Poradniki wideo", icon: HelpCircle },
 ];

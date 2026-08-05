@@ -16,8 +16,9 @@ import api from "@/lib/api";
 import { DataTable } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Printer, ExternalLink, FileText } from "lucide-react";
+import { Download, Printer, ExternalLink, FileText, FileCheck2 } from "lucide-react";
 import { MarketplaceOrder } from "@/types/marketplace-order";
+import { SalesCorrectionModal } from "./sales-correction-modal";
 
 interface PaginatedOrdersResponse {
   total: number;
@@ -239,6 +240,14 @@ export function InvoiceHistoryTable() {
     }
   };
 
+  const [correctionOrder, setCorrectionOrder] = useState<MarketplaceOrder | null>(null);
+  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
+
+  const handleOpenCorrection = (order: MarketplaceOrder) => {
+    setCorrectionOrder(order);
+    setIsCorrectionModalOpen(true);
+  };
+
   const columns = useMemo<ColumnDef<MarketplaceOrder>[]>(
     () => [
       {
@@ -314,6 +323,18 @@ export function InvoiceHistoryTable() {
               <Button
                 variant="outline"
                 size="sm"
+                className="h-8 group border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-all"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenCorrection(order);
+                }}
+              >
+                <FileCheck2 className="w-4 h-4 mr-1.5" />
+                Koryguj
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 className="h-8 group hover:border-primary/50 hover:bg-primary/5 transition-all w-24"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -360,6 +381,11 @@ export function InvoiceHistoryTable() {
         pagination={pagination}
         setPagination={setPagination}
         isLoading={isLoading}
+      />
+      <SalesCorrectionModal
+        order={correctionOrder}
+        isOpen={isCorrectionModalOpen}
+        onClose={() => setIsCorrectionModalOpen(false)}
       />
     </div>
   );

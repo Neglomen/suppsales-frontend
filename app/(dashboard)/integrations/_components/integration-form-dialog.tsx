@@ -64,7 +64,7 @@ interface IntegrationFormDialogProps {
   onSuccess: (newIntegration: ServiceIntegration) => void;
 }
 
-type ProviderType = "ALLEGRO" | "BASELINKER" | "SUUS" | "AB" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "EMPIK" | "GEIS" | "GEODIS" | "INPOST_BUY";
+type ProviderType = "ALLEGRO" | "BASELINKER" | "SUUS" | "AB" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "EMPIK" | "GEIS" | "GEODIS" | "INPOST_BUY" | "RABEN";
 
 const CATEGORIES = [
   { id: "ALL", name: "Wszystkie", icon: <Grid className="h-4 w-4 mr-2.5" /> },

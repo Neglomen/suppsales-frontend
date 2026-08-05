@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, MessageSquareReply, FileText, Clock, Zap, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Settings, MessageSquareReply, FileText, Clock, Zap, ShieldCheck, Bot, BrainCircuit, Sparkles } from "lucide-react";
 import { StatusMappingConfig } from "../StatusMappingConfig";
 import {
   Select,
@@ -209,29 +210,133 @@ export const AllegroManageTab = ({ integrationId }: AllegroManageTabProps) => {
         <StatusMappingConfig integrationId={integrationId} />
       </TabsContent>
 
-      <TabsContent value="autoresponder" className="space-y-4 pt-4">
-        <SyncSwitch
-          name={{ control: form.control, name: "autoresponder_enabled" }}
-          label="Włącz autoresponder"
-        />
-        <FormField
-          control={form.control}
-          name="autoresponder_message"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Treść wiadomości</FormLabel>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  placeholder="np. Dziękujemy za zakup! Twoje zamówienie jest w realizacji."
-                  rows={4}
-                  className="bg-background/80 border-border/20"
+      <TabsContent value="autoresponder" className="space-y-6 pt-6">
+        {/* Główny przełącznik autorespondera */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-5 rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/50 to-slate-950/80 shadow-lg relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <Bot className="w-5 h-5 text-indigo-400" />
+              Automatyczne Odpowiedzi
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md leading-relaxed">
+              Włącz asystenta, który będzie automatycznie odpowiadał na wiadomości od kupujących, redukując Twój czas obsługi.
+            </p>
+          </div>
+          <div className="relative z-10 sm:scale-110 sm:mr-4">
+            <SyncSwitch
+              name={{ control: form.control, name: "autoresponder_enabled" }}
+              label=""
+            />
+          </div>
+        </div>
+
+        {/* Sekcja konfiguracji - widoczna gdy włączony */}
+        {form.watch("autoresponder_enabled") && (
+          <div className="grid gap-6 md:grid-cols-2 animate-in fade-in slide-in-from-top-4 duration-500">
+            
+            {/* Lewa kolumna - Tryb i Zasięg */}
+            <div className="space-y-5 p-5 rounded-2xl border border-white/5 bg-slate-950/40 shadow-inner">
+              <FormField
+                control={form.control}
+                name="autoresponder_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-semibold flex items-center gap-2 text-slate-200">
+                      Tryb Asystenta
+                      {field.value === "AI" && (
+                        <Badge variant="default" className="bg-gradient-to-r from-purple-500 to-indigo-500 text-[9px] px-1.5 py-0 border-0 h-4">AI BETA</Badge>
+                      )}
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "STATIC"}>
+                      <FormControl>
+                        <SelectTrigger className="bg-slate-900/60 border-white/10 h-14 rounded-xl hover:bg-slate-900 transition-colors">
+                          <SelectValue placeholder="Wybierz tryb generowania" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-slate-950 border-white/10 text-white rounded-xl">
+                        <SelectItem value="STATIC" className="py-3">
+                          <div className="flex flex-col text-left">
+                            <span className="font-medium text-sm text-slate-200">Własny szablon tekstu</span>
+                            <span className="text-[10px] text-muted-foreground mt-0.5">Zawsze ta sama, stała wiadomość</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="AI" className="py-3 focus:bg-indigo-500/10 focus:text-indigo-200">
+                          <div className="flex flex-col text-left">
+                            <span className="font-medium text-sm text-indigo-300 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              Inteligentny Asystent Gemini
+                            </span>
+                            <span className="text-[10px] text-muted-foreground mt-0.5">Analizuje status i odpowiada kontekstowo</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="autoresponder_mode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-semibold text-slate-200">Zasady odpowiadania</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "first_message"}>
+                      <FormControl>
+                        <SelectTrigger className="bg-slate-900/60 border-white/10 h-11 rounded-xl hover:bg-slate-900 transition-colors">
+                          <SelectValue placeholder="Wybierz zasady" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-slate-950 border-white/10 text-white rounded-xl">
+                        <SelectItem value="first_message">Tylko na pierwszą wiadomość w wątku</SelectItem>
+                        <SelectItem value="all_messages">Na każdą wiadomość od kupującego</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Prawa kolumna - Konfiguracja wiadomości */}
+            <div className="p-5 rounded-2xl border border-white/5 bg-slate-950/40 shadow-inner flex flex-col justify-center min-h-[220px]">
+              {form.watch("autoresponder_type") === "AI" ? (
+                <div className="text-center space-y-4 px-4 py-6 animate-in zoom-in-95 duration-300">
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-3 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
+                    <BrainCircuit className="w-7 h-7 text-indigo-400" />
+                  </div>
+                  <h4 className="font-bold text-sm text-indigo-300">Pełna automatyzacja z AI</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Nasz system sztucznej inteligencji sam odnajdzie zamówienie klienta, zweryfikuje numer paczki i sformułuje uprzejmą odpowiedź opartą na aktualnym statusie.
+                  </p>
+                </div>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="autoresponder_message"
+                  render={({ field }) => (
+                    <FormItem className="h-full flex flex-col animate-in fade-in duration-300">
+                      <FormLabel className="text-sm font-semibold text-slate-200 flex items-center justify-between">
+                        Szablon wiadomości statycznej
+                      </FormLabel>
+                      <FormControl className="flex-1 mt-3">
+                        <Textarea
+                          {...field}
+                          placeholder="np. Dzień dobry, dziękujemy za zakup! Twoje zamówienie jest w realizacji."
+                          className="bg-slate-900/60 border-white/10 hover:border-white/20 focus:border-indigo-500/30 transition-colors rounded-xl min-h-[140px] resize-none text-sm leading-relaxed text-slate-200 shadow-inner"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+              )}
+            </div>
+
+          </div>
+        )}
       </TabsContent>
 
       <TabsContent value="invoices" className="space-y-6 pt-4">

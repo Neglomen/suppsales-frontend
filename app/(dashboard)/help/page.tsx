@@ -88,7 +88,7 @@ export default function HelpPage() {
   };
 
   return (
-    <div className="space-y-12 max-w-5xl mx-auto w-full pb-20 text-foreground">
+    <div className="space-y-12 max-w-7xl mx-auto w-full pb-20 text-foreground">
       
       {/* Header Section with Ambient Glow */}
       <div className="relative text-center space-y-5 py-12 rounded-3xl overflow-hidden bg-slate-900/40 border border-border/30 backdrop-blur-md">
@@ -153,7 +153,7 @@ export default function HelpPage() {
             <p className="text-xs text-muted-foreground/60">Nie znaleziono wideo instrukcji dopasowanych do wybranych filtrów.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredVideos.map((video) => {
               const Icon = getCategoryIcon(video.category);
               const videoUrl = video.video_path.startsWith("http")

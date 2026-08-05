@@ -12,6 +12,8 @@ import {
   GeisIcon,
   GeodisIcon,
   RabenIcon,
+  EmpikIcon,
+  InPostIcon,
 } from "@/components/shared/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,9 @@ export const IntegrationCard = ({
     GEIS: <GeisIcon className="w-28 h-auto drop-shadow-lg" />,
     GEODIS: <GeodisIcon className="w-28 h-auto drop-shadow-lg" />,
     RABEN: <RabenIcon className="w-28 h-auto drop-shadow-lg" />,
+    EMPIK: <EmpikIcon className="w-20 h-auto drop-shadow-lg" />,
+    INPOST_BUY: <InPostIcon className="w-24 h-auto drop-shadow-lg" />,
+    INPOST: <InPostIcon className="w-24 h-auto drop-shadow-lg" />,
   };
 
   return (

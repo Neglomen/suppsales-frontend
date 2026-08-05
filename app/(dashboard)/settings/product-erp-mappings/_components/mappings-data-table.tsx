@@ -13,6 +13,7 @@ import { keepPreviousData } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -34,7 +35,7 @@ import { PaginatedResponse } from "@/types/pagination";
 import { MarketplaceOffer } from "@/types/marketplace-offer";
 import { ServiceIntegration } from "@/types/service-integration";
 import { InlineMappingCell } from "./inline-mapping-cell";
-import { Loader2, ExternalLink, ImageIcon } from "lucide-react";
+import { Loader2, ExternalLink, ImageIcon, Search, X } from "lucide-react";
 
 export function MappingsDataTable() {
   const [pagination, setPagination] = React.useState({
@@ -44,6 +45,21 @@ export function MappingsDataTable() {
   const [sourceIntegrationId, setSourceIntegrationId] =
     React.useState<string>("");
   const [erpIntegrationId, setErpIntegrationId] = React.useState<string>("");
+  const [search, setSearch] = React.useState("");
+  const [debouncedSearch, setDebouncedSearch] = React.useState("");
+
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  // Reset wyszukiwania przy zmianie integracji źródłowej
+  React.useEffect(() => {
+    setSearch("");
+    setDebouncedSearch("");
+  }, [sourceIntegrationId]);
 
   const { data: marketplaceIntegrations } = useQuery<ServiceIntegration[]>({
     queryKey: ["serviceIntegrations", { category: "MARKETPLACE" }],
@@ -60,12 +76,15 @@ export function MappingsDataTable() {
   const { data: offersData, isLoading: isOffersLoading } = useQuery<
     PaginatedResponse<MarketplaceOffer>
   >({
-    queryKey: ["marketplaceOffers", sourceIntegrationId, pagination],
+    queryKey: ["marketplaceOffers", sourceIntegrationId, pagination, debouncedSearch],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(pagination.pageIndex + 1),
         size: String(pagination.pageSize),
       });
+      if (debouncedSearch) {
+        params.append("q", debouncedSearch);
+      }
       const response = await api.get(
         `/erp-proxy/integrations/${sourceIntegrationId}/offers?${params.toString()}`
       );
@@ -207,6 +226,36 @@ export function MappingsDataTable() {
             </SelectContent>
           </Select>
         </div>
+        {sourceIntegrationId && (
+          <div className="flex-1 space-y-2.5 animate-in fade-in slide-in-from-right-1 duration-200">
+            <label className="text-sm font-semibold text-foreground/90">Szukaj Oferty</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="ID oferty lub nazwa..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                }}
+                className="pl-9 pr-8 h-10 bg-background border-border/80 focus-visible:ring-primary/30"
+              />
+              {search && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1.5 h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setSearch("");
+                    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       <div className="rounded-xl shadow-sm overflow-hidden bg-card ring-1 ring-border/50">
         <Table>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
 import { MarketplaceOrder } from "@/types/marketplace-order";
@@ -24,6 +24,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -52,6 +53,10 @@ import {
   Calendar,
   Clock,
   Box,
+  ClipboardList,
+  Plus,
+  Trash,
+  User
 } from "lucide-react";
 
 import {
@@ -84,6 +89,7 @@ import { Shipment } from "@/types/shipment";
 import { AdditionalServiceMapping } from "@/types/additional-service-mapping";
 import { useOrderShipments } from "../_hooks/use-order-shipments";
 import { ShipmentHistory } from "./ShipmentHistory";
+import { SalesCorrectionModal } from "./sales-correction-modal";
 import { cn, downloadFileFromBase64 } from "@/lib/utils";
 import { SUUS_PACKAGE_CODES, RABEN_PACKAGE_CODES } from "@/lib/courier-data";
 import {
@@ -191,6 +197,7 @@ const OrderInfoCard = ({
   const [isEditAddressOpen, setIsEditAddressOpen] = useState(false);
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [isSalesCorrectionOpen, setIsSalesCorrectionOpen] = useState(false);
 
   const handleCreateInvoice = async () => {
     try {
@@ -683,16 +690,27 @@ const OrderInfoCard = ({
                     </div>
                   )}
 
-                  {/* Status Faktury i Przycisk Tworzenia */}
+                  {/* Status Faktury i Przycisk Tworzenia / Korekty */}
                   {order.erp_sales_document_number ? (
-                    <div className="mt-3 pt-3 border-t border-emerald-500/20 flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-400">
-                      <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="font-semibold">Wystawiono fakturę:</p>
-                        <p className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-white mt-1 truncate inline-block">
-                          {order.erp_sales_document_number}
-                        </p>
+                    <div className="mt-3 pt-3 border-t border-emerald-500/20 space-y-2">
+                      <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-400">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-semibold">Wystawiono fakturę:</p>
+                            <p className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-white mt-1 truncate inline-block">
+                              {order.erp_sales_document_number}
+                            </p>
+                          </div>
+                        </div>
                       </div>
+                      <Button
+                        onClick={() => setIsSalesCorrectionOpen(true)}
+                        className="w-full h-8 text-xs font-semibold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Wystaw Korektę (KFS)
+                      </Button>
                     </div>
                   ) : (
                     <div className="mt-3 pt-3 border-t border-border/40">
@@ -878,6 +896,11 @@ const OrderInfoCard = ({
             onClose={() => setIsEditInvoiceOpen(false)}
             onSuccess={(updatedOrder) => { setIsEditInvoiceOpen(false); onOrderUpdate?.(updatedOrder); }}
           />
+          <SalesCorrectionModal
+            order={order}
+            isOpen={isSalesCorrectionOpen}
+            onClose={() => setIsSalesCorrectionOpen(false)}
+          />
         </div>
       )}
     </div>  );
@@ -957,6 +980,78 @@ export function OrderDetailsColumn({
       refetchOrder();
     }
   }, [liveCheckResult, refetchOrder]);
+
+  const [orderNotes, setOrderNotes] = useState<any[]>([]);
+  const [isNotesLoading, setIsNotesLoading] = useState(false);
+  const [orderTasks, setOrderTasks] = useState<any[]>([]);
+  const [isOrderTasksLoading, setIsOrderTasksLoading] = useState(false);
+  const [newNoteContent, setNewNoteContent] = useState("");
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+
+  const fetchOrderNotes = useCallback(async () => {
+    if (!order?.id) return;
+    setIsNotesLoading(true);
+    try {
+      const res = await api.get(`/orders/${order.id}/notes`);
+      setOrderNotes(res.data || []);
+    } catch {
+      // ignore
+    } finally {
+      setIsNotesLoading(false);
+    }
+  }, [order?.id]);
+
+  const fetchOrderTasks = useCallback(async () => {
+    if (!order?.id) return;
+    setIsOrderTasksLoading(true);
+    try {
+      const res = await api.get(`/internal-tasks/?order_id=${order.id}`);
+      setOrderTasks(res.data.items || []);
+    } catch {
+      // ignore
+    } finally {
+      setIsOrderTasksLoading(false);
+    }
+  }, [order?.id]);
+
+  useEffect(() => {
+    if (order?.id) {
+      fetchOrderNotes();
+      fetchOrderTasks();
+    } else {
+      setOrderNotes([]);
+      setOrderTasks([]);
+    }
+  }, [order?.id, fetchOrderNotes, fetchOrderTasks]);
+
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoteContent.trim() || !order?.id) return;
+    setIsSubmittingNote(true);
+    try {
+      await api.post(`/orders/${order.id}/notes`, { content: newNoteContent.trim() });
+      setNewNoteContent("");
+      toast.success("Notatka została dodana.");
+      fetchOrderNotes();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || "Błąd dodawania notatki.";
+      toast.error(msg);
+    } finally {
+      setIsSubmittingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!confirm("Czy na pewno chcesz usunąć tę notatkę?")) return;
+    try {
+      await api.delete(`/notes/${noteId}`);
+      toast.success("Notatka została usunięta.");
+      fetchOrderNotes();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || "Błąd usuwania notatki.";
+      toast.error(msg);
+    }
+  };
 
   const { data: integrations } = useQuery<ServiceIntegration[]>({
     queryKey: ["serviceIntegrations"],
@@ -1266,11 +1361,12 @@ export function OrderDetailsColumn({
     );
   }, [order, isCodOrder]);
 
-  const { mappedCourier, mappedPackageId, mappingWarning } = useMemo(() => {
+  const { mappedCourier, mappedPackageId, mappedServiceCode = "", mappingWarning } = useMemo(() => {
     if (!order || !config)
       return {
         mappedCourier: null,
         mappedPackageId: undefined,
+        mappedServiceCode: "",
         mappingWarning: null,
       };
 
@@ -1317,6 +1413,7 @@ export function OrderDetailsColumn({
             return {
               mappedCourier: courier,
               mappedPackageId: defaultPackage?.id,
+              mappedServiceCode: matchedSrv.courier_service_code || "",
               mappingWarning: null,
             };
           }
@@ -1330,7 +1427,7 @@ export function OrderDetailsColumn({
       order.details_payload?.delivery_method ||
       (order.service_integration?.provider_type === "EMPIK" ? order.details_payload?.shipping_type_label : null);
     if (!deliveryMethodName)
-      return { mappingWarning: "W zamówieniu brakuje nazwy metody dostawy." };
+      return { mappingWarning: "W zamówieniu brakuje nazwy metody dostawy.", mappedServiceCode: "" };
     const mapping = config.mappings.find(
       (m) =>
         m.marketplace_delivery_method === deliveryMethodName &&
@@ -1340,10 +1437,12 @@ export function OrderDetailsColumn({
     if (!mapping)
       return {
         mappingWarning: `Brak mapowania dla metody: "${deliveryMethodName}".`,
+        mappedServiceCode: "",
       };
     if (!mapping.service_integration_id || !mapping.courier_service_code)
       return {
         mappingWarning: `Mapowanie dla "${deliveryMethodName}" jest niekompletne.`,
+        mappedServiceCode: "",
       };
     const courier = config.couriers.find(
       (c) => c.id === mapping.service_integration_id
@@ -1353,6 +1452,7 @@ export function OrderDetailsColumn({
       mappedCourier: courier,
       mappedPackageId:
         mapping.default_package_definition_id || defaultPackage?.id,
+      mappedServiceCode: mapping.courier_service_code || "",
       mappingWarning: null,
     };
   }, [order, config, serviceMappings]);
@@ -1605,7 +1705,13 @@ export function OrderDetailsColumn({
     setSelectedServiceCode("");
     try {
       const res = await api.get<ApaczkaService[]>(`/service-integrations/${courierId}/apaczka/services`);
-      setApaczkaServices(res.data);
+      setApaczkaServices(res.data || []);
+      if (res.data && res.data.length > 0) {
+        const defaultCode = (courierId === mappedCourier?.id && mappedServiceCode)
+          ? mappedServiceCode
+          : res.data[0].id;
+        setSelectedServiceCode(defaultCode);
+      }
     } catch {
       toast.error("Nie udało się pobrać listy serwisów Apaczki.");
     } finally {
@@ -1814,9 +1920,11 @@ export function OrderDetailsColumn({
         </p>
       </div>
     );
+  const selectedCourier = config?.couriers?.find(c => c.id === selectedCourierId);
   const isGenerateButtonDisabled =
     isGenerating ||
     (isManualCourier ? !selectedCourierId : !!mappingWarning) ||
+    (isManualCourier && selectedCourier?.provider_type === "APACZKA" && !selectedServiceCode) ||
     packages.length === 0 ||
     packages.some(
       (p) =>
@@ -2007,7 +2115,7 @@ export function OrderDetailsColumn({
       )}
 
       <Tabs defaultValue="main" className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="grid w-full grid-cols-3 bg-slate-950/40 p-1 border border-white/5 rounded-xl shrink-0">
+        <TabsList className="grid w-full grid-cols-4 bg-slate-950/40 p-1 border border-white/5 rounded-xl shrink-0">
           <TabsTrigger value="main" className="flex items-center justify-center gap-2 rounded-lg py-2 data-[state=active]:bg-primary/20 data-[state=active]:text-white">
             <Info className="h-4 w-4" />
             <span className="text-xs font-medium">Główna</span>
@@ -2029,6 +2137,16 @@ export function OrderDetailsColumn({
             {shipments && shipments.length > 0 && (
               <Badge className="ml-1 px-1.5 py-0.5 text-[9px] font-bold bg-indigo-500 hover:bg-indigo-600 text-white">
                 {shipments.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+
+          <TabsTrigger value="tasks" className="flex items-center justify-center gap-1.5 rounded-lg py-2 data-[state=active]:bg-primary/20 data-[state=active]:text-white">
+            <ClipboardList className="h-4 w-4" />
+            <span className="text-xs font-medium">Zadania & Notatki</span>
+            {(orderTasks.length + orderNotes.length) > 0 && (
+              <Badge className="ml-1 px-1.5 py-0.5 text-[9px] font-bold bg-indigo-500 hover:bg-indigo-600 text-white">
+                {orderTasks.length + orderNotes.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -2688,6 +2806,158 @@ export function OrderDetailsColumn({
           isLoading={areShipmentsLoading}
           error={shipmentsError}
         />
+      </TabsContent>
+
+      <TabsContent value="tasks" className="flex-1 overflow-y-auto mt-3 pr-1 outline-none">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 pb-4">
+          {/* Lewa kolumna: Notatki do zamówienia */}
+          <Card className="border-white/5 bg-slate-900/40 backdrop-blur-xl">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-sm text-slate-200">
+                <StickyNote className="h-4 w-4 text-primary" /> Notatki wewnętrzne
+              </CardTitle>
+              <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">{orderNotes.length}</Badge>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Formularz dodawania notatki */}
+              <form onSubmit={handleAddNote} className="space-y-2">
+                <Textarea
+                  placeholder="Wpisz nową notatkę wewnętrzną do zamówienia..."
+                  value={newNoteContent}
+                  onChange={(e: any) => setNewNoteContent(e.target.value)}
+                  required
+                  rows={3}
+                  className="rounded-xl border-white/10 focus-visible:ring-indigo-500 bg-slate-950/40 text-xs text-slate-200"
+                />
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    disabled={isSubmittingNote || !newNoteContent.trim()}
+                    className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs h-8"
+                  >
+                    {isSubmittingNote ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    Dodaj notatkę
+                  </Button>
+                </div>
+              </form>
+
+              <Separator className="bg-white/5 my-3" />
+
+              {/* Lista notatek */}
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                {isNotesLoading ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
+                ) : orderNotes.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 italic text-xs">
+                    Brak notatek do tego zamówienia.
+                  </div>
+                ) : (
+                  orderNotes.map((note) => (
+                    <div key={note.id} className="p-3 bg-slate-950/30 border border-white/5 rounded-xl relative group hover:bg-slate-900/30 transition-all duration-200">
+                      <div className="flex items-center justify-between text-[9px] font-semibold text-slate-500 mb-1.5">
+                        <span className="flex items-center gap-1">
+                          <User className="h-2.5 w-2.5" />
+                          {note.author.name || note.author.email}
+                        </span>
+                        <span>{new Date(note.created_at).toLocaleString("pl-PL")}</span>
+                      </div>
+                      <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed pr-6">{note.content}</p>
+                      <Button
+                        onClick={() => handleDeleteNote(note.id)}
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 rounded-lg text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 absolute right-2 bottom-2 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                      >
+                        <Trash className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Prawa kolumna: Zadania i decyzje */}
+          <Card className="border-white/5 bg-slate-900/40 backdrop-blur-xl">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-sm text-slate-200">
+                <ClipboardList className="h-4 w-4 text-indigo-400" /> Zadania i decyzje
+              </CardTitle>
+              <Badge variant="outline" className="text-xs bg-indigo-500/5 text-indigo-400 border-indigo-500/20">{orderTasks.length}</Badge>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                {isOrderTasksLoading ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
+                  </div>
+                ) : orderTasks.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 italic text-xs">
+                    Brak przypisanych zadań. Możesz utworzyć nowe zadanie z dymka na dole strony.
+                  </div>
+                ) : (
+                  orderTasks.map((task) => {
+                    const priorityColor = 
+                      task.priority === "LOW" ? "border-slate-500/20 text-slate-400" :
+                      task.priority === "MEDIUM" ? "border-blue-500/20 text-blue-400" :
+                      task.priority === "HIGH" ? "border-orange-500/20 text-orange-400" :
+                      "border-rose-500/20 text-rose-400 bg-rose-500/5 animate-pulse";
+
+                    const statusColor = 
+                      task.status === "NEW" ? "bg-blue-500/10 text-blue-400" :
+                      task.status === "IN_PROGRESS" ? "bg-amber-500/10 text-amber-400" :
+                      task.status === "RESOLVED" ? "bg-emerald-500/10 text-emerald-400" :
+                      "bg-slate-500/10 text-slate-400";
+
+                    return (
+                      <div key={task.id} className="p-3 bg-slate-950/30 border border-white/5 rounded-xl hover:bg-slate-900/30 transition-all duration-200 flex flex-col gap-2">
+                        <div className="flex items-center justify-between text-[9px]">
+                          <span className="font-semibold text-slate-500">
+                            Zleca: {task.created_by.name || task.created_by.email}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {task.type === "DECISION_REQUEST" && (
+                              <Badge className="bg-purple-500/10 text-purple-400 border-none text-[8px] h-4 font-bold">Decyzja</Badge>
+                            )}
+                            <Badge variant="outline" className={`text-[8px] h-4 ${priorityColor}`}>{task.priority}</Badge>
+                            <Badge className={`border-none text-[8px] h-4 ${statusColor}`}>{task.status}</Badge>
+                          </div>
+                        </div>
+                        
+                        <h4 className="text-xs font-bold text-slate-200 leading-normal">{task.title}</h4>
+                        {task.description && (
+                          <p className="text-[10px] text-slate-400 line-clamp-2">{task.description}</p>
+                        )}
+
+                        <Separator className="bg-white/5 my-0.5" />
+
+                        <div className="flex items-center justify-between text-[9px] text-slate-500">
+                          <span>Przypisane do: <strong className="text-slate-300">{task.assigned_to ? (task.assigned_to.name || task.assigned_to.email) : "Każdy"}</strong></span>
+                          <Button
+                            onClick={() => {
+                              window.dispatchEvent(new CustomEvent("open-internal-task", { detail: { taskId: task.id } }));
+                            }}
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[9px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/5 font-bold rounded-lg p-0 px-2"
+                          >
+                            Pokaż czat
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </TabsContent>
       </Tabs>
     </div>

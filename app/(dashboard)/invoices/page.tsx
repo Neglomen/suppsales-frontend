@@ -23,6 +23,7 @@ import { SupplierInvoice, ErpSyncStatus } from "@/types/invoice";
 import { generateKsefPdfBase64 } from "@/lib/ksef-pdf";
 
 import { KsefProductMappingModal } from "./_components/ksef-product-mapping-modal";
+import { InvoicePreviewDialog } from "./_components/invoice-preview-dialog";
 import {
   Eye,
   Download,
@@ -170,6 +171,10 @@ export default function InvoicesPage() {
   const [isKsefSyncing, setIsKsefSyncing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   
+  // Stan dla podglądu faktury (InvoicePreviewDialog)
+  const [selectedPreviewInvoice, setSelectedPreviewInvoice] = useState<SupplierInvoice | null>(null);
+  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = useState(false);
+
   // Stan dla modalu mapowania
   const [mappingModalState, setMappingModalState] = useState<{
     isOpen: boolean;
@@ -776,7 +781,8 @@ export default function InvoicesPage() {
   };
 
   const handleViewXml = (invoice: SupplierInvoice) => {
-    window.open(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1"}/supplier-invoices/${invoice.id}/ksef-xml`, "_blank");
+    setSelectedPreviewInvoice(invoice);
+    setIsPreviewDialogOpen(true);
   };
 
   const handleMassiveDownload = async () => {
@@ -1327,6 +1333,13 @@ export default function InvoicesPage() {
           setMappingModalState(prev => ({ ...prev, isOpen: false }));
           handleCreateKsefInSubiekt(ids);
         }}
+      />
+
+      {/* Modal interaktywnego podglądu faktury */}
+      <InvoicePreviewDialog
+        isOpen={isPreviewDialogOpen}
+        setIsOpen={setIsPreviewDialogOpen}
+        invoice={selectedPreviewInvoice}
       />
     </div>
   );

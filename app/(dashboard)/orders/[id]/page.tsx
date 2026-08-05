@@ -40,6 +40,9 @@ import {
   ArrowRightLeft,
   ShoppingBag,
   Truck,
+  ClipboardList,
+  Trash,
+  Plus
 } from "lucide-react";
 import { useMobile } from "@/hooks/use-mobile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +50,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { Separator } from "@/components/ui/separator";
 import { ChatPanel } from "./_components/chat-panel";
@@ -824,6 +828,71 @@ function OrderDetailsContent() {
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
   const [isDisputeChatOpen, setIsDisputeChatOpen] = useState(false);
 
+  const [orderNotes, setOrderNotes] = useState<any[]>([]);
+  const [isNotesLoading, setIsNotesLoading] = useState(false);
+  const [orderTasks, setOrderTasks] = useState<any[]>([]);
+  const [isOrderTasksLoading, setIsOrderTasksLoading] = useState(false);
+
+  const fetchOrderNotes = useCallback(async () => {
+    if (!orderId) return;
+    setIsNotesLoading(true);
+    try {
+      const res = await api.get(`/orders/${orderId}/notes`);
+      setOrderNotes(res.data || []);
+    } catch {
+      toast.error("Nie udało się pobrać notatek zamówienia.");
+    } finally {
+      setIsNotesLoading(false);
+    }
+  }, [orderId]);
+
+  const fetchOrderTasks = useCallback(async () => {
+    if (!orderId) return;
+    setIsOrderTasksLoading(true);
+    try {
+      const res = await api.get(`/internal-tasks/?order_id=${orderId}`);
+      setOrderTasks(res.data.items || []);
+    } catch {
+      toast.error("Nie udało się pobrać zadań powiązanych z zamówieniem.");
+    } finally {
+      setIsOrderTasksLoading(false);
+    }
+  }, [orderId]);
+
+  const [newNoteContent, setNewNoteContent] = useState("");
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+
+  const handleAddNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoteContent.trim() || !orderId) return;
+    setIsSubmittingNote(true);
+    try {
+      await api.post(`/orders/${orderId}/notes`, { content: newNoteContent.trim() });
+      setNewNoteContent("");
+      toast.success("Notatka została dodana.");
+      fetchOrderNotes();
+      fetchOrderDetails();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || "Błąd dodawania notatki.";
+      toast.error(msg);
+    } finally {
+      setIsSubmittingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    if (!confirm("Czy na pewno chcesz usunąć tę notatkę?")) return;
+    try {
+      await api.delete(`/notes/${noteId}`);
+      toast.success("Notatka została usunięta.");
+      fetchOrderNotes();
+      fetchOrderDetails();
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.message || "Błąd usuwania notatki.";
+      toast.error(msg);
+    }
+  };
+
   const [showMissingStock, setShowMissingStock] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     const saved = localStorage.getItem("orders_show_missing_stock");
@@ -866,6 +935,25 @@ function OrderDetailsContent() {
       toast.error("Nie udało się zaktualizować statusu zamówienia.", { id: toastId });
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+
+  const handleMarkPaid = async () => {
+    if (!order) return;
+    setIsMarkingPaid(true);
+    const toastId = toast.loading("Zaksięgowywanie wpłaty...");
+    try {
+      const response = await api.post<any>(`/orders/${order.id}/mark-paid`);
+      toast.success("Wpłata została zaksięgowana pomyślnie!", { id: toastId });
+      // Fetch details again to refresh UI
+      const refreshed = await api.get<OrderDetailsApiResponse>(`/orders/${order.id}`);
+      setOrder(refreshed.data);
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.response?.data?.detail || "Nie udało się zaksięgować wpłaty.", { id: toastId });
+    } finally {
+      setIsMarkingPaid(false);
     }
   };
   const [isSavingPdf, setIsSavingPdf] = useState(false);
@@ -1063,8 +1151,12 @@ function OrderDetailsContent() {
   }, [orderId]);
 
   useEffect(() => {
-    if (orderId) fetchOrderDetails();
-  }, [orderId, fetchOrderDetails]);
+    if (orderId) {
+      fetchOrderDetails();
+      fetchOrderNotes();
+      fetchOrderTasks();
+    }
+  }, [orderId, fetchOrderDetails, fetchOrderNotes, fetchOrderTasks]);
 
   const mappedDetails = useMemo(() => {
     if (!order) return null;
@@ -1391,6 +1483,15 @@ function OrderDetailsContent() {
               <Badge variant="secondary" className="ml-1 text-[9px] px-1.5 py-0 h-4 bg-primary/20 text-primary border-none font-bold rounded-full">{order.event_logs.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="tasks" className="rounded-xl gap-1.5 px-4 py-2 text-xs font-semibold data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all duration-300">
+            <ClipboardList className="h-3.5 w-3.5" />
+            Zadania i Notatki
+            {(orderTasks.length + orderNotes.length) > 0 && (
+              <Badge variant="secondary" className="ml-1 text-[9px] px-1.5 py-0 h-4 bg-primary/20 text-primary border-none font-bold rounded-full">
+                {orderTasks.length + orderNotes.length}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
  
         {/* ── TAB: Details ── */}
@@ -1595,6 +1696,22 @@ function OrderDetailsContent() {
                       {mappedDetails.payment.total}
                     </span>
                   </div>
+                  {payStatus !== "COMPLETED" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleMarkPaid}
+                      disabled={isMarkingPaid}
+                      className="w-full mt-3 text-xs bg-emerald-500/10 hover:bg-emerald-500/25 border-emerald-500/30 text-emerald-400 hover:text-emerald-300 font-bold transition-all rounded-xl py-1.5 h-auto flex items-center justify-center gap-1.5"
+                    >
+                      {isMarkingPaid ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      Zaksięguj wpłatę
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
 
@@ -2149,6 +2266,159 @@ function OrderDetailsContent() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── TAB: Tasks & Notes ── */}
+        <TabsContent value="tasks" className="mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Lewa kolumna: Notatki do zamówienia */}
+            <Card className="border-border/60">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ScrollText className="h-4 w-4 text-primary" /> Notatki wewnętrzne
+                </CardTitle>
+                <Badge variant="outline" className="text-xs bg-primary/5">{orderNotes.length}</Badge>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Formularz dodawania notatki */}
+                <form onSubmit={handleAddNote} className="space-y-2">
+                  <Textarea
+                    placeholder="Wpisz nową notatkę wewnętrzną do zamówienia (np. zmiana adresu, ustalenia z klientem)..."
+                    value={newNoteContent}
+                    onChange={(e: any) => setNewNoteContent(e.target.value)}
+                    required
+                    rows={3}
+                    className="rounded-xl border-border/40 focus-visible:ring-indigo-500 text-xs"
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      disabled={isSubmittingNote || !newNoteContent.trim()}
+                      className="rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs h-8"
+                    >
+                      {isSubmittingNote ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                      ) : (
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Dodaj notatkę
+                    </Button>
+                  </div>
+                </form>
+
+                <Separator className="bg-border/10 my-3" />
+
+                {/* Lista notatek */}
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                  {isNotesLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : orderNotes.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground italic text-xs">
+                      Brak notatek do tego zamówienia.
+                    </div>
+                  ) : (
+                    orderNotes.map((note) => (
+                      <div key={note.id} className="p-3 bg-muted/20 border border-border/20 rounded-xl relative group hover:bg-muted/30 transition-all duration-200">
+                        <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground mb-1.5">
+                          <span className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {note.author.name || note.author.email}
+                          </span>
+                          <span>{new Date(note.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed pr-6">{note.content}</p>
+                        <Button
+                          onClick={() => handleDeleteNote(note.id)}
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive absolute right-2 bottom-2 md:opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        >
+                          <Trash className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Prawa kolumna: Zadania i Ticket'y */}
+            <Card className="border-border/60">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ClipboardList className="h-4 w-4 text-indigo-500" /> Zadania i decyzje
+                </CardTitle>
+                <Badge variant="outline" className="text-xs bg-indigo-500/5 text-indigo-500">{orderTasks.length}</Badge>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                  {isOrderTasksLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+                    </div>
+                  ) : orderTasks.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground italic text-xs">
+                      Brak przypisanych zadań do tego zamówienia. Możesz utworzyć nowe zadanie z dymka w prawym dolnym rogu.
+                    </div>
+                  ) : (
+                    orderTasks.map((task) => {
+                      const priorityColor = 
+                        task.priority === "LOW" ? "border-slate-500/20 text-slate-500" :
+                        task.priority === "MEDIUM" ? "border-blue-500/20 text-blue-500" :
+                        task.priority === "HIGH" ? "border-orange-500/20 text-orange-500" :
+                        "border-red-500/20 text-red-500 bg-red-500/5 animate-pulse";
+
+                      const statusColor = 
+                        task.status === "NEW" ? "bg-blue-500/10 text-blue-500" :
+                        task.status === "IN_PROGRESS" ? "bg-amber-500/10 text-amber-500" :
+                        task.status === "RESOLVED" ? "bg-emerald-500/10 text-emerald-500" :
+                        "bg-slate-500/10 text-slate-500";
+
+                      return (
+                        <div key={task.id} className="p-3 bg-muted/20 border border-border/20 rounded-xl hover:bg-muted/30 transition-all duration-200 flex flex-col gap-2">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="font-semibold text-muted-foreground">
+                              Zleca: {task.created_by.name || task.created_by.email}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {task.type === "DECISION_REQUEST" && (
+                                <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-none text-[8px] h-4.5 font-bold">Decyzja</Badge>
+                              )}
+                              <Badge variant="outline" className={`text-[8px] h-4.5 ${priorityColor}`}>{task.priority}</Badge>
+                              <Badge className={`border-none text-[8px] h-4.5 ${statusColor}`}>{task.status}</Badge>
+                            </div>
+                          </div>
+                          
+                          <h4 className="text-xs font-bold text-foreground leading-normal">{task.title}</h4>
+                          {task.description && (
+                            <p className="text-[11px] text-muted-foreground line-clamp-2">{task.description}</p>
+                          )}
+
+                          <Separator className="bg-border/10 my-0.5" />
+
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                            <span>Przypisane do: <strong className="text-foreground">{task.assigned_to ? (task.assigned_to.name || task.assigned_to.email) : "Każdy"}</strong></span>
+                            <Button
+                              onClick={() => {
+                                window.dispatchEvent(new CustomEvent("open-internal-task", { detail: { taskId: task.id } }));
+                              }}
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-[9px] text-indigo-500 hover:text-indigo-400 hover:bg-indigo-500/5 font-bold rounded-lg p-0 px-2"
+                            >
+                              Szczegóły i Czat
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 

@@ -1,7 +1,9 @@
 // src/app/(dashboard)/dashboard/page.tsx
 "use client";
 
+import { useState } from "react";
 import { useAuthStore } from "@/store/auth";
+import ReportModal from "@/components/dashboard/report-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   TrendingUp, 
@@ -54,6 +56,7 @@ interface RecentOrder {
   total_to_pay: number;
   status: string;
   payment_status: string;
+  payment_type: string | null;
   purchased_at: string;
   service_integration_provider: string;
   products: RecentOrderProduct[];
@@ -78,6 +81,8 @@ interface DashboardStats {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportModalType, setReportModalType] = useState<"sales_summary" | "sales_by_channel" | "uninvoiced_orders" | "shipments">("sales_summary");
 
   const { data: statsData, isLoading } = useQuery<DashboardStats>({
     queryKey: ["dashboardStats"],
@@ -112,11 +117,14 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-2.5">
-          <Button variant="outline" className="glass border-border/30 text-foreground hover:bg-accent/5 rounded-xl h-10">
+          <Button 
+            className="bg-primary hover:bg-primary/95 text-white rounded-xl h-10 shadow-lg shadow-primary/20"
+            onClick={() => {
+              setReportModalType("sales_summary");
+              setIsReportModalOpen(true);
+            }}
+          >
             Raport miesięczny
-          </Button>
-          <Button className="bg-primary hover:bg-primary/95 text-white rounded-xl h-10 shadow-lg shadow-primary/20">
-            Eksportuj dane
           </Button>
         </div>
       </div>
@@ -394,7 +402,9 @@ export default function DashboardPage() {
                     {/* Order Total and Payment Status */}
                     <div className="text-right ml-4 shrink-0">
                       <p className="font-bold text-sm text-foreground">{(order.total_to_pay || 0).toLocaleString("pl-PL")} PLN</p>
-                      {order.payment_status === "COMPLETED" ? (
+                      {order.payment_type === "CASH_ON_DELIVERY" ? (
+                        <Badge className="bg-amber-500/10 text-amber-400 border-none h-5 px-2 text-[10px] rounded-md mt-1 font-semibold">Pobranie</Badge>
+                      ) : order.payment_status === "COMPLETED" ? (
                         <Badge className="bg-emerald-500/10 text-emerald-400 border-none h-5 px-2 text-[10px] rounded-md mt-1 font-semibold">Opłacone</Badge>
                       ) : order.payment_status === "PENDING" ? (
                         <Badge className="bg-amber-500/10 text-amber-400 border-none h-5 px-2 text-[10px] rounded-md mt-1 font-semibold animate-pulse">Oczekuje</Badge>
@@ -409,6 +419,12 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+
+      <ReportModal 
+        isOpen={isReportModalOpen} 
+        onClose={() => setIsReportModalOpen(false)} 
+        defaultReportType={reportModalType}
+      />
     </div>
   );
 }

@@ -34,20 +34,14 @@ interface AuthState {
 const ssrSafeCustomStorage = {
   getItem: (name: string) => {
     if (typeof window === "undefined") return null;
-    const localVal = localStorage.getItem(name);
-    if (localVal) return localVal;
-    return sessionStorage.getItem(name);
+    // Sprawdzamy najpierw localStorage, fallback do sessionStorage w ramach migracji
+    return localStorage.getItem(name) || sessionStorage.getItem(name);
   },
   setItem: (name: string, value: string) => {
     if (typeof window === "undefined") return;
-    const rememberMe = localStorage.getItem("auth-remember-me") === "true";
-    if (rememberMe) {
-      localStorage.setItem(name, value);
-      sessionStorage.removeItem(name);
-    } else {
-      sessionStorage.setItem(name, value);
-      localStorage.removeItem(name);
-    }
+    // Zawsze używamy localStorage, by współdzielić sesję między kartami (np. po kliknięciu "Otwórz w nowej karcie")
+    localStorage.setItem(name, value);
+    sessionStorage.removeItem(name);
   },
   removeItem: (name: string) => {
     if (typeof window === "undefined") return;

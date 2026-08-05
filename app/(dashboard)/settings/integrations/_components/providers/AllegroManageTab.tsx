@@ -213,22 +213,66 @@ export const AllegroManageTab = ({ integrationId }: AllegroManageTabProps) => {
         />
         <FormField
           control={form.control}
-          name="autoresponder_message"
+          name="autoresponder_type"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Treść wiadomości</FormLabel>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  placeholder="np. Dziękujemy za zakup! Twoje zamówienie jest w realizacji."
-                  rows={4}
-                  className="bg-background/80 border-border/20"
-                />
-              </FormControl>
+              <FormLabel>Sposób generowania odpowiedzi</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value || "STATIC"}>
+                <FormControl>
+                  <SelectTrigger className="bg-background/80 border-border/20">
+                    <SelectValue placeholder="Wybierz tryb generowania" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent className="bg-slate-950 border-white/10 text-white">
+                  <SelectItem value="STATIC">Statyczny tekst (stała treść)</SelectItem>
+                  <SelectItem value="AI">Inteligentny AI (Gemini - automatyczna analiza zamówienia)</SelectItem>
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
         />
+        <FormField
+          control={form.control}
+          name="autoresponder_mode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tryb autorespondera</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value || "first_message"}>
+                <FormControl>
+                  <SelectTrigger className="bg-background/80 border-border/20">
+                    <SelectValue placeholder="Wybierz tryb" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent className="bg-slate-950 border-white/10 text-white">
+                  <SelectItem value="first_message">Tylko na pierwszą wiadomość w wątku</SelectItem>
+                  <SelectItem value="all_messages">Na każdą wiadomość od kupującego</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        {form.watch("autoresponder_type") !== "AI" && (
+          <FormField
+            control={form.control}
+            name="autoresponder_message"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Treść wiadomości statycznej</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="np. Dziękujemy za zakup! Twoje zamówienie jest w realizacji."
+                    rows={4}
+                    className="bg-background/80 border-border/20"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
       </TabsContent>
 
       <TabsContent value="invoices" className="space-y-6 pt-4">

@@ -60,6 +60,7 @@ const formSchema = z.object({
   name: z.string().min(1, "Nazwa jest wymagana"),
   stock_quantity: z.coerce.number().min(0, "Ilość nie może być ujemna"),
   base_price: z.coerce.number().min(0, "Cena nie może być ujemna").optional(),
+  stock_management_mode: z.string().default("ERP_LOCK"),
 });
 
 export default function ProductDetailsPage() {
@@ -145,6 +146,7 @@ export default function ProductDetailsPage() {
         name: prodData.name || "",
         stock_quantity: prodData.stock_quantity ?? 0,
         base_price: prodData.base_price || 0,
+        stock_management_mode: prodData.stock_management_mode || "ERP_LOCK",
       });
     } catch (error) {
       console.error("Failed to fetch product details", error);
@@ -334,6 +336,13 @@ export default function ProductDetailsPage() {
   };
 
   const handleFetchErpStock = async () => {
+    if (product?.stock_management_mode === "RESERVATION") {
+      const confirmSync = window.confirm(
+        "Uwaga: Jesteś w trybie rezerwacji. Pobranie stanu z ERP nadpisze lokalną ilość, a rezerwacje dla niezrealizowanych zamówień zostaną przeliczone na nowo. Czy chcesz kontynuować?"
+      );
+      if (!confirmSync) return;
+    }
+
     try {
       toast.loading("Pobieranie stanu z Subiekt GT...", { id: "fetch-erp-stock" });
       const res = await api.post(`/inventory/${params.id}/fetch-erp-stock`);
@@ -605,6 +614,54 @@ export default function ProductDetailsPage() {
                   />
                 </div>
 
+                <FormField
+                  control={form.control}
+                  name="stock_management_mode"
+                  render={({ field }) => (
+                    <FormItem className="space-y-2 mt-3">
+                      <FormLabel className="text-xs">Tryb Zarządzania Magazynem</FormLabel>
+                      <FormControl>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => field.onChange("ERP_LOCK")}
+                            className={`p-3.5 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between h-28 hover:shadow-md hover:border-primary/50 ${
+                              field.value === "ERP_LOCK"
+                                ? "border-primary bg-primary/5 text-primary ring-1 ring-primary"
+                                : "border-border/60 bg-card text-muted-foreground"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                              <span>🔒</span> Zestrojony z ERP
+                            </div>
+                            <span className="text-[10px] leading-relaxed mt-1 text-muted-foreground">
+                              Stan ściśle z Subiekt GT. Rezerwacje odejmowane dynamicznie w locie.
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => field.onChange("RESERVATION")}
+                            className={`p-3.5 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between h-28 hover:shadow-md hover:border-primary/50 ${
+                              field.value === "RESERVATION"
+                                ? "border-primary bg-primary/5 text-primary ring-1 ring-primary"
+                                : "border-border/60 bg-card text-muted-foreground"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                              <span>📦</span> Tryb rezerwacji
+                            </div>
+                            <span className="text-[10px] leading-relaxed mt-1 text-muted-foreground">
+                              Trwałe rezerwowanie sztuk od razu po zamówieniu. FV zwalnia rezerwację.
+                            </span>
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <Button type="submit" disabled={isSaving} className="w-full bg-primary hover:bg-primary/90 mt-2">
                   {isSaving ? "Zapisywanie..." : "Zapisz i Prześlij do Kanałów"}
                 </Button>
@@ -615,41 +672,76 @@ export default function ProductDetailsPage() {
             <div className="mt-6 pt-4 border-t border-border/10 space-y-4">
               <div className="flex items-center justify-between text-xs font-bold text-foreground">
                 <span className="flex items-center gap-1.5 text-primary">
-                  <RefreshCw className="h-3.5 w-3.5 text-primary" /> Stan ERP (Subiekt GT) & Rezerwacje
+                  <RefreshCw className="h-3.5 w-3.5 text-primary" /> Stan & Rezerwacje
                 </span>
                 <Button variant="ghost" size="sm" onClick={handleFetchErpStock} className="h-7 px-2 text-[11px] text-primary hover:bg-primary/5 transition-all">
                   Odśwież z ERP
                 </Button>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 text-center text-xs">
-                <div className="p-3 rounded-xl bg-card border border-border/20 shadow-sm flex flex-col items-center justify-center">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Fizyczny w ERP</span>
-                  <span className="font-mono font-extrabold text-lg text-foreground mt-1">
-                    {product?.stock_quantity ?? 0}
-                  </span>
-                  <span className="text-[9px] text-muted-foreground mt-0.5">sztuk</span>
-                </div>
+              {product?.stock_management_mode === "RESERVATION" ? (
+                <>
+                  <div className="grid grid-cols-3 gap-3 text-center text-xs">
+                    <div className="p-3 rounded-xl bg-card border border-border/20 shadow-sm flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Fizyczny w ERP</span>
+                      <span className="font-mono font-extrabold text-lg text-foreground mt-1">
+                        {(product?.stock_quantity ?? 0) + (product?.reserved_quantity ?? 0)}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground mt-0.5">sztuk</span>
+                    </div>
 
-                <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex flex-col items-center justify-center">
-                  <span className="text-[10px] uppercase font-bold opacity-80 tracking-wide">Rezerwacje</span>
-                  <span className="font-mono font-extrabold text-lg mt-1">
-                    -{product?.uninvoiced_sold_quantity ?? 0}
-                  </span>
-                  <span className="text-[9px] opacity-80 mt-0.5">sztuk</span>
-                </div>
+                    <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold opacity-80 tracking-wide">Rezerwacje</span>
+                      <span className="font-mono font-extrabold text-lg mt-1">
+                        -{product?.reserved_quantity ?? 0}
+                      </span>
+                      <span className="text-[9px] opacity-80 mt-0.5">sztuk</span>
+                    </div>
 
-                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex flex-col items-center justify-center">
-                  <span className="text-[10px] uppercase font-bold opacity-80 tracking-wide">Na aukcje</span>
-                  <span className="font-mono font-extrabold text-lg mt-1">
-                    {product?.effective_available_stock ?? product?.stock_quantity ?? 0}
-                  </span>
-                  <span className="text-[9px] opacity-80 mt-0.5">sztuk</span>
-                </div>
-              </div>
-              <p className="text-[10px] text-muted-foreground leading-tight text-center italic">
-                * Rezerwacje odejmują się od stanu z Subiekta do momentu wystawienia faktury/WZ w ERP.
-              </p>
+                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold opacity-80 tracking-wide">Na aukcje</span>
+                      <span className="font-mono font-extrabold text-lg mt-1">
+                        {product?.stock_quantity ?? 0}
+                      </span>
+                      <span className="text-[9px] opacity-80 mt-0.5">sztuk</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-tight text-center italic">
+                    * W trybie rezerwacji stan na aukcjach jest na sztywno pomniejszany o zarezerwowane sztuki w bazie danych.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-3 text-center text-xs">
+                    <div className="p-3 rounded-xl bg-card border border-border/20 shadow-sm flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Fizyczny w ERP</span>
+                      <span className="font-mono font-extrabold text-lg text-foreground mt-1">
+                        {product?.stock_quantity ?? 0}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground mt-0.5">sztuk</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold opacity-80 tracking-wide">Rezerwacje</span>
+                      <span className="font-mono font-extrabold text-lg mt-1">
+                        -{product?.uninvoiced_sold_quantity ?? 0}
+                      </span>
+                      <span className="text-[9px] opacity-80 mt-0.5">sztuk</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex flex-col items-center justify-center">
+                      <span className="text-[10px] uppercase font-bold opacity-80 tracking-wide">Na aukcje</span>
+                      <span className="font-mono font-extrabold text-lg mt-1">
+                        {product?.effective_available_stock ?? product?.stock_quantity ?? 0}
+                      </span>
+                      <span className="text-[9px] opacity-80 mt-0.5">sztuk</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground leading-tight text-center italic">
+                    * Rezerwacje odejmują się od stanu z Subiekta do momentu wystawienia faktury/WZ w ERP.
+                  </p>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

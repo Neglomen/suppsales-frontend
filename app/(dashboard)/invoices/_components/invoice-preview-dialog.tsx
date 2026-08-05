@@ -137,32 +137,32 @@ export function InvoicePreviewDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-7xl w-[95vw] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Header */}
-        <DialogHeader className="px-6 pt-6 pb-4 border-b bg-muted/30">
+        <DialogHeader className="px-6 pt-5 pb-3 border-b bg-muted/30 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
                 <FileText className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-semibold">
-                  {invoice.original_invoice_number || invoice.invoice_number}
+                <DialogTitle className="text-base font-semibold">
+                  {invoice?.original_invoice_number || invoice?.invoice_number}
                 </DialogTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {invoice.original_invoice_number && (
-                    <>KSeF: {invoice.invoice_number} • </>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {invoice?.original_invoice_number && (
+                    <>KSeF: {invoice?.invoice_number} • </>
                   )}
-                  Wystawiona: {formatDate(invoice.issue_date)}
+                  Wystawiona: {formatDate(invoice?.issue_date || null)}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {invoice.supplier_integration?.provider_type === "KSEF" && (
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">KSeF</Badge>
+              {invoice?.supplier_integration?.provider_type === "KSEF" && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">KSeF</Badge>
               )}
-              {invoice.invoice_type && (
-                <Badge variant={typeBadgeVariant(invoice.invoice_type) as any}>
+              {invoice?.invoice_type && (
+                <Badge variant={typeBadgeVariant(invoice.invoice_type) as any} className="text-xs">
                   {typeLabel(invoice.invoice_type)}
                 </Badge>
               )}
@@ -171,34 +171,34 @@ export function InvoicePreviewDialog({
         </DialogHeader>
 
         {/* Content - split view: info panel + PDF/XML preview */}
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Left panel - invoice data */}
-          <div className="w-[380px] border-r overflow-y-auto p-5 space-y-5 bg-background">
+          <div className="w-[320px] border-r overflow-y-auto p-4 space-y-4 bg-background shrink-0">
             {/* Kwoty */}
             <div>
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3 flex items-center gap-2">
+              <h3 className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider mb-2 flex items-center gap-1.5">
                 <DollarSign className="h-3.5 w-3.5" /> Kwoty
               </h3>
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Brutto</span>
-                  <span className="text-lg font-bold text-foreground">
-                    {formatCurrency(invoice.total_gross_amount, invoice.currency)}
+                  <span className="text-xs text-muted-foreground">Brutto</span>
+                  <span className="text-base font-bold text-foreground">
+                    {formatCurrency(invoice?.total_gross_amount || 0, invoice?.currency || "PLN")}
                   </span>
                 </div>
-                {invoice.total_net_amount !== null && (
+                {invoice?.total_net_amount !== null && (
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Netto</span>
-                    <span className="text-sm font-medium">
-                      {formatCurrency(invoice.total_net_amount, invoice.currency)}
+                    <span className="text-xs text-muted-foreground">Netto</span>
+                    <span className="text-xs font-medium">
+                      {formatCurrency(invoice?.total_net_amount || 0, invoice?.currency || "PLN")}
                     </span>
                   </div>
                 )}
-                {invoice.total_vat_amount !== null && (
+                {invoice?.total_vat_amount !== null && (
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">VAT</span>
-                    <span className="text-sm font-medium text-orange-600 dark:text-orange-400">
-                      {formatCurrency(invoice.total_vat_amount, invoice.currency)}
+                    <span className="text-xs text-muted-foreground">VAT</span>
+                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                      {formatCurrency(invoice?.total_vat_amount || 0, invoice?.currency || "PLN")}
                     </span>
                   </div>
                 )}
@@ -209,38 +209,38 @@ export function InvoicePreviewDialog({
 
             {/* Sprzedawca */}
             <div>
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3 flex items-center gap-2">
+              <h3 className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider mb-2 flex items-center gap-1.5">
                 <Building2 className="h-3.5 w-3.5" /> Sprzedawca
               </h3>
-              <div className="rounded-lg border p-3 space-y-1.5 bg-muted/20">
-                <p className="text-sm font-medium">{invoice.seller_name || "-"}</p>
-                {invoice.seller_nip && (
-                  <p className="text-xs text-muted-foreground">NIP: {invoice.seller_nip}</p>
+              <div className="rounded-lg border p-2.5 space-y-1 bg-muted/20">
+                <p className="text-xs font-semibold">{invoice?.seller_name || "-"}</p>
+                {invoice?.seller_nip && (
+                  <p className="text-[11px] text-muted-foreground font-mono">NIP: {invoice.seller_nip}</p>
                 )}
               </div>
             </div>
 
             {/* Nabywca */}
             <div>
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3 flex items-center gap-2">
+              <h3 className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider mb-2 flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5" /> Nabywca
               </h3>
-              <div className="rounded-lg border p-3 space-y-1.5 bg-muted/20">
-                <p className="text-sm font-medium">{invoice.buyer_name || "-"}</p>
-                {invoice.buyer_nip && (
-                  <p className="text-xs text-muted-foreground">NIP: {invoice.buyer_nip}</p>
+              <div className="rounded-lg border p-2.5 space-y-1 bg-muted/20">
+                <p className="text-xs font-semibold">{invoice?.buyer_name || "-"}</p>
+                {invoice?.buyer_nip && (
+                  <p className="text-[11px] text-muted-foreground font-mono">NIP: {invoice.buyer_nip}</p>
                 )}
               </div>
             </div>
 
             {/* Odbiorca */}
-            {invoice.recipient_name && (
+            {invoice?.recipient_name && (
               <div>
-                <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3 flex items-center gap-2">
+                <h3 className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider mb-2 flex items-center gap-1.5">
                   <User className="h-3.5 w-3.5" /> Odbiorca
                 </h3>
-                <div className="rounded-lg border p-3 space-y-1.5 bg-muted/20">
-                  <p className="text-sm font-medium">{invoice.recipient_name}</p>
+                <div className="rounded-lg border p-2.5 space-y-1 bg-muted/20">
+                  <p className="text-xs font-semibold">{invoice.recipient_name}</p>
                 </div>
               </div>
             )}
@@ -249,34 +249,34 @@ export function InvoicePreviewDialog({
 
             {/* Szczegóły */}
             <div>
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3 flex items-center gap-2">
+              <h3 className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider mb-2 flex items-center gap-1.5">
                 <Hash className="h-3.5 w-3.5" /> Szczegóły
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-xs text-muted-foreground">Data wystawienia</span>
-                  <span className="text-xs font-medium">{formatDate(invoice.issue_date)}</span>
+                  <span className="text-muted-foreground">Data wystawienia</span>
+                  <span className="font-medium">{formatDate(invoice?.issue_date || null)}</span>
                 </div>
-                {invoice.due_date && (
+                {invoice?.due_date && (
                   <div className="flex justify-between">
-                    <span className="text-xs text-muted-foreground">Termin płatności</span>
-                    <span className="text-xs font-medium">{formatDate(invoice.due_date)}</span>
+                    <span className="text-muted-foreground">Termin płatności</span>
+                    <span className="font-medium">{formatDate(invoice.due_date)}</span>
                   </div>
                 )}
-                {invoice.ksef_acquisition_date && (
+                {invoice?.ksef_acquisition_date && (
                   <div className="flex justify-between">
-                    <span className="text-xs text-muted-foreground">Przyjęto do KSeF</span>
-                    <span className="text-xs font-medium">{formatDateTime(invoice.ksef_acquisition_date)}</span>
+                    <span className="text-muted-foreground">Przyjęto do KSeF</span>
+                    <span className="font-medium">{formatDateTime(invoice.ksef_acquisition_date)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-xs text-muted-foreground">Waluta</span>
-                  <span className="text-xs font-medium">{invoice.currency}</span>
+                  <span className="text-muted-foreground">Waluta</span>
+                  <span className="font-medium">{invoice?.currency}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-xs text-muted-foreground">Status ERP</span>
-                  <Badge variant={invoice.erp_sync_status === "SYNCED" ? "default" : "outline"} className="text-xs">
-                    {invoice.erp_sync_status}
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Status ERP</span>
+                  <Badge variant={invoice?.erp_sync_status === "SYNCED" ? "default" : "outline"} className="text-[10px]">
+                    {invoice?.erp_sync_status}
                   </Badge>
                 </div>
               </div>
@@ -284,14 +284,14 @@ export function InvoicePreviewDialog({
           </div>
 
           {/* Right panel - PDF/XML preview */}
-          <div className="flex-1 bg-muted/10">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100 dark:bg-slate-950">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 <span className="ml-3 text-muted-foreground">Ładowanie podglądu...</span>
               </div>
             ) : xmlContent ? (
-               <div className="w-full h-full bg-white dark:bg-black overflow-hidden relative">
+               <div className="w-full h-full flex flex-col min-h-0 overflow-hidden relative">
                    <KsefVisualizer xml={xmlContent} />
                </div>
             ) : pdfUrl ? (

@@ -131,7 +131,7 @@ export default function AcademyPage() {
 
       {/* Main Content */}
       <main className="flex-1 relative z-10 py-16">
-        <div className="container mx-auto px-6 lg:px-12 max-w-5xl space-y-12">
+        <div className="container mx-auto px-6 lg:px-12 max-w-7xl space-y-12">
           
           {/* Hero Section */}
           <div className="text-center space-y-5 max-w-3xl mx-auto">
@@ -163,7 +163,7 @@ export default function AcademyPage() {
               <span className="text-xs text-slate-500 font-medium">Ładowanie lekcji wideo...</span>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-4">
               
               {/* If Authenticated and has DB videos, render them */}
               {isAuthenticated && videos.length > 0 ? (
