@@ -43,7 +43,6 @@ const toolItems = [
   { href: "/communication", icon: MessagesSquare, label: "Komunikacja", adminOnly: false, permission: "orders" },
   { href: "/shipping/fulfillment", icon: PackageCheck, label: "Nabijarka", adminOnly: false, permission: "shipping", isSpecial: true, mobileHidden: true },
   { href: "/inventory", icon: Boxes, label: "Magazyn", adminOnly: false, permission: "inventory" },
-  { href: "/repricer", icon: TrendingDown, label: "Automat cenowy", adminOnly: false, permission: "inventory" },
   { href: "/shipping", icon: Ship, label: "Wysyłki", adminOnly: false, permission: "shipping", mobileHidden: true },
   { href: "/dropshipping", icon: Package, label: "Dropshipping", adminOnly: false, permission: "inventory", mobileHidden: true },
   { href: "/invoices", icon: Receipt, label: "Faktury", adminOnly: false, permission: "invoices" },
