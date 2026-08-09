@@ -153,8 +153,11 @@ export function GlobalSearch() {
         animate={{ width: isExpanded ? 320 : 44 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={cn(
-          "relative flex items-center h-11 bg-slate-950/40 backdrop-blur-xl border rounded-full shadow-lg overflow-hidden transition-colors duration-300",
-          isExpanded ? "border-primary/50 shadow-primary/10" : "border-border/30 hover:border-border/60 hover:bg-slate-900/60"
+          "relative flex items-center h-11 backdrop-blur-xl border rounded-full shadow-lg overflow-hidden transition-colors duration-300",
+          "bg-white/80 dark:bg-slate-950/40",
+          isExpanded
+            ? "border-primary/50 shadow-primary/10"
+            : "border-slate-200 dark:border-border/30 hover:border-slate-300 dark:hover:border-border/60 hover:bg-white dark:hover:bg-slate-900/60"
         )}
       >
         <button
@@ -202,7 +205,7 @@ export function GlobalSearch() {
               exit={{ opacity: 0, scale: 0.8 }}
               type="button"
               onClick={clearAndClose}
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-full hover:bg-white/10 transition-colors z-10"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors z-10"
             >
               <X className="h-4 w-4" />
             </motion.button>
@@ -218,7 +221,7 @@ export function GlobalSearch() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="absolute right-0 top-full mt-2 w-[360px] max-h-[400px] overflow-y-auto bg-slate-950/95 backdrop-blur-xl border border-border/50 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-2 scrollbar-none"
+            className="absolute right-0 top-full mt-2 w-[360px] max-h-[400px] overflow-y-auto bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border border-slate-200 dark:border-border/50 rounded-2xl shadow-2xl shadow-slate-200/60 dark:shadow-black/60 p-2 z-50 flex flex-col gap-2 scrollbar-none"
           >
             {isLoading && !hasResults ? (
               <div className="flex items-center justify-center py-6 text-muted-foreground text-xs">
@@ -242,7 +245,7 @@ export function GlobalSearch() {
                         href={`/orders/${order.id}`}
                         target="_blank"
                         onClick={() => setIsExpanded(false)}
-                        className="flex flex-col gap-0.5 p-2 rounded-xl hover:bg-white/5 transition-colors group"
+                        className="flex flex-col gap-0.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-colors group"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors line-clamp-1" title={getProductsLabel(order)}>
@@ -273,7 +276,7 @@ export function GlobalSearch() {
                 )}
 
                 {results.returns.length > 0 && (
-                  <div className="flex flex-col gap-1 mt-1 pt-2 border-t border-border/20">
+                  <div className="flex flex-col gap-1 mt-1 pt-2 border-t border-slate-100 dark:border-border/20">
                     <div className="px-2 py-1 flex items-center gap-2 text-[10px] font-bold text-rose-500/80 uppercase tracking-wider">
                       <ArrowRightLeft className="h-3 w-3" /> Zwroty
                     </div>
@@ -283,7 +286,7 @@ export function GlobalSearch() {
                         href={`/returns/${ret.id}`}
                         target="_blank"
                         onClick={() => setIsExpanded(false)}
-                        className="flex flex-col gap-0.5 p-2 rounded-xl hover:bg-white/5 transition-colors group"
+                        className="flex flex-col gap-0.5 p-2 rounded-xl hover:bg-rose-50 dark:hover:bg-white/5 transition-colors group"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-xs text-foreground group-hover:text-rose-400 transition-colors line-clamp-1" title={getReturnProductsLabel(ret)}>
