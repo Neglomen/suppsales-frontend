@@ -77,7 +77,7 @@ export default function IntegrationsPage() {
 
   const handleManualReturnSync = async (integrationId: number) => {
     await toast.promise(
-      api.post(`/integrations/${integrationId}/sync-returns`),
+      api.post(`/service-integrations/${integrationId}/sync-returns`),
       {
         loading: "Zlecanie synchronizacji zwrotów...",
         success: "Synchronizacja zwrotów została pomyślnie zlecona!",
@@ -115,7 +115,7 @@ export default function IntegrationsPage() {
   };
 
   const handleManualSync = async (integrationId: number) => {
-    await toast.promise(api.post(`/integrations/${integrationId}/sync`), {
+    await toast.promise(api.post(`/service-integrations/${integrationId}/sync-orders`), {
       loading: "Zlecanie synchronizacji...",
       success: "Synchronizacja została pomyślnie zlecona!",
       error: (err: any) =>
@@ -125,7 +125,7 @@ export default function IntegrationsPage() {
 
   const handleManualMessageSync = async (integrationId: number) => {
     await toast.promise(
-      api.post(`/integrations/${integrationId}/sync-messages`),
+      api.post(`/service-integrations/${integrationId}/sync-messages`),
       {
         loading: "Zlecanie synchronizacji wiadomości...",
         success: "Synchronizacja wiadomości została pomyślnie zlecona!",

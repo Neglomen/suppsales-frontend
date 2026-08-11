@@ -193,7 +193,7 @@
   }
 
   .glass-dark {
-    @apply bg-slate-950/20 backdrop-blur-xl border border-border/30 shadow-xl;
+    @apply bg-white/60 dark:bg-slate-950/20 backdrop-blur-xl border border-slate-200 dark:border-border/30 shadow-xl;
   }
 
   .neon-border {

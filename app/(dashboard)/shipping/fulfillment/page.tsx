@@ -54,6 +54,8 @@ import {
   Sparkles,
   ArrowRightLeft,
   ShoppingBag,
+  Undo2,
+  ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,7 +81,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusCircle, Undo2, Plus, Trash, ClipboardList, User, StickyNote } from "lucide-react";
+import { PlusCircle, Plus, Trash, ClipboardList, User, StickyNote, Headphones } from "lucide-react";
 import { cn, explodeBundleItems } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -143,6 +145,123 @@ const getCourierIcon = (providerType?: string, name?: string, className: string 
     </div>
   );
 };
+
+// --- Funkcje Pomocnicze do Śledzenia Przesyłek ---
+function getTrackingUrl(trackingNumber: string, providerType?: string, serviceCode?: string): string | null {
+  if (!trackingNumber) return null;
+  const cleanNum = trackingNumber.trim();
+  const numOnly = cleanNum.replace(/\s+/g, "");
+  const providerUp = (providerType || "").toUpperCase().trim();
+
+  if (providerUp === "SUUS" || providerUp === "ROHLIG_SUUS") {
+    return `https://portal.suus.com/order-details/${numOnly}`;
+  }
+  if (providerUp === "RABEN") {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (providerUp === "GEIS") {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "GEODIS") {
+    return `https://tracking.geodis.pl/?reference=${numOnly}`;
+  }
+  if (providerUp === "INPOST" || providerUp === "INPOST_BUY" || providerUp === "INPOST_KURIER") {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "DHL") {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+  if (providerUp === "DPD" || providerUp === "DPD_PL") {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (providerUp === "GLS") {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (providerUp === "UPS") {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (providerUp === "FEDEX") {
+    return `https://www.fedex.com/fedextrack/?trknbr=${numOnly}`;
+  }
+  if (providerUp === "POCZTA_POLSKA" || providerUp === "POCZTEX") {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  if (providerUp === "ALLEGRO" || providerUp === "ALLEGRO_ONE" || providerUp === "ALLEGRO_ONE_PICKUP" || providerUp === "ALLEGRO_ONE_MOBILE" || providerUp === "ALLEGRO_DELIVERY") {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+
+  const codeLower = (serviceCode || "").toLowerCase();
+  if (codeLower.includes("inpost") || codeLower.includes("paczkomat")) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (codeLower.includes("dpd")) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (codeLower.includes("dhl")) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+  if (codeLower.includes("gls")) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (codeLower.includes("ups")) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (codeLower.includes("raben")) {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (codeLower.includes("geis")) {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+
+  // Allegro Delivery (zaczynające się na A, np. A000..., AD..., ALE..., AL...)
+  if (/^A[A-Z0-9]+$/i.test(numOnly)) {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+  if (/^1Z[A-Z0-9]{16}$/i.test(numOnly)) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (/^\d{24}$/.test(numOnly)) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (/^\d{13,14}[A-Za-z]?$/.test(numOnly)) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (/^[A-Z]{2}\d{9}[A-Z]{2}$/i.test(numOnly) || /^\d{20}$/.test(numOnly)) {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  if (/^\d{12}$/.test(numOnly)) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (/^\d{10,11}$/.test(numOnly)) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+
+  return `https://www.google.com/search?q=${encodeURIComponent("śledzenie przesyłki")}+${numOnly}`;
+}
+
+function getAllegroCarrierForWaybill(detailsPayload: any, waybill: string): string | undefined {
+  if (!detailsPayload) return undefined;
+  const shipments: any[] = detailsPayload?.shipments || [];
+  const shipMatch = shipments.find((s: any) => s.waybill === waybill || s.waybill?.trim() === waybill.trim());
+  if (shipMatch?.carrierId) return shipMatch.carrierId;
+
+  const methodName: string = (detailsPayload?.delivery?.method?.name || "").toLowerCase();
+  if (!methodName) return undefined;
+
+  if (methodName.includes("inpost") || methodName.includes("paczkomat")) return "INPOST";
+  if (methodName.includes("dpd")) return "DPD";
+  if (methodName.includes("dhl")) return "DHL";
+  if (methodName.includes("gls")) return "GLS";
+  if (methodName.includes("ups")) return "UPS";
+  if (methodName.includes("fedex")) return "FEDEX";
+  if (methodName.includes("raben")) return "RABEN";
+  if (methodName.includes("geis")) return "GEIS";
+  if (methodName.includes("suus") || methodName.includes("rohlig")) return "SUUS";
+  if (methodName.includes("allegro one") || methodName.includes("allegroone")) return "ALLEGRO_ONE";
+  if (methodName.includes("poczta") || methodName.includes("pocztex")) return "POCZTA_POLSKA";
+
+  return undefined;
+}
 
 export default function FulfillmentPage() {
   const isMobile = useMobile(1023);
@@ -268,6 +387,19 @@ export default function FulfillmentPage() {
 
   const currentOrder = queueData?.items?.[0] as MarketplaceOrder | undefined;
   const totalOrders = queueData?.total || 0;
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).__currentFulfillmentOrder = currentOrder;
+      window.dispatchEvent(new CustomEvent("fulfillment-order-changed", { detail: { order: currentOrder } }));
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        delete (window as any).__currentFulfillmentOrder;
+        window.dispatchEvent(new CustomEvent("fulfillment-order-changed", { detail: { order: null } }));
+      }
+    };
+  }, [currentOrder]);
 
   // 3. Fetch Service Integrations to find Subiekt GT
   const { data: integrations } = useQuery<ServiceIntegration[]>({
@@ -562,6 +694,15 @@ export default function FulfillmentPage() {
   const [suggestedPackageInfo, setSuggestedPackageInfo] = useState<{ id: string | null; isNstd: boolean } | null>(null);
   const [apaczkaServices, setApaczkaServices] = useState<any[]>([]);
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
+  const [codEnabled, setCodEnabled] = useState(true);
+  const [isReturnLabel, setIsReturnLabel] = useState(false);
+
+  useEffect(() => {
+    setCodEnabled(true);
+    setIsReturnLabel(false);
+  }, [currentOrder?.id]);
+
+  const effectiveIsCod = isCod && codEnabled;
 
   const courierProvider = useMemo(() => {
     if (selectedCourierId) {
@@ -685,6 +826,14 @@ export default function FulfillmentPage() {
     }
   }, [orderDetails?.id, fetchOrderNotes, fetchOrderTasks]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchOrderTasks();
+    };
+    window.addEventListener("refresh-tasks", handleRefresh);
+    return () => window.removeEventListener("refresh-tasks", handleRefresh);
+  }, [fetchOrderTasks]);
+
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNoteContent.trim() || !orderDetails?.id) return;
@@ -727,7 +876,7 @@ export default function FulfillmentPage() {
   // Synchronize packages on order and suggested package change
   useEffect(() => {
     if (currentOrder && suggestedPackageInfo) {
-      const initialCodAmount = isCod ? totalCodAmount.toFixed(2) : "";
+      const initialCodAmount = effectiveIsCod ? totalCodAmount.toFixed(2) : "";
       setPackages([
         {
           id: crypto.randomUUID(),
@@ -747,7 +896,7 @@ export default function FulfillmentPage() {
     } else if (!currentOrder) {
       setPackages([]);
     }
-  }, [currentOrder, suggestedPackageInfo, isCod, totalCodAmount]);
+  }, [currentOrder, suggestedPackageInfo, effectiveIsCod, totalCodAmount]);
 
   // Max reference length based on selected courier and active service
   const maxRefLength = useMemo(() => {
@@ -967,9 +1116,39 @@ export default function FulfillmentPage() {
     );
   };
 
+  const handleToggleCod = (enabled: boolean) => {
+    setCodEnabled(enabled);
+    if (!enabled) {
+      setPackages((pkgs) => pkgs.map((p) => ({ ...p, codAmount: "" })));
+    } else {
+      if (isCod) {
+        const numPackages = packages.length;
+        if (numPackages > 0) {
+          const totalCents = Math.round(totalCodAmount * 100);
+          const baseCents = Math.floor(totalCents / numPackages);
+          let remainderCents = totalCents % numPackages;
+
+          setPackages((pkgs) =>
+            pkgs.map((pkg) => {
+              let packageCents = baseCents;
+              if (remainderCents > 0) {
+                packageCents += 1;
+                remainderCents--;
+              }
+              return {
+                ...pkg,
+                codAmount: (packageCents / 100).toFixed(2),
+              };
+            })
+          );
+        }
+      }
+    }
+  };
+
   const splitCodForPackages = (currentPackages: PackageState[]) => {
     const numPackages = currentPackages.length;
-    if (!isCod || numPackages === 0) return;
+    if (!effectiveIsCod || numPackages === 0) return;
 
     const totalCents = Math.round(totalCodAmount * 100);
     const baseCents = Math.floor(totalCents / numPackages);
@@ -991,7 +1170,7 @@ export default function FulfillmentPage() {
   };
 
   const addPackage = () => {
-    const newCodAmount = isCod ? "0.00" : "";
+    const newCodAmount = effectiveIsCod ? "0.00" : "";
     const newPackage: PackageState = {
       id: crypto.randomUUID(),
       mode: "predefined",
@@ -1008,7 +1187,7 @@ export default function FulfillmentPage() {
     };
     const newPackages = [...packages, newPackage];
     setPackages(newPackages);
-    if (isCod) {
+    if (effectiveIsCod) {
       splitCodForPackages(newPackages);
     }
   };
@@ -1016,7 +1195,7 @@ export default function FulfillmentPage() {
   const removePackage = (id: string) => {
     const newPackages = packages.filter((p) => p.id !== id);
     setPackages(newPackages);
-    if (isCod && newPackages.length > 0) {
+    if (effectiveIsCod && newPackages.length > 0) {
       splitCodForPackages(newPackages);
     }
   };
@@ -1344,7 +1523,7 @@ export default function FulfillmentPage() {
           packageDef = config?.packages.find((p) => p.id === pkg.selectedPackageId) || null;
         }
         const currentPayload: any = {
-          cod_amount: isCod ? parseFloat(pkg.codAmount.replace(",", ".")) : undefined,
+          cod_amount: effectiveIsCod ? parseFloat(pkg.codAmount.replace(",", ".")) : undefined,
           is_nstd: pkg.is_nstd,
           courier_code: pkg.courier_code || undefined,
         };
@@ -1375,6 +1554,7 @@ export default function FulfillmentPage() {
         reference_number: refToUse,
         packages: packagesPayload,
         manual_additional_services: Array.from(selectedServices),
+        is_return: isReturnLabel,
       };
 
       const selectedCourier = config?.couriers?.find((c) => c.id === selectedCourierId);
@@ -1786,9 +1966,28 @@ export default function FulfillmentPage() {
                             </span>
                           </div>
                           {order.tracking_numbers && order.tracking_numbers.length > 0 && (
-                            <div className="text-[10px] text-slate-400 font-mono flex gap-1 items-center">
-                              <Truck className="h-3 w-3 text-slate-500" />
-                              <span>{order.tracking_numbers.join(", ")}</span>
+                            <div className="text-[10px] text-slate-400 font-mono flex flex-wrap gap-x-2 gap-y-0.5 items-center">
+                              <Truck className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                              {order.tracking_numbers.map((t, idx) => {
+                                const allegroCarrier = getAllegroCarrierForWaybill(order.details_payload || order.detailsPayload, t);
+                                const trackingUrl = getTrackingUrl(
+                                  t,
+                                  allegroCarrier || order.service_integration?.provider_type || order.serviceIntegration?.provider_type
+                                );
+                                return trackingUrl ? (
+                                  <a
+                                    key={idx}
+                                    href={trackingUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:underline flex items-center gap-0.5 text-indigo-400 hover:text-indigo-300"
+                                  >
+                                    {t} <ExternalLink className="h-2 w-2" />
+                                  </a>
+                                ) : (
+                                  <span key={idx}>{t}</span>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -2046,15 +2245,28 @@ export default function FulfillmentPage() {
                     <SelectItem value="CANCELLED">Anulowane (CANCELLED)</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("open-internal-task", {
+                      detail: { orderId: currentOrder.id }
+                    }));
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 border border-indigo-500/20 hover:border-indigo-500/30 rounded-lg flex items-center gap-1.5 mt-1.5 w-[150px] justify-center font-bold"
+                >
+                  <Plus className="h-3 w-3" />
+                  Dodaj zadanie
+                </Button>
               </div>
             </div>
 
             {/* Buyer Comments Alert */}
             {buyerMessage && (
-              <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-200">
-                <AlertCircle className="h-4 w-4 text-amber-400" />
-                <AlertTitle className="text-xs font-bold">Uwaga! Wiadomość od kupującego</AlertTitle>
-                <AlertDescription className="mt-1 text-xs italic font-semibold">
+              <Alert className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <AlertTitle className="text-xs font-bold text-amber-950 dark:text-amber-300">Uwaga! Wiadomość od kupującego</AlertTitle>
+                <AlertDescription className="mt-1 text-xs italic font-semibold text-amber-900 dark:text-amber-200">
                   &quot;{buyerMessage}&quot;
                 </AlertDescription>
               </Alert>
@@ -2062,21 +2274,44 @@ export default function FulfillmentPage() {
 
             {/* Warning: Invoice already exists */}
             {organization?.warn_invoice_exists && (currentOrder.erp_sales_document_number || currentOrder.erpSalesDocumentNumber) && (
-              <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-200 font-medium">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-900 dark:text-amber-200 font-medium">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span>
-                  Faktura już istnieje w ERP: <strong className="font-mono bg-amber-500/15 dark:bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-700 dark:text-amber-400 ml-0.5">{currentOrder.erp_sales_document_number || currentOrder.erpSalesDocumentNumber}</strong>
+                  Faktura już istnieje w ERP: <strong className="font-mono bg-amber-500/20 dark:bg-amber-500/30 border border-amber-500/30 px-1.5 py-0.5 rounded text-amber-950 dark:text-white ml-0.5">{currentOrder.erp_sales_document_number || currentOrder.erpSalesDocumentNumber}</strong>
                 </span>
               </div>
             )}
 
             {/* Warning: Waybill already exists */}
             {organization?.warn_waybill_exists && currentOrder.tracking_numbers && currentOrder.tracking_numbers.length > 0 && (
-              <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-200 font-medium">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                <span>
-                  Wygenerowano już list przewozowy: <strong className="font-mono bg-amber-500/15 dark:bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-700 dark:text-amber-400 ml-0.5">{currentOrder.tracking_numbers.join(", ")}</strong>
-                </span>
+              <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-900 dark:text-amber-200 font-medium">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>Wygenerowano już list przewozowy:</span>
+                  {currentOrder.tracking_numbers.map((t, idx) => {
+                    const allegroCarrier = getAllegroCarrierForWaybill(currentOrder.details_payload || currentOrder.detailsPayload, t);
+                    const trackingUrl = getTrackingUrl(
+                      t,
+                      allegroCarrier || currentOrder.service_integration?.provider_type || currentOrder.serviceIntegration?.provider_type
+                    );
+                    return (
+                      <span key={idx} className="inline-flex items-center gap-1 font-mono bg-amber-500/20 dark:bg-amber-500/30 border border-amber-500/30 px-1.5 py-0.5 rounded text-amber-950 dark:text-white text-[10px] font-semibold">
+                        {trackingUrl ? (
+                          <a
+                            href={trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline flex items-center gap-0.5 text-amber-900 dark:text-amber-200 hover:text-amber-950 dark:hover:text-white font-bold"
+                          >
+                            {t} <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        ) : (
+                          t
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -2315,6 +2550,19 @@ export default function FulfillmentPage() {
 
                   {/* Logo wybranego kuriera + Przycisk resetowania */}
                   <div className="flex items-center gap-3 self-end sm:self-center">
+                    {isCod && (
+                      <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-xl backdrop-blur-sm">
+                        <Checkbox
+                          id="cod-toggle-fulfillment"
+                          checked={codEnabled}
+                          onCheckedChange={(checked) => handleToggleCod(!!checked)}
+                          className="h-3.5 w-3.5 border-amber-500/50 data-[state=checked]:bg-amber-500 data-[state=checked]:text-black"
+                        />
+                        <label htmlFor="cod-toggle-fulfillment" className="text-xs font-semibold text-amber-300 cursor-pointer select-none">
+                          Pobranie (COD)
+                        </label>
+                      </div>
+                    )}
                     {activeCourier && (
                       <div className="flex items-center gap-2 bg-slate-950/60 border border-border/30 px-3 py-1.5 rounded-xl shadow-inner backdrop-blur-sm">
                         <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider select-none shrink-0">
@@ -2336,7 +2584,7 @@ export default function FulfillmentPage() {
                           setSelectedCourierId(mappedCourier?.id || null);
                           setSelectedServiceCode(mappedServiceCode || "");
                           if (currentOrder) {
-                            const initialCodAmount = isCod ? totalCodAmount.toFixed(2) : "";
+                            const initialCodAmount = effectiveIsCod ? totalCodAmount.toFixed(2) : "";
                             setPackages([
                               {
                                 id: crypto.randomUUID(),
@@ -2759,7 +3007,7 @@ export default function FulfillmentPage() {
                       </div>
                     )}
 
-                    {isCod && (
+                    {effectiveIsCod && (
                       <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-3 h-8 mt-0.5">
                         <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider select-none flex items-center gap-1">
                           <CreditCard className="h-3.5 w-3.5 text-emerald-500 animate-pulse" /> Kwota Pobrania (COD)
@@ -2795,7 +3043,7 @@ export default function FulfillmentPage() {
               >
                 <PlusCircle className="h-4 w-4 text-indigo-500" /> Dodaj paczkę
               </Button>
-              {isCod && packages.length > 1 && (
+              {effectiveIsCod && packages.length > 1 && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -3092,7 +3340,22 @@ export default function FulfillmentPage() {
                   <h3 className="font-bold text-xs text-indigo-400 flex items-center gap-1.5">
                     <ClipboardList className="h-4 w-4 text-indigo-400" /> Zadania i decyzje
                   </h3>
-                  <Badge variant="outline" className="text-xs bg-indigo-500/5 text-indigo-400 border-indigo-500/20">{orderTasks.length}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent("open-internal-task", {
+                          detail: { orderId: currentOrder?.id }
+                        }));
+                      }}
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-[10px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 border border-indigo-500/20 hover:border-indigo-500/30 rounded-lg flex items-center gap-1 shrink-0 font-bold"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Dodaj zadanie
+                    </Button>
+                    <Badge variant="outline" className="text-xs bg-indigo-500/5 text-indigo-400 border-indigo-500/20">{orderTasks.length}</Badge>
+                  </div>
                 </div>
 
                 <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
@@ -3118,6 +3381,10 @@ export default function FulfillmentPage() {
                         task.status === "RESOLVED" ? "bg-emerald-500/10 text-emerald-400" :
                         "bg-slate-500/10 text-slate-400";
 
+                      const titleMatch = task.title.match(/^\[(.*?)\]\s*(.*)$/);
+                      const displayTitle = titleMatch ? titleMatch[2] : task.title;
+                      const category = titleMatch ? titleMatch[1] : null;
+
                       return (
                         <div key={task.id} className="p-2.5 bg-slate-950/30 border border-white/5 rounded-xl hover:bg-slate-900/30 transition-all duration-200 flex flex-col gap-1.5">
                           <div className="flex items-center justify-between text-[9px]">
@@ -3133,7 +3400,14 @@ export default function FulfillmentPage() {
                             </div>
                           </div>
                           
-                          <h4 className="text-xs font-bold text-slate-200 leading-normal">{task.title}</h4>
+                          <div className="flex items-start gap-1.5 flex-wrap">
+                            {category && (
+                              <Badge variant="outline" className="border-indigo-500/20 bg-indigo-500/5 text-indigo-400 text-[8px] h-4.5 font-bold px-1.5 py-0 select-none shrink-0">
+                                {category}
+                              </Badge>
+                            )}
+                            <h4 className="text-xs font-bold text-slate-200 leading-normal flex-1">{displayTitle}</h4>
+                          </div>
                           {task.description && (
                             <p className="text-[10px] text-slate-400 line-clamp-2">{task.description}</p>
                           )}

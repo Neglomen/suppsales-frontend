@@ -114,10 +114,10 @@ export default function LoginPage() {
           <ArrowLeft className="h-4 w-4" /> Wróć do strony głównej
         </Link>
 
-        <Card className="glass border-border/60 bg-slate-900/60 backdrop-blur-xl shadow-2xl relative overflow-hidden text-slate-100">
+        <Card className="glass shadow-2xl relative overflow-hidden text-foreground border-slate-200/50 dark:border-white/10 bg-white/70 dark:bg-slate-900/60">
           {/* Subtle neon glowing light effect in upper corner */}
-          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
-          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-600/10 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 dark:bg-primary/20 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-600/5 dark:bg-purple-600/10 blur-3xl rounded-full pointer-events-none" />
 
           <CardHeader className="text-center pt-8 pb-6">
             <div className="flex justify-center mb-6">
@@ -126,7 +126,7 @@ export default function LoginPage() {
             <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
               Witaj z powrotem!
             </CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-muted-foreground">
               Wprowadź swoje dane, aby uzyskać dostęp do panelu.
             </CardDescription>
           </CardHeader>
@@ -138,11 +138,11 @@ export default function LoginPage() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-slate-300">Adres email</FormLabel>
+                      <FormLabel className="text-foreground/80">Adres email</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="nazwa@przyklad.com"
-                          className="bg-slate-950/20 border-border/50 text-foreground placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary rounded-xl h-11"
+                          className="bg-white/50 dark:bg-slate-950/20 border-slate-200/50 dark:border-border/50 text-foreground placeholder-slate-400 dark:placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary rounded-xl h-11"
                           {...field}
                         />
                       </FormControl>
@@ -155,12 +155,12 @@ export default function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-slate-300">Hasło</FormLabel>
+                      <FormLabel className="text-foreground/80">Hasło</FormLabel>
                       <FormControl>
                         <Input
                           type="password"
                           placeholder="••••••••"
-                          className="bg-slate-950/20 border-border/50 text-foreground placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary rounded-xl h-11"
+                          className="bg-white/50 dark:bg-slate-950/20 border-slate-200/50 dark:border-border/50 text-foreground placeholder-slate-400 dark:placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary rounded-xl h-11"
                           {...field}
                         />
                       </FormControl>
@@ -180,12 +180,12 @@ export default function LoginPage() {
                             id="rememberMe"
                             checked={field.value}
                             onCheckedChange={field.onChange}
-                            className="border-slate-600 text-white data-[state=checked]:bg-primary data-[state=checked]:border-primary rounded"
+                            className="border-slate-300 dark:border-slate-600 text-foreground dark:text-white data-[state=checked]:bg-primary data-[state=checked]:border-primary rounded"
                           />
                         </FormControl>
                         <FormLabel
                           htmlFor="rememberMe"
-                          className="text-xs sm:text-sm font-medium leading-none cursor-pointer text-slate-300 hover:text-slate-50 transition-colors"
+                          className="text-xs sm:text-sm font-medium leading-none cursor-pointer text-foreground/75 hover:text-foreground transition-colors"
                         >
                           Zapamiętaj mnie
                         </FormLabel>
@@ -222,8 +222,8 @@ export default function LoginPage() {
               </form>
             </Form>
           </CardContent>
-          <CardFooter className="flex justify-center text-sm border-t border-border/30 pt-5 pb-6">
-            <p className="text-slate-400">
+          <CardFooter className="flex justify-center text-sm border-t border-slate-100 dark:border-border/30 pt-5 pb-6">
+            <p className="text-muted-foreground">
               Nie masz jeszcze konta?&nbsp;
               <Link
                 href="/register"

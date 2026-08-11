@@ -27,6 +27,7 @@ export interface Shipment {
   };
   order_id: string;
   courier_integration_id: number;
+  is_return?: boolean;
   created_at: string; // ISO date string
   updated_at: string; // ISO date string
 }

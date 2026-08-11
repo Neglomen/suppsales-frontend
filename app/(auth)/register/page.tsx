@@ -36,7 +36,7 @@ import { Logo } from "@/components/shared/logo";
 
 // Input styling helper
 const inputClassName =
-  "bg-slate-950/20 border-border/50 text-foreground placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary rounded-xl h-11";
+  "bg-white/50 dark:bg-slate-950/20 border-slate-200/50 dark:border-border/50 text-foreground placeholder-slate-400 dark:placeholder-slate-500 focus:border-primary focus:ring-1 focus:ring-primary rounded-xl h-11";
 
 // --- Krok 1: Komponent formularza danych logowania ---
 const Step1 = () => (
@@ -45,7 +45,7 @@ const Step1 = () => (
       name="email"
       render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-slate-300">Email</FormLabel>
+          <FormLabel className="text-foreground/80">Email</FormLabel>
           <FormControl>
             <Input placeholder="nazwa@domena.com" className={inputClassName} {...field} />
           </FormControl>
@@ -57,7 +57,7 @@ const Step1 = () => (
       name="password"
       render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-slate-300">Hasło</FormLabel>
+          <FormLabel className="text-foreground/80">Hasło</FormLabel>
           <FormControl>
             <Input type="password" placeholder="••••••••" className={inputClassName} {...field} />
           </FormControl>
@@ -69,7 +69,7 @@ const Step1 = () => (
       name="name"
       render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-slate-300">Imię i Nazwisko (opcjonalnie)</FormLabel>
+          <FormLabel className="text-foreground/80">Imię i Nazwisko (opcjonalnie)</FormLabel>
           <FormControl>
             <Input placeholder="Jan Kowalski" className={inputClassName} {...field} />
           </FormControl>
@@ -87,7 +87,7 @@ const Step2 = () => (
       name="organizationName"
       render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-slate-300">Nazwa Twojej Organizacji</FormLabel>
+          <FormLabel className="text-foreground/80">Nazwa Twojej Organizacji</FormLabel>
           <FormControl>
             <Input placeholder="Moja Firma" className={inputClassName} {...field} />
           </FormControl>
@@ -99,7 +99,7 @@ const Step2 = () => (
       name="companyName"
       render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-slate-300">Pełna Nazwa Firmy (opcjonalnie)</FormLabel>
+          <FormLabel className="text-foreground/80">Pełna Nazwa Firmy (opcjonalnie)</FormLabel>
           <FormControl>
             <Input placeholder="Moja Firma sp. z o.o." className={inputClassName} {...field} />
           </FormControl>
@@ -111,7 +111,7 @@ const Step2 = () => (
       name="taxId"
       render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-slate-300">NIP (opcjonalnie)</FormLabel>
+          <FormLabel className="text-foreground/80">NIP (opcjonalnie)</FormLabel>
           <FormControl>
             <Input placeholder="123-456-78-90" className={inputClassName} {...field} />
           </FormControl>
@@ -130,17 +130,17 @@ const Step3 = () => {
       control={control}
       name="acceptTerms"
       render={({ field }) => (
-        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-xl border border-border/60 bg-slate-950/20 p-4">
+        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-xl border border-slate-200/50 dark:border-border/60 bg-white/50 dark:bg-slate-950/20 p-4">
           <FormControl>
             <Checkbox
               checked={field.value}
               onCheckedChange={field.onChange}
-              className="border-slate-600 text-white data-[state=checked]:bg-primary data-[state=checked]:border-primary rounded mt-1"
+              className="border-slate-300 dark:border-slate-600 text-foreground dark:text-white data-[state=checked]:bg-primary data-[state=checked]:border-primary rounded mt-1"
             />
           </FormControl>
           <div className="space-y-1 leading-none">
-            <FormLabel className="text-slate-200 font-medium">Akceptacja regulaminu</FormLabel>
-            <FormDescription className="text-slate-400 text-xs sm:text-sm">
+            <FormLabel className="text-foreground/90 dark:text-slate-200 font-medium">Akceptacja regulaminu</FormLabel>
+            <FormDescription className="text-muted-foreground text-xs sm:text-sm">
               Akceptuję{" "}
               <Link href="/terms" className="underline text-primary hover:text-primary/80 transition-colors">
                 regulamin
@@ -248,10 +248,10 @@ export default function RegisterPage() {
           <ArrowLeft className="h-4 w-4" /> Wróć do strony głównej
         </Link>
 
-        <Card className="glass border-border/60 bg-slate-900/60 backdrop-blur-xl shadow-2xl relative overflow-hidden text-slate-100">
+        <Card className="glass shadow-2xl relative overflow-hidden text-foreground border-slate-200/50 dark:border-white/10 bg-white/70 dark:bg-slate-900/60">
           {/* Subtle neon glowing light effects */}
-          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
-          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-600/10 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 dark:bg-primary/20 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-600/5 dark:bg-purple-600/10 blur-3xl rounded-full pointer-events-none" />
 
           <CardHeader className="text-center pt-8 pb-4">
             <div className="flex justify-center mb-6">
@@ -260,7 +260,7 @@ export default function RegisterPage() {
             <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
               Stwórz nowe konto
             </CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-muted-foreground">
               Krok {step} z 3 — Wypełnij dane rejestracyjne
             </CardDescription>
           </CardHeader>
@@ -297,7 +297,7 @@ export default function RegisterPage() {
                       type="button"
                       variant="ghost"
                       onClick={prevStep}
-                      className="text-slate-300 hover:text-slate-50 hover:bg-white/5 rounded-xl h-11"
+                      className="text-foreground/70 hover:text-foreground hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl h-11"
                     >
                       <ArrowLeft className="mr-2 h-4 w-4" /> Wróć
                     </Button>
@@ -333,8 +333,8 @@ export default function RegisterPage() {
             </FormProvider>
           </CardContent>
 
-          <CardFooter className="flex justify-center text-sm border-t border-border/30 pt-5 pb-6">
-            <p className="text-slate-400">
+          <CardFooter className="flex justify-center text-sm border-t border-slate-100 dark:border-border/30 pt-5 pb-6">
+            <p className="text-muted-foreground">
               Masz już konto?&nbsp;
               <Link
                 href="/login"

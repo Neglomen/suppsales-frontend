@@ -446,4 +446,30 @@ export const RabenIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const WooCommerceIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <rect width="160" height="40" rx="8" fill="#96588A" />
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M24 12C20.6863 12 18 14.6863 18 18V22C18 25.3137 20.6863 28 24 28H32C35.3137 28 38 25.3137 38 22V18C38 14.6863 35.3137 12 32 12H24ZM26.4 16.2L28 21L29.6 16.2H31.4L29 23.4H27L24.6 16.2H26.4Z"
+      fill="#ffffff"
+    />
+    <text
+      x="95"
+      y="22"
+      textAnchor="middle"
+      dominantBaseline="middle"
+      fontSize="14"
+      fontWeight="900"
+      fill="#ffffff"
+      fontFamily="'Outfit', 'Inter', system-ui, sans-serif"
+      letterSpacing="0.5px"
+    >
+      WOO
+    </text>
+  </svg>
+);
+
+
 

@@ -54,7 +54,7 @@ export function DataTableToolbar({
   };
 
   return (
-    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/40 border border-border/30 p-4 rounded-2xl backdrop-blur-xl shadow-lg w-full">
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/60 dark:bg-slate-900/40 border border-slate-200/50 dark:border-border/30 p-4 rounded-2xl backdrop-blur-xl shadow-lg w-full">
       <div className="flex flex-1 flex-wrap items-center gap-3">
         {/* Wyszukiwarka z ikoną Search */}
         <div className="relative w-full sm:w-[280px]">
@@ -65,7 +65,7 @@ export function DataTableToolbar({
             onChange={(event) =>
               setFilters((prev) => ({ ...prev, search: event.target.value }))
             }
-            className="pl-9 h-9 w-full bg-slate-950/20 border-border/30 hover:border-border/60 hover:bg-slate-950/40 focus-visible:ring-primary/30 transition-all rounded-xl text-xs font-medium placeholder:text-muted-foreground/50 text-foreground"
+            className="pl-9 h-9 w-full bg-white dark:bg-slate-950/20 border-slate-200 dark:border-border/30 hover:border-slate-300 dark:hover:border-border/60 hover:bg-slate-50 dark:hover:bg-slate-950/40 focus-visible:ring-primary/30 transition-all rounded-xl text-xs font-medium placeholder:text-muted-foreground/50 text-foreground"
           />
         </div>
 
@@ -76,10 +76,10 @@ export function DataTableToolbar({
             setFilters((prev) => ({ ...prev, status: value }))
           }
         >
-          <SelectTrigger className="h-9 w-full sm:w-[170px] bg-slate-950/20 border-border/30 hover:border-border/60 hover:bg-slate-950/40 focus:ring-primary/30 rounded-xl transition-all text-xs font-semibold text-foreground/95">
+          <SelectTrigger className="h-9 w-full sm:w-[170px] bg-white dark:bg-slate-950/20 border-slate-200 dark:border-border/30 hover:border-slate-300 dark:hover:border-border/60 hover:bg-slate-50 dark:hover:bg-slate-950/40 focus:ring-primary/30 rounded-xl transition-all text-xs font-semibold text-foreground/95">
             <SelectValue placeholder="Status zwrotu" />
           </SelectTrigger>
-          <SelectContent className="rounded-xl border-border/35 bg-popover/95 backdrop-blur-lg">
+          <SelectContent className="rounded-xl border-slate-200/50 dark:border-border/35 bg-popover/95 backdrop-blur-lg">
             <SelectItem value="all" className="text-xs">Wszystkie statusy</SelectItem>
             <SelectItem value="SENT" className="text-xs font-medium text-blue-500">Wysłany (SENT)</SelectItem>
             <SelectItem value="DELIVERED" className="text-xs font-medium text-indigo-500">Dostarczony (DELIVERED)</SelectItem>
@@ -98,10 +98,10 @@ export function DataTableToolbar({
             setFilters((prev) => ({ ...prev, integrationId: value }))
           }
         >
-          <SelectTrigger className="h-9 w-full sm:w-[170px] bg-slate-950/20 border-border/30 hover:border-border/60 hover:bg-slate-950/40 focus:ring-primary/30 rounded-xl transition-all text-xs font-semibold text-foreground/95">
+          <SelectTrigger className="h-9 w-full sm:w-[170px] bg-white dark:bg-slate-950/20 border-slate-200 dark:border-border/30 hover:border-slate-300 dark:hover:border-border/60 hover:bg-slate-50 dark:hover:bg-slate-950/40 focus:ring-primary/30 rounded-xl transition-all text-xs font-semibold text-foreground/95">
             <SelectValue placeholder="Wszystkie źródła" />
           </SelectTrigger>
-          <SelectContent className="rounded-xl border-border/35 bg-popover/95 backdrop-blur-lg">
+          <SelectContent className="rounded-xl border-slate-200/50 dark:border-border/35 bg-popover/95 backdrop-blur-lg">
             <SelectItem value="all" className="text-xs">Wszystkie źródła</SelectItem>
             {integrations.map((integration) => (
               <SelectItem key={integration.id} value={String(integration.id)} className="text-xs">
@@ -112,7 +112,7 @@ export function DataTableToolbar({
         </Select>
 
         {/* Filtr dat */}
-        <div className="rounded-xl border border-border/30 bg-slate-950/20 hover:bg-slate-950/40 transition-all overflow-hidden h-9 flex items-center">
+        <div className="rounded-xl border border-slate-200 dark:border-border/30 bg-white dark:bg-slate-950/20 hover:bg-slate-50 dark:hover:bg-slate-950/40 transition-all overflow-hidden h-9 flex items-center">
           <DateRangePicker
             date={filters.dateRange}
             onDateChange={(range) =>

@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Thread, Message } from "@/types/thread"; // Importujemy nowe typy
 import { cn } from "@/lib/utils";
+import toast from "react-hot-toast";
 
 interface ChatPanelProps {
   buyerLogin: string;
@@ -68,6 +69,32 @@ export function ChatPanel({
   const [threads, setThreads] = useState<Thread[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Stany wysyłania odpowiedzi
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  const [isSending, setIsSending] = useState<Record<string, boolean>>({});
+
+  const handleSendReply = async (threadId: string) => {
+    const text = replyTexts[threadId]?.trim();
+    if (!text) return;
+
+    setIsSending((prev) => ({ ...prev, [threadId]: true }));
+    try {
+      await api.post(`/threads/${threadId}/reply`, { text });
+      toast.success("Wiadomość została wysłana do klienta.");
+      setReplyTexts((prev) => ({ ...prev, [threadId]: "" }));
+      
+      // Przeładuj wątki w celu pobrania nowo wysłanej wiadomości
+      const response = await api.get<Thread[]>("/threads/by-buyer-login", {
+        params: { buyer_login: buyerLogin, integration_id: integrationId },
+      });
+      setThreads(response.data);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Nie udało się wysłać odpowiedzi.");
+    } finally {
+      setIsSending((prev) => ({ ...prev, [threadId]: false }));
+    }
+  };
 
   useEffect(() => {
     if (!buyerLogin || !integrationId) return;
@@ -188,13 +215,22 @@ export function ChatPanel({
                     placeholder="Napisz odpowiedź..."
                     className="pr-12"
                     rows={3}
+                    value={replyTexts[thread.id] || ""}
+                    onChange={(e) => setReplyTexts((prev) => ({ ...prev, [thread.id]: e.target.value }))}
+                    disabled={isSending[thread.id]}
                   />
                   <Button
                     type="submit"
                     size="icon"
                     className="absolute top-1/2 right-2 -translate-y-1/2"
+                    onClick={() => handleSendReply(thread.id)}
+                    disabled={isSending[thread.id] || !replyTexts[thread.id]?.trim()}
                   >
-                    <Send className="h-4 w-4" />
+                    {isSending[thread.id] ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               </div>

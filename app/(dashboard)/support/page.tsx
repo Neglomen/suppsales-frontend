@@ -77,22 +77,16 @@ export default function SupportTicketsHistoryPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
             Twoje Zgłoszenia i Kontakt
           </h1>
-          <p className="text-slate-400 mt-1">
+          <p className="text-muted-foreground mt-1">
             Historia spraw, zgłoszeń błędów oraz sugestii w kontakcie z administracją.
           </p>
         </div>
         <button
           onClick={() => {
-            // Wyzwalamy otwarcie pływającego widgetu
-            const widgetBtn = document.getElementById("support-widget-trigger");
-            if (widgetBtn) {
-              widgetBtn.click();
-            } else {
-              toast.error("Skorzystaj z widgetu w prawym dolnym rogu ekranu, aby dodać zgłoszenie.");
-            }
+            window.dispatchEvent(new CustomEvent("open-support-widget"));
           }}
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-tr from-primary to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 hover:scale-105 transition-all duration-300 shrink-0"
         >
@@ -102,34 +96,34 @@ export default function SupportTicketsHistoryPage() {
       </div>
 
       {/* Tickets List */}
-      <Card className="border-white/5 bg-slate-900/50 backdrop-blur-xl">
+      <Card className="border-slate-200 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl">
         <CardContent className="p-6">
           {loading ? (
             <div className="space-y-4">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex flex-col gap-4 p-4 rounded-xl border border-white/5 bg-slate-950/20">
+                <div key={i} className="flex flex-col gap-4 p-4 rounded-xl border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950/20">
                   <div className="flex items-center justify-between">
-                    <Skeleton className="h-5 w-1/3 bg-slate-800" />
-                    <Skeleton className="h-5 w-20 bg-slate-800" />
+                    <Skeleton className="h-5 w-1/3 bg-slate-200 dark:bg-slate-800" />
+                    <Skeleton className="h-5 w-20 bg-slate-200 dark:bg-slate-800" />
                   </div>
-                  <Skeleton className="h-4 w-40 bg-slate-800" />
+                  <Skeleton className="h-4 w-40 bg-slate-200 dark:bg-slate-800" />
                 </div>
               ))}
             </div>
           ) : tickets.length === 0 ? (
-            <div className="text-center py-16 space-y-4 border border-dashed border-white/10 rounded-2xl bg-slate-950/10">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-slate-400">
+            <div className="text-center py-16 space-y-4 border border-dashed border-slate-200 dark:border-white/10 rounded-2xl bg-slate-50 dark:bg-slate-950/10">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-900 text-muted-foreground dark:text-slate-400">
                 <Headphones className="h-6 w-6" />
               </div>
-              <h3 className="text-sm font-semibold text-slate-200">Brak zgłoszeń</h3>
-              <p className="text-xs text-slate-400 max-w-xs mx-auto">
+              <h3 className="text-sm font-semibold text-foreground dark:text-slate-200">Brak zgłoszeń</h3>
+              <p className="text-xs text-muted-foreground dark:text-slate-400 max-w-xs mx-auto">
                 Nie masz jeszcze żadnych zgłoszeń. Kliknij przycisk powyżej lub użyj widgetu w prawym rogu, aby opisać błąd lub zadać pytanie.
               </p>
             </div>
           ) : (
             <div className="space-y-4">
               {/* Header column labels for wide screen */}
-              <div className="hidden md:grid grid-cols-[1fr_150px_130px_160px_160px_50px] gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 border-b border-white/5">
+              <div className="hidden md:grid grid-cols-[1fr_150px_130px_160px_160px_50px] gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground dark:text-slate-400 border-b border-slate-150 dark:border-white/5">
                 <div>Temat zgłoszenia</div>
                 <div>Kategoria</div>
                 <div>Status</div>
@@ -144,21 +138,21 @@ export default function SupportTicketsHistoryPage() {
                 return (
                   <div
                     key={ticket.id}
-                    className="grid grid-cols-1 md:grid-cols-[1fr_150px_130px_160px_160px_50px] gap-4 items-center p-4 rounded-xl border border-white/5 bg-slate-950/20 hover:bg-white/5 transition-colors group"
+                    className="grid grid-cols-1 md:grid-cols-[1fr_150px_130px_160px_160px_50px] gap-4 items-center p-4 rounded-xl border border-slate-150 dark:border-white/5 bg-slate-50 dark:bg-slate-950/20 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors group"
                   >
                     {/* Temat */}
                     <div className="space-y-1 min-w-0">
                       <Link
                         href={`/support/${ticket.id}`}
-                        className="font-medium text-slate-200 hover:text-primary transition-colors block truncate"
+                        className="font-medium text-foreground dark:text-slate-200 hover:text-primary transition-colors block truncate"
                       >
                         {ticket.title}
                       </Link>
-                      <span className="text-[10px] text-slate-500 font-mono">#{ticket.id}</span>
+                      <span className="text-[10px] text-muted-foreground dark:text-slate-500 font-mono">#{ticket.id}</span>
                     </div>
 
                     {/* Kategoria */}
-                    <div className="text-xs text-slate-300">
+                    <div className="text-xs text-foreground/90 dark:text-slate-300">
                       {categoryLabels[ticket.category] || ticket.category}
                     </div>
 
@@ -170,19 +164,19 @@ export default function SupportTicketsHistoryPage() {
                     </div>
 
                     {/* Odpowiedzialny Admin */}
-                    <div className="text-xs text-slate-300 truncate">
+                    <div className="text-xs text-foreground/90 dark:text-slate-300 truncate">
                       {ticket.assigned_admin ? (
                         <div className="flex items-center gap-1">
                           <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
                           <span className="truncate">{ticket.assigned_admin.name || "Administrator"}</span>
                         </div>
                       ) : (
-                        <span className="text-slate-600">Oczekuje na przypisanie</span>
+                        <span className="text-muted-foreground dark:text-slate-600">Oczekuje na przypisanie</span>
                       )}
                     </div>
 
                     {/* Ostatnia zmiana */}
-                    <div className="text-[11px] text-slate-400">
+                    <div className="text-[11px] text-muted-foreground dark:text-slate-400">
                       {new Date(ticket.updated_at).toLocaleString("pl-PL")}
                     </div>
 
@@ -190,7 +184,7 @@ export default function SupportTicketsHistoryPage() {
                     <div className="text-right">
                       <Link
                         href={`/support/${ticket.id}`}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-300 hover:bg-primary hover:text-white transition-all group-hover:translate-x-1"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-white/5 text-foreground dark:text-slate-300 hover:bg-primary hover:text-white transition-all group-hover:translate-x-1"
                       >
                         <ArrowRight className="h-4 w-4" />
                       </Link>
@@ -203,21 +197,21 @@ export default function SupportTicketsHistoryPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-white/5 mt-6 pt-6">
+            <div className="flex items-center justify-between border-t border-slate-150 dark:border-white/5 mt-6 pt-6">
               <button
                 onClick={() => setPage((p) => Math.max(p - 1, 1))}
                 disabled={page === 1}
-                className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                className="rounded-xl border border-slate-200 dark:border-white/10 px-4 py-2 text-xs font-semibold text-foreground dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
               >
                 Poprzednia
               </button>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-muted-foreground dark:text-slate-400">
                 Strona {page} z {totalPages}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
                 disabled={page === totalPages}
-                className="rounded-xl border border-white/10 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                className="rounded-xl border border-slate-200 dark:border-white/10 px-4 py-2 text-xs font-semibold text-foreground dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
               >
                 Następna
               </button>

@@ -160,6 +160,14 @@ const getIntegrationStyle = (providerType: string | undefined) => {
         badge: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
         letter: "I",
       };
+    case "WOOCOMMERCE":
+      return {
+        bg: "bg-purple-500/10",
+        text: "text-purple-400",
+        border: "border-purple-500/20",
+        badge: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+        letter: "W",
+      };
     default:
       return {
         bg: "bg-emerald-500/10",
@@ -269,6 +277,59 @@ const mapOrderPayloadToDetails = (
         };
       }),
       buyerComments: payload?.delivery_comments || payload?.customer_message || payload?.note?.text || undefined,
+    };
+  }
+
+  if (order.integration?.provider_type === "WOOCOMMERCE" || order.service_integration?.provider_type === "WOOCOMMERCE") {
+    const currency = payload?.currency || "PLN";
+    const rawShipping = payload?.shipping;
+    const hasShipping = !!(rawShipping?.address_1 && rawShipping?.city);
+    const shipping = hasShipping ? rawShipping : payload?.billing;
+    const billing = payload?.billing;
+
+    return {
+      delivery: {
+        methodName: payload?.shipping_lines?.[0]?.method_title || "Brak informacji",
+        isPickupPoint: false,
+        address: shipping ? {
+          firstName: shipping.first_name || undefined,
+          lastName: shipping.last_name || undefined,
+          street: ((shipping.address_1 || "") + (shipping.address_2 ? " " + shipping.address_2 : "")).trim() || undefined,
+          zipCode: shipping.postcode || undefined,
+          city: shipping.city || undefined,
+          countryCode: shipping.country || undefined,
+          phoneNumber: billing?.phone || undefined,
+        } : undefined,
+      },
+      payment: {
+        type: ["cod", "pobranie"].some(x => payload?.payment_method?.toLowerCase().includes(x)) ? "CASH_ON_DELIVERY" : "ONLINE",
+        provider: payload?.payment_method_title || payload?.payment_method || "Brak informacji",
+        status: order.payment_status || "COMPLETED",
+        total: `${payload?.total || "0.00"} ${currency}`,
+      },
+      invoice: {
+        required: !!billing?.company,
+        address: billing ? {
+          companyName: billing.company || undefined,
+          taxId: (payload?.meta_data || []).find((m: any) => ["billing_nip", "_billing_nip", "vat_number", "nip", "billing_vat"].includes(m.key))?.value || undefined,
+          street: ((billing.address_1 || "") + (billing.address_2 ? " " + billing.address_2 : "")).trim() || undefined,
+          zipCode: billing.postcode || undefined,
+          city: billing.city || undefined,
+          countryCode: billing.country || undefined,
+        } : undefined,
+      },
+      line_items: (payload?.line_items || []).map((line: any) => {
+        return {
+          id: line.variation_id && line.variation_id > 0 ? `${line.product_id}-${line.variation_id}` : `${line.product_id}`,
+          name: line.name || "Brak nazwy",
+          quantity: line.quantity || 1,
+          price: `${(parseFloat(line.total || "0") / (line.quantity || 1)).toFixed(2)} ${currency}`,
+          sku: line.sku || undefined,
+          imageUrl: line.image?.src || null,
+          offerId: line.variation_id && line.variation_id > 0 ? `${line.product_id}-${line.variation_id}` : `${line.product_id}`,
+        };
+      }),
+      buyerComments: payload?.customer_note || undefined,
     };
   }
 
@@ -1403,7 +1464,7 @@ export default function OrdersPage() {
           integrations.filter(
             (integration) =>
               integration &&
-              ["ALLEGRO", "BASELINKER", "EMPIK", "INPOST_BUY"].includes(
+              ["ALLEGRO", "BASELINKER", "EMPIK", "INPOST_BUY", "WOOCOMMERCE"].includes(
                 integration.provider_type
               )
           ) as { id: number; name: string }[]
@@ -1416,7 +1477,7 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto w-full pb-10">
-      <div className="relative overflow-hidden rounded-3xl border border-border/30 bg-slate-900/40 backdrop-blur-xl p-6 md:p-8 shadow-xl shadow-black/10">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-border/30 bg-gradient-to-br from-white via-slate-50 to-slate-100 dark:bg-slate-900/40 dark:bg-none backdrop-blur-xl p-6 md:p-8 shadow-xl shadow-slate-200/40 dark:shadow-black/10">
         <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-primary/5 blur-[100px] rounded-full pointer-events-none animate-pulse" />
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
@@ -1482,7 +1543,7 @@ export default function OrdersPage() {
               </TooltipProvider>
             )}
 
-            <div className="flex items-center gap-1.5 bg-slate-950/60 border border-border/30 p-1 rounded-2xl backdrop-blur-md shadow-inner">
+            <div className="flex items-center gap-1.5 bg-slate-200/60 dark:bg-slate-950/60 border border-slate-300/60 dark:border-border/30 p-1 rounded-2xl backdrop-blur-md shadow-inner">
             <Button
               variant="ghost"
               size="sm"
@@ -1526,7 +1587,7 @@ export default function OrdersPage() {
                 "h-9 px-3.5 rounded-2xl text-xs font-bold gap-1.5 transition-all duration-300 border backdrop-blur-md shadow-sm",
                 showMissingStock
                   ? "bg-red-500/10 hover:bg-red-500/15 text-red-400 border-red-500/25"
-                  : "bg-slate-950/40 hover:bg-slate-950/60 text-muted-foreground hover:text-foreground border-border/30"
+                  : "bg-slate-100 dark:bg-slate-950/40 hover:bg-slate-200 dark:hover:bg-slate-950/60 text-muted-foreground hover:text-foreground border-slate-200 dark:border-border/30"
               )}
             >
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -1581,7 +1642,7 @@ export default function OrdersPage() {
         if (selectedCount === 0) return null;
 
         return (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-slate-900/90 border border-primary/30 px-6 py-3 rounded-2xl shadow-xl shadow-black/50 backdrop-blur-md animate-in slide-in-from-bottom-5 duration-300">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-white/95 dark:bg-slate-900/90 border border-primary/30 px-6 py-3 rounded-2xl shadow-xl shadow-slate-300/50 dark:shadow-black/50 backdrop-blur-md animate-in slide-in-from-bottom-5 duration-300">
             <span className="text-xs font-bold text-foreground font-mono">
               Wybrano: <span className="text-primary text-sm font-extrabold">{selectedCount}</span>
             </span>
@@ -1592,7 +1653,7 @@ export default function OrdersPage() {
                 variant="outline"
                 onClick={handleBulkPrint}
                 disabled={isBulkPrinting || isBulkSavingPdf}
-                className="border-primary/20 text-primary hover:bg-primary/10 bg-white/5 font-semibold text-xs rounded-xl shadow-md h-8.5"
+                className="border-primary/20 text-primary hover:bg-primary/10 bg-primary/5 dark:bg-white/5 font-semibold text-xs rounded-xl shadow-md h-8.5"
               >
                 {isBulkPrinting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />

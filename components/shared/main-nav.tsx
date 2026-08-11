@@ -167,7 +167,7 @@ export function MainNav({ forceExpand = false }: MainNavProps) {
         key={href}
         href={href}
         className={cn(
-          "group relative flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-300 overflow-hidden border border-transparent",
+          "group relative flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-300 overflow-hidden border border-transparent sidebar-link-responsive",
           isActive
             ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-[0_4px_20px_-3px_rgba(0,0,0,0.1)] shadow-primary/40 ring-1 ring-primary/30 translate-x-1 font-semibold"
             : isSpecial
@@ -204,7 +204,7 @@ export function MainNav({ forceExpand = false }: MainNavProps) {
     <TooltipProvider delayDuration={0}>
       <div className="flex-grow flex flex-col justify-between">
         {/* Top: Tools */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {!isCollapsed && (
             <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40 select-none">
               Narzędzia
@@ -219,7 +219,7 @@ export function MainNav({ forceExpand = false }: MainNavProps) {
         </div>
 
         {/* Bottom: Settings, Support & Admin */}
-        <div className="space-y-2 mt-auto pt-6 border-t border-border/10">
+        <div className="space-y-1.5 mt-auto pt-4 border-t border-border/10 sidebar-section-spacing">
           {!isCollapsed && (
             <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40 select-none">
               Ustawienia i pomoc

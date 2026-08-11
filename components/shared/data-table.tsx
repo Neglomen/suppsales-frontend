@@ -107,90 +107,92 @@ export function DataTable<TData, TValue>({
     <div className="space-y-6">
       {toolbar}
       <div className="rounded-xl border border-border/30 bg-card overflow-hidden shadow-sm">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className={cn(
-                      "bg-primary/5 text-primary font-bold uppercase tracking-wider text-[10px] transition-all duration-200",
-                      viewMode === "compact" ? "py-2" : "py-4"
-                    )}
-                    style={{
-                      width:
-                        header.getSize() !== 150 ? header.getSize() : undefined,
-                    }}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {/* === NOWA LOGIKA RENDEROWANIA CIAŁA TABELI === */}
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  <div className="flex justify-center items-center gap-2">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                    <span>Ładowanie danych...</span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <motion.tr
-                  key={row.id}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2, delay: row.index * 0.03 }}
-                  data-state={row.getIsSelected() && "selected"}
-                  onClick={() => onRowClick && onRowClick(row)}
-                  className={cn(
-                    "group/row transition-colors duration-200 border-b border-border/15 hover:bg-muted/30",
-                    onRowClick ? "cursor-pointer" : ""
-                  )}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell 
-                      key={cell.id} 
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
                       className={cn(
-                        "transition-all duration-200",
-                        viewMode === "compact" ? "py-2.5" : "py-4"
+                        "bg-primary/5 text-primary font-bold uppercase tracking-wider text-[10px] transition-all duration-200",
+                        viewMode === "compact" ? "py-2" : "py-4"
                       )}
+                      style={{
+                        width:
+                          header.getSize() !== 150 ? header.getSize() : undefined,
+                      }}
                     >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
                   ))}
-                </motion.tr>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  Brak wyników.
-                </TableCell>
-              </TableRow>
-            )}
-            {/* === KONIEC NOWEJ LOGIKI === */}
-          </TableBody>
-        </Table>
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {/* === NOWA LOGIKA RENDEROWANIA CIAŁA TABELI === */}
+              {isLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center"
+                  >
+                    <div className="flex justify-center items-center gap-2">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                      <span>Ładowanie danych...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <motion.tr
+                    key={row.id}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, delay: row.index * 0.03 }}
+                    data-state={row.getIsSelected() && "selected"}
+                    onClick={() => onRowClick && onRowClick(row)}
+                    className={cn(
+                      "group/row transition-colors duration-200 border-b border-border/15 hover:bg-muted/30",
+                      onRowClick ? "cursor-pointer" : ""
+                    )}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell 
+                        key={cell.id} 
+                        className={cn(
+                          "transition-all duration-200",
+                          viewMode === "compact" ? "py-2.5" : "py-4"
+                        )}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </motion.tr>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center"
+                  >
+                    Brak wyników.
+                  </TableCell>
+                </TableRow>
+              )}
+              {/* === KONIEC NOWEJ LOGIKI === */}
+            </TableBody>
+          </Table>
+        </div>
       </div>
       {/* Paginacja jest wyświetlana, jeśli są dane i dane nie są ładowane */}
       {data.length > 0 && !isLoading && (

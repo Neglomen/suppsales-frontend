@@ -121,10 +121,10 @@ export default function AcademyPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden relative selection:bg-primary selection:text-white">
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-foreground dark:text-slate-100 overflow-x-hidden relative selection:bg-primary selection:text-white transition-colors duration-500">
       {/* Glow background effects */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/10 blur-[150px] rounded-full pointer-events-none z-0" />
-      <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-purple-600/10 blur-[150px] rounded-full pointer-events-none z-0" />
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/5 dark:bg-primary/10 blur-[150px] rounded-full pointer-events-none z-0" />
+      <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-purple-600/5 dark:bg-purple-600/10 blur-[150px] rounded-full pointer-events-none z-0" />
 
       {/* Header */}
       <MarketingNavbar />
@@ -135,21 +135,21 @@ export default function AcademyPage() {
           
           {/* Hero Section */}
           <div className="text-center space-y-5 max-w-3xl mx-auto">
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/10 text-primary-foreground text-[10px] font-bold uppercase tracking-wider">
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/10 text-primary dark:text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow-sm shadow-primary/5">
               <BookOpen className="h-3.5 w-3.5 text-primary animate-pulse" /> SuppSales Academy
             </span>
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-tight text-slate-100">
-              Centrum Wiedzy i Center <br />
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-tight text-foreground">
+              Centrum Wiedzy i Centrum <br />
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-purple-400 to-pink-500">
                 Wideo Poradników
               </span>
             </h1>
-            <p className="text-slate-400 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
+            <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
               Krótkie, praktyczne instrukcje wideo, które pomogą Tobie i Twojemu zespołowi opanować konfigurację integracji, ERP oraz obsługę zamówień.
             </p>
 
             {_hasHydrated && !isAuthenticated && (
-              <div className="flex items-center justify-center gap-2 text-xs bg-amber-500/10 border border-amber-500/20 text-amber-300 rounded-xl px-4 py-2.5 max-w-md mx-auto">
+              <div className="flex items-center justify-center gap-2 text-xs bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-xl px-4 py-2.5 max-w-md mx-auto shadow-xs">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>Zaloguj się, aby odblokować bezpłatny dostęp do odtwarzacza wideo.</span>
               </div>
@@ -160,7 +160,7 @@ export default function AcademyPage() {
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="text-xs text-slate-500 font-medium">Ładowanie lekcji wideo...</span>
+              <span className="text-xs text-muted-foreground font-medium">Ładowanie lekcji wideo...</span>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-4">
@@ -176,16 +176,16 @@ export default function AcademyPage() {
                     <Card
                       key={video.id}
                       onClick={() => handleCardClick(video, false)}
-                      className="glass border-white/5 bg-slate-900/20 hover:bg-slate-900/40 backdrop-blur-xl rounded-2xl overflow-hidden border hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 group cursor-pointer flex flex-col h-full"
+                      className="glass border-slate-200/60 dark:border-white/5 bg-white/60 dark:bg-slate-900/20 hover:bg-slate-100/80 dark:hover:bg-slate-900/40 backdrop-blur-xl rounded-2xl overflow-hidden border hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 group cursor-pointer flex flex-col h-full shadow-sm"
                     >
                       {/* Video Thumbnail Hover Play */}
-                      <div className="relative aspect-video w-full bg-slate-950 border-b border-white/5 overflow-hidden shrink-0 group/video flex items-center justify-center">
+                      <div className="relative aspect-video w-full bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-white/5 overflow-hidden shrink-0 group/video flex items-center justify-center">
                         <video
                           src={videoUrl}
                           preload="metadata"
                           muted
                           playsInline
-                          className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-80 transition-all duration-300 group-hover:scale-105"
+                          className="absolute inset-0 w-full h-full object-cover opacity-55 dark:opacity-50 group-hover:opacity-80 transition-all duration-300 group-hover:scale-105"
                           onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
                           onMouseLeave={(e) => {
                             e.currentTarget.pause();
@@ -193,7 +193,7 @@ export default function AcademyPage() {
                           }}
                         />
                         
-                        <div className="h-14 w-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-lg shadow-black/40 z-10 pointer-events-none">
+                        <div className="h-14 w-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-lg z-10 pointer-events-none">
                           <Play className="h-6 w-6 fill-current translate-x-0.5" />
                         </div>
 
@@ -203,7 +203,7 @@ export default function AcademyPage() {
                             {video.duration}
                           </span>
                         )}
-                        <div className="absolute top-3 left-3 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-emerald-400 rounded-lg px-2.5 py-0.5 text-[10px] font-bold flex items-center gap-1 z-10">
+                        <div className="absolute top-3 left-3 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-emerald-650 dark:text-emerald-400 rounded-lg px-2.5 py-0.5 text-[10px] font-bold flex items-center gap-1 z-10">
                           <Unlock className="h-3 w-3" /> Odblokowane
                         </div>
                       </div>
@@ -214,10 +214,10 @@ export default function AcademyPage() {
                           <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md">
                             {CATEGORY_LABELS[video.category] || video.category}
                           </Badge>
-                          <h3 className="font-extrabold text-base text-slate-100 group-hover:text-primary transition-colors leading-tight">
+                          <h3 className="font-extrabold text-base text-foreground group-hover:text-primary transition-colors leading-tight">
                             {video.title}
                           </h3>
-                          <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
                             {video.description}
                           </p>
                         </div>
@@ -231,15 +231,15 @@ export default function AcademyPage() {
                   <Card
                     key={teaser.id}
                     onClick={() => handleCardClick(teaser, true)}
-                    className="glass border-white/5 bg-slate-900/10 hover:bg-slate-900/20 backdrop-blur-xl rounded-2xl overflow-hidden border hover:border-amber-500/20 hover:shadow-lg transition-all duration-300 group cursor-pointer flex flex-col h-full"
+                    className="glass border-slate-200/60 dark:border-white/5 bg-white/60 dark:bg-slate-900/10 hover:bg-slate-100/60 dark:hover:bg-slate-900/20 backdrop-blur-xl rounded-2xl overflow-hidden border hover:border-amber-500/20 hover:shadow-lg transition-all duration-300 group cursor-pointer flex flex-col h-full shadow-sm"
                   >
                     {/* Thumbnail / Locked Overlay */}
-                    <div className="relative aspect-video w-full bg-slate-950 border-b border-white/5 overflow-hidden shrink-0 flex items-center justify-center">
-                      <div className="absolute inset-0 bg-slate-900/60 z-10 flex flex-col items-center justify-center gap-2 group-hover:bg-slate-900/50 transition-colors">
-                        <div className="h-12 w-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 group-hover:scale-110 group-hover:border-amber-500/30 group-hover:text-amber-400 transition-all duration-300 shadow-xl shadow-black/40">
+                    <div className="relative aspect-video w-full bg-slate-100 dark:bg-slate-950 border-b border-slate-200 dark:border-white/5 overflow-hidden shrink-0 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-slate-100/60 dark:bg-slate-900/60 z-10 flex flex-col items-center justify-center gap-2 group-hover:bg-slate-100/40 dark:group-hover:bg-slate-900/50 transition-colors">
+                        <div className="h-12 w-12 rounded-full bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-muted-foreground dark:text-slate-400 group-hover:scale-110 group-hover:border-amber-500/30 group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-all duration-300 shadow-md">
                           <Lock className="h-5 w-5" />
                         </div>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Zablokowane</span>
+                        <span className="text-[10px] text-muted-foreground dark:text-slate-400 font-bold uppercase tracking-widest mt-1">Zablokowane</span>
                       </div>
                       
                       <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md border border-white/10 rounded-lg px-2 py-0.5 text-[10px] font-bold font-mono text-white tracking-wider flex items-center gap-1 z-10">
@@ -251,13 +251,13 @@ export default function AcademyPage() {
                     {/* Card Content */}
                     <CardContent className="p-5 flex-1 flex flex-col justify-between gap-4">
                       <div className="space-y-2">
-                        <Badge variant="outline" className="bg-slate-900/40 text-slate-400 border-white/10 text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md">
+                        <Badge variant="outline" className="bg-slate-100 dark:bg-slate-900/40 text-muted-foreground dark:text-slate-400 border-slate-250 dark:border-white/10 text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md">
                           {CATEGORY_LABELS[teaser.category] || teaser.category}
                         </Badge>
-                        <h3 className="font-extrabold text-base text-slate-300 group-hover:text-amber-400 transition-colors leading-tight">
+                        <h3 className="font-extrabold text-base text-foreground/85 dark:text-slate-300 group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors leading-tight">
                           {teaser.title}
                         </h3>
-                        <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
                           {teaser.description}
                         </p>
                       </div>
@@ -270,10 +270,10 @@ export default function AcademyPage() {
           )}
 
           {/* Bottom Call to Action */}
-          <div className="rounded-3xl border border-white/5 bg-slate-900/30 backdrop-blur-md p-8 md:p-12 text-center space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[350px] bg-primary/10 blur-[100px] rounded-full pointer-events-none -z-10" />
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-100">Chcesz odblokować pełne szkolenia?</h2>
-            <p className="text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
+          <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-white/40 dark:bg-slate-900/30 backdrop-blur-md p-8 md:p-12 text-center space-y-6 relative overflow-hidden shadow-sm">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[350px] bg-primary/5 dark:bg-primary/10 blur-[100px] rounded-full pointer-events-none -z-10" />
+            <h2 className="text-2xl sm:text-3xl font-black text-foreground">Chcesz odblokować pełne szkolenia?</h2>
+            <p className="text-sm text-muted-foreground max-w-lg mx-auto leading-relaxed">
               Zaloguj się do swojego darmowego panelu deweloperskiego lub zarejestruj nowe konto w SuppSales, by uzyskać natychmiastowy dostęp do wszystkich lekcji.
             </p>
             <div className="flex justify-center gap-4">
@@ -296,7 +296,7 @@ export default function AcademyPage() {
 
       {/* Video Modal Player (For authenticated users) */}
       <Dialog open={!!selectedVideo} onOpenChange={(open) => !open && setSelectedVideo(null)}>
-        <DialogContent className="sm:max-w-[960px] p-0 overflow-hidden border border-white/10 bg-slate-950/95 text-slate-100 rounded-2xl shadow-2xl backdrop-blur-3xl">
+        <DialogContent className="sm:max-w-[960px] p-0 overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/95 text-foreground dark:text-slate-100 rounded-2xl shadow-2xl backdrop-blur-3xl">
           <DialogTitle className="sr-only">
             {selectedVideo?.title || "Podgląd wideo"}
           </DialogTitle>
@@ -319,20 +319,20 @@ export default function AcademyPage() {
             </div>
 
             {selectedVideo && (
-              <div className="p-6 space-y-3 bg-slate-900/30 border-t border-white/5">
+              <div className="p-6 space-y-3 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-100 dark:border-white/5">
                 <div className="flex items-center gap-3">
                   <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md">
                     {CATEGORY_LABELS[selectedVideo.category] || selectedVideo.category}
                   </Badge>
                   {selectedVideo.duration && (
-                    <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground font-semibold flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5" />
                       {selectedVideo.duration}
                     </span>
                   )}
                 </div>
-                <h3 className="text-xl font-extrabold text-slate-100">{selectedVideo.title}</h3>
-                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedVideo.description}</p>
+                <h3 className="text-xl font-extrabold text-foreground dark:text-slate-100">{selectedVideo.title}</h3>
+                <p className="text-sm text-muted-foreground dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedVideo.description}</p>
               </div>
             )}
           </div>
@@ -341,18 +341,18 @@ export default function AcademyPage() {
 
       {/* Unlock Notice Modal (For unauthenticated users) */}
       <Dialog open={showUnlockModal} onOpenChange={setShowUnlockModal}>
-        <DialogContent className="sm:max-w-[480px] p-6 border border-white/10 bg-slate-900/90 text-slate-100 rounded-2xl shadow-2xl backdrop-blur-2xl">
-          <DialogTitle className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            <Lock className="h-5 w-5 text-amber-400" /> Wideo zablokowane
+        <DialogContent className="sm:max-w-[480px] p-6 border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/90 text-foreground dark:text-slate-100 rounded-2xl shadow-2xl backdrop-blur-2xl">
+          <DialogTitle className="text-lg font-bold text-foreground dark:text-slate-100 flex items-center gap-2">
+            <Lock className="h-5 w-5 text-amber-500 dark:text-amber-400" /> Wideo zablokowane
           </DialogTitle>
-          <DialogDescription className="text-sm text-slate-400 mt-2 leading-relaxed">
+          <DialogDescription className="text-sm text-muted-foreground mt-2 leading-relaxed">
             Te lekcje szkoleniowe są dostępne wyłącznie dla zalogowanych użytkowników i pracowników korzystających z platformy SuppSales.
           </DialogDescription>
           
           <div className="space-y-4 pt-4">
-            <div className="bg-slate-950/40 border border-white/5 p-4 rounded-xl space-y-2">
-              <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">Dlaczego warto?</span>
-              <p className="text-xs text-slate-500 leading-relaxed">
+            <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-white/5 p-4 rounded-xl space-y-2">
+              <span className="text-xs font-bold text-muted-foreground block uppercase tracking-wider">Dlaczego warto?</span>
+              <p className="text-xs text-muted-foreground/75 leading-relaxed">
                 Dostęp do pełnej biblioteki wideo-poradników pozwala zredukować czas potrzebny na wdrożenie pracowników magazynu i biura obsługi klienta o ponad 70%.
               </p>
             </div>
@@ -361,7 +361,7 @@ export default function AcademyPage() {
               <Button
                 variant="ghost"
                 onClick={() => setShowUnlockModal(false)}
-                className="rounded-xl hover:bg-white/5 text-slate-400 hover:text-slate-200"
+                className="rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground"
               >
                 Zamknij
               </Button>

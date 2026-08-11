@@ -131,11 +131,22 @@ export default function DashboardLayout({
 
             {/* Stopka panelu bocznego z UserNav i statusem PrintHub */}
             <div className={cn(
-              "mt-auto border-t border-border/10 transition-all duration-300 flex flex-col items-center overflow-hidden",
-              isCollapsed ? "p-2 gap-2" : "p-4 gap-4"
+              "mt-auto border-t border-border/10 transition-all duration-300 flex flex-col items-center overflow-hidden shrink-0",
+              isCollapsed ? "p-2 gap-2" : "p-3.5 gap-3 lg:gap-4"
             )}>
-              <ErpStatusIndicator isCollapsed={isCollapsed} />
-              <PrintHubIndicator isCollapsed={isCollapsed} />
+              {/* Grupowanie indykatorów w wiersz przy niskiej wysokości ekranu */}
+              <div className={cn(
+                "w-full flex gap-2 transition-all duration-300",
+                isCollapsed ? "flex-col items-center" : "flex-col sidebar-indicators-row"
+              )}>
+                <div className="flex-1 min-w-0 w-full">
+                  <ErpStatusIndicator isCollapsed={isCollapsed} />
+                </div>
+                <div className="flex-1 min-w-0 w-full">
+                  <PrintHubIndicator isCollapsed={isCollapsed} />
+                </div>
+              </div>
+
               <div className={cn(
                 "transition-all duration-300 w-full",
                 isCollapsed ? "flex justify-center" : "flex items-center gap-3"
@@ -156,7 +167,7 @@ export default function DashboardLayout({
             <GlobalSearch />
           </div>
 
-          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-8 lg:p-8 max-w-screen-2xl mx-auto w-full">
+          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 xl:gap-8 xl:p-8 max-w-screen-2xl mx-auto w-full">
             {/* Przycisk menu mobilnego na górze strony (tylko na mobile) */}
             <div className="md:hidden flex items-center justify-between mb-4 glass p-2 rounded-xl gap-2 min-w-0 overflow-visible">
               <div className="shrink-0">

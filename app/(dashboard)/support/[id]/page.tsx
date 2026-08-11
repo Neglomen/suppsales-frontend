@@ -138,13 +138,13 @@ export default function TicketDetailPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-6 w-24 bg-slate-800" />
+        <Skeleton className="h-6 w-24 bg-slate-200 dark:bg-slate-800" />
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
           <div className="space-y-4">
-            <Skeleton className="h-10 w-2/3 bg-slate-800" />
-            <Skeleton className="h-64 w-full bg-slate-800" />
+            <Skeleton className="h-10 w-2/3 bg-slate-200 dark:bg-slate-800" />
+            <Skeleton className="h-64 w-full bg-slate-200 dark:bg-slate-800" />
           </div>
-          <Skeleton className="h-48 w-full bg-slate-800" />
+          <Skeleton className="h-48 w-full bg-slate-200 dark:bg-slate-800" />
         </div>
       </div>
     );
@@ -161,7 +161,7 @@ export default function TicketDetailPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <Link
           href="/support"
-          className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-200 transition-colors text-sm"
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Powrót do historii zgłoszeń
@@ -169,7 +169,7 @@ export default function TicketDetailPage() {
         {ticket.status !== "CLOSED" && (
           <button
             onClick={handleCloseTicket}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-md shadow-emerald-500/5"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-md shadow-emerald-500/5"
           >
             <CheckCircle2 className="h-4 w-4" />
             Rozwiązałem problem - Zamknij zgłoszenie
@@ -182,11 +182,11 @@ export default function TicketDetailPage() {
         {/* Left Column: Chat and Reply Form */}
         <div className="space-y-6 flex flex-col h-[650px]">
           {/* Chat Window */}
-          <Card className="border-white/5 bg-slate-900/50 backdrop-blur-xl flex flex-col flex-1 overflow-hidden">
-            <CardHeader className="border-b border-white/5 px-6 py-4 flex flex-row items-center gap-4 justify-between shrink-0">
+          <Card className="border-slate-200 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl flex flex-col flex-1 overflow-hidden">
+            <CardHeader className="border-b border-slate-200 dark:border-white/5 px-6 py-4 flex flex-row items-center gap-4 justify-between shrink-0">
               <div className="min-w-0">
-                <h2 className="font-semibold text-slate-200 text-base truncate">{ticket.title}</h2>
-                <p className="text-xs text-slate-500 mt-0.5 font-mono">#{ticket.id}</p>
+                <h2 className="font-semibold text-foreground dark:text-slate-200 text-base truncate">{ticket.title}</h2>
+                <p className="text-xs text-muted-foreground dark:text-slate-500 mt-0.5 font-mono">#{ticket.id}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="outline" className={`${status.className} font-semibold`}>
@@ -196,7 +196,7 @@ export default function TicketDetailPage() {
             </CardHeader>
 
             {/* Conversation Feed */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-950/10">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50 dark:bg-slate-950/10">
               {ticket.messages.map((message) => {
                 // Czy autorem jest superadmin / pomoc?
                 // Możemy to zweryfikować na podstawie sender_id (czy to id usera ticketu?)
@@ -207,18 +207,18 @@ export default function TicketDetailPage() {
                     key={message.id}
                     className={`flex flex-col max-w-[80%] ${isSupport ? "mr-auto items-start" : "ml-auto items-end"}`}
                   >
-                    <div className="flex items-center gap-1.5 mb-1 text-[11px] text-slate-400">
+                    <div className="flex items-center gap-1.5 mb-1 text-[11px] text-muted-foreground dark:text-slate-400">
                       {isSupport && <ShieldCheck className="h-3.5 w-3.5 text-primary" />}
-                      <span className="font-semibold">{message.sender.name || message.sender.email}</span>
-                      {isSupport && <span className="text-primary-400 font-bold">(Wsparcie)</span>}
-                      <span className="text-slate-600">•</span>
+                      <span className="font-semibold text-foreground dark:text-slate-200">{message.sender.name || message.sender.email}</span>
+                      {isSupport && <span className="text-primary dark:text-primary-400 font-bold">(Wsparcie)</span>}
+                      <span className="text-slate-300 dark:text-slate-600">•</span>
                       <span>{new Date(message.created_at).toLocaleString("pl-PL")}</span>
                     </div>
 
                     <div
                       className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap border ${
                         isSupport
-                          ? "bg-slate-900/90 text-slate-200 border-white/10 rounded-tl-none"
+                          ? "bg-slate-100 dark:bg-slate-900/90 text-foreground dark:text-slate-200 border-slate-200 dark:border-white/10 rounded-tl-none"
                           : "bg-primary text-white border-primary/20 rounded-tr-none shadow-lg shadow-primary/10"
                       }`}
                     >
@@ -232,14 +232,14 @@ export default function TicketDetailPage() {
 
             {/* Reply Form */}
             {ticket.status !== "CLOSED" ? (
-              <div className="border-t border-white/5 p-4 shrink-0 bg-slate-950/20">
+              <div className="border-t border-slate-200 dark:border-white/5 p-4 shrink-0 bg-slate-50 dark:bg-slate-950/20">
                 <form onSubmit={handleSend} className="flex gap-2">
                   <input
                     type="text"
                     value={reply}
                     onChange={(e) => setReply(e.target.value)}
                     placeholder="Wpisz swoją odpowiedź..."
-                    className="flex-1 rounded-xl border border-white/10 bg-slate-950 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-primary/50 focus:outline-none transition-colors"
+                    className="flex-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none transition-colors"
                     disabled={sending}
                   />
                   <button
@@ -252,7 +252,7 @@ export default function TicketDetailPage() {
                 </form>
               </div>
             ) : (
-              <div className="border-t border-white/5 p-4 shrink-0 bg-slate-950/40 text-center text-xs text-slate-500">
+              <div className="border-t border-slate-200 dark:border-white/5 p-4 shrink-0 bg-slate-100 dark:bg-slate-950/40 text-center text-xs text-muted-foreground">
                 🔒 Zgłoszenie zostało zamknięte. Napisanie wiadomości w widgetcie lub ponowny kontakt otworzy nowy wątek.
               </div>
             )}
@@ -262,27 +262,27 @@ export default function TicketDetailPage() {
         {/* Right Column: Sidebar Meta */}
         <div className="space-y-6">
           {/* Ticket Information Card */}
-          <Card className="border-white/5 bg-slate-900/50 backdrop-blur-xl">
-            <CardHeader className="border-b border-white/5 px-6 py-4">
-              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+          <Card className="border-slate-200 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl">
+            <CardHeader className="border-b border-slate-200 dark:border-white/5 px-6 py-4">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground dark:text-slate-400">
                 Metadane zgłoszenia
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4 text-sm">
               {/* Kategoria */}
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 flex items-center gap-1.5">
+                <span className="text-muted-foreground flex items-center gap-1.5">
                   <Tag className="h-4 w-4" />
                   Kategoria
                 </span>
-                <span className="font-semibold text-slate-200">
+                <span className="font-semibold text-foreground dark:text-slate-200">
                   {categoryLabels[ticket.category] || ticket.category}
                 </span>
               </div>
 
               {/* Priorytet */}
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 flex items-center gap-1.5">
+                <span className="text-muted-foreground flex items-center gap-1.5">
                   <Clock className="h-4 w-4" />
                   Priorytet
                 </span>
@@ -293,23 +293,23 @@ export default function TicketDetailPage() {
 
               {/* Data utworzenia */}
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 flex items-center gap-1.5">
+                <span className="text-muted-foreground flex items-center gap-1.5">
                   <Calendar className="h-4 w-4" />
                   Utworzono
                 </span>
-                <span className="text-slate-300">
+                <span className="text-foreground dark:text-slate-300">
                   {new Date(ticket.created_at).toLocaleDateString("pl-PL")}
                 </span>
               </div>
 
               {/* URL Context (Diagnostyka) */}
               {ticket.url_context && (
-                <div className="pt-2 border-t border-white/5 space-y-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <div className="pt-2 border-t border-slate-200 dark:border-white/5 space-y-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                     <Laptop className="h-3.5 w-3.5" />
                     Ścieżka diagnostyczna
                   </span>
-                  <div className="font-mono text-xs rounded bg-slate-950 px-2 py-1 text-slate-300 truncate" title={ticket.url_context}>
+                  <div className="font-mono text-xs rounded bg-slate-100 dark:bg-slate-950 px-2 py-1 text-foreground dark:text-slate-300 truncate" title={ticket.url_context}>
                     {ticket.url_context}
                   </div>
                 </div>

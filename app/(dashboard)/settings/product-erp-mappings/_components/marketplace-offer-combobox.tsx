@@ -66,7 +66,7 @@ export function MarketplaceOfferCombobox({
     queryFn: async () => {
       const response = await api.get(
         `/erp-proxy/integrations/${marketplaceIntegrationId}/offers`,
-        { params: { q: debouncedSearchQuery, size: 50 } }
+        { params: { q: debouncedSearchQuery, size: 100 } }
       );
       return response.data;
     },

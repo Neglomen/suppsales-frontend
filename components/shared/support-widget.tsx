@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Headphones, X, Loader2, Send, MessageSquare, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,16 @@ import { toast } from "react-hot-toast";
 import api, { getErrorMessage } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
+interface OrderContext {
+  id: string;
+  external_order_id?: string | null;
+  buyer_login?: string | null;
+  service_integration?: string | null;
+  payment_type?: string | null;
+  total_to_pay?: number | null;
+  delivery_method?: string | null;
+}
+
 interface SupportWidgetProps {
   inline?: boolean;
 }
@@ -35,7 +45,62 @@ export function SupportWidget({ inline = false }: SupportWidgetProps) {
   const [category, setCategory] = useState("QUESTION");
   const [priority, setPriority] = useState("MEDIUM");
   const [content, setContent] = useState("");
+  const [orderContext, setOrderContext] = useState<OrderContext | null>(null);
+  const [includeOrderContext, setIncludeOrderContext] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const handleOpenSupport = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const context = customEvent.detail?.orderContext;
+      if (context) {
+        setOrderContext(context);
+        setIncludeOrderContext(true);
+      } else {
+        setOrderContext(null);
+        setIncludeOrderContext(false);
+      }
+      setIsOpen(true);
+    };
+
+    window.addEventListener("open-support-widget", handleOpenSupport);
+    return () => window.removeEventListener("open-support-widget", handleOpenSupport);
+  }, []);
+
+  const handleOpen = () => {
+    if (typeof window !== "undefined") {
+      let context: OrderContext | null = null;
+      if (window.location.pathname === "/shipping/fulfillment" && (window as any).__currentFulfillmentOrder) {
+        const order = (window as any).__currentFulfillmentOrder;
+        context = {
+          id: order.id,
+          external_order_id: order.external_order_id,
+          buyer_login: order.buyer_login,
+          service_integration: order.service_integration?.name,
+          payment_type: order.payment_type,
+          total_to_pay: order.total_to_pay,
+          delivery_method: order.details_payload?.delivery?.method?.name || order.details_payload?.delivery_method
+        };
+      }
+      if (context) {
+        setOrderContext(context);
+        setIncludeOrderContext(true);
+      } else {
+        setOrderContext(null);
+        setIncludeOrderContext(false);
+      }
+    }
+    setIsOpen(true);
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    // Delay resetting context to avoid visual pop during modal close animation
+    setTimeout(() => {
+      setOrderContext(null);
+      setIncludeOrderContext(false);
+    }, 300);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,15 +117,24 @@ export function SupportWidget({ inline = false }: SupportWidgetProps) {
       const viewportSize =
         typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : "";
 
+      let finalContent = content;
+      const systemMetadata: any = {};
+
+      if (includeOrderContext && orderContext) {
+        systemMetadata.order_context = orderContext;
+        const orderIdStr = orderContext.external_order_id || orderContext.id;
+        finalContent += `\n\n--- KONTEKST ZAMÓWIENIA ---\n- ID Zamówienia: ${orderIdStr}\n- Kupujący: ${orderContext.buyer_login || "N/A"}\n- Integracja: ${orderContext.service_integration || "N/A"}\n- Płatność: ${orderContext.payment_type || "N/A"} (${orderContext.total_to_pay ? orderContext.total_to_pay.toFixed(2) + " PLN" : "N/A"})\n- Sposób dostawy: ${orderContext.delivery_method || "N/A"}`;
+      }
+
       const response = await api.post("/support/", {
         title,
         category,
         priority,
-        content,
+        content: finalContent,
         url_context: urlContext,
         user_agent: userAgent,
         viewport_size: viewportSize,
-        system_metadata: {},
+        system_metadata: systemMetadata,
       });
 
       toast.success("Zgłoszenie zostało wysłane pomyślnie!");
@@ -71,6 +145,8 @@ export function SupportWidget({ inline = false }: SupportWidgetProps) {
       setContent("");
       setCategory("QUESTION");
       setPriority("MEDIUM");
+      setOrderContext(null);
+      setIncludeOrderContext(false);
 
       // Przekierowanie do widoku nowego zgłoszenia
       const newTicket = response.data;
@@ -89,7 +165,7 @@ export function SupportWidget({ inline = false }: SupportWidgetProps) {
       {inline ? (
         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
           <Button
-            onClick={() => setIsOpen(true)}
+            onClick={handleOpen}
             variant="ghost"
             className="h-10 w-10 rounded-xl bg-background/50 backdrop-blur-md border border-border/50 text-muted-foreground hover:text-foreground shadow-sm transition-all duration-300"
             size="icon"
@@ -106,7 +182,7 @@ export function SupportWidget({ inline = false }: SupportWidgetProps) {
             whileTap={{ scale: 0.95 }}
           >
             <Button
-              onClick={() => setIsOpen(true)}
+              onClick={handleOpen}
               className="h-12 w-12 rounded-full bg-gradient-to-tr from-primary to-primary/80 text-primary-foreground shadow-lg hover:shadow-primary/20 hover:shadow-xl transition-all duration-300 ring-2 ring-primary/20"
               size="icon"
             >
@@ -117,7 +193,7 @@ export function SupportWidget({ inline = false }: SupportWidgetProps) {
       )}
 
       {/* Modal formularza zgłoszenia */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); else handleOpen(); }}>
         <DialogContent className="sm:max-w-[500px] glass border-border/10">
           <DialogHeader>
             <div className="flex items-center gap-2">
@@ -188,6 +264,32 @@ export function SupportWidget({ inline = false }: SupportWidgetProps) {
               </div>
             </div>
 
+            {orderContext && (
+              <div className="p-3 bg-indigo-500/10 dark:bg-indigo-500/5 border border-indigo-500/15 rounded-xl flex items-center justify-between gap-3 transition-all duration-300">
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase block select-none">
+                    Kontekst zamówienia
+                  </span>
+                  <span className="text-xs text-foreground/90 font-semibold truncate block mt-0.5">
+                    {orderContext.buyer_login} ({orderContext.external_order_id || orderContext.id.slice(0, 8)})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <label htmlFor="include-order-context" className="text-xs text-muted-foreground cursor-pointer select-none">
+                    Dołącz dane
+                  </label>
+                  <input
+                    id="include-order-context"
+                    type="checkbox"
+                    checked={includeOrderContext}
+                    onChange={(e) => setIncludeOrderContext(e.target.checked)}
+                    disabled={isLoading}
+                    className="h-4 w-4 rounded border-border bg-background focus:ring-indigo-500 text-indigo-600 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">Opis zgłoszenia</label>
               <Textarea
@@ -212,7 +314,7 @@ export function SupportWidget({ inline = false }: SupportWidgetProps) {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setIsOpen(false)}
+                onClick={handleClose}
                 disabled={isLoading}
                 className="rounded-xl hover:bg-muted/10"
               >

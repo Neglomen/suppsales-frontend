@@ -14,6 +14,7 @@ export interface OrderEventLogRead {
 export interface OrderDetailsRead extends MarketplaceOrder {
   event_logs: OrderEventLogRead[];
   erp_sales_document_number?: string | null;
+  erp_sales_correction_number?: string | null;
   erp_sales_document_sync_status?: ErpSyncStatus | null;
   erp_sales_document_sync_notes?: string | null;
   erp_sales_document_synced_at?: string | null;

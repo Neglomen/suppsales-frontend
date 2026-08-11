@@ -47,15 +47,15 @@ export default function HomePage() {
   } as const;
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden relative selection:bg-primary selection:text-white">
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-foreground dark:text-slate-100 overflow-x-hidden relative selection:bg-primary selection:text-white transition-colors duration-500">
       {/* 3D Particle Sphere Background */}
       <div className="absolute inset-0 h-[100vh] w-full z-0 pointer-events-none opacity-80">
         <ThreeDGlobe />
       </div>
 
       {/* Decorative Radial Poświaty (Glows) */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/10 blur-[150px] rounded-full pointer-events-none z-0" />
-      <div className="absolute top-[40vh] right-1/4 w-[400px] h-[400px] bg-purple-600/10 blur-[150px] rounded-full pointer-events-none z-0" />
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/5 dark:bg-primary/10 blur-[150px] rounded-full pointer-events-none z-0" />
+      <div className="absolute top-[40vh] right-1/4 w-[400px] h-[400px] bg-purple-600/5 dark:bg-purple-600/10 blur-[150px] rounded-full pointer-events-none z-0" />
 
       {/* Header / Navbar */}
       <MarketingNavbar />
@@ -74,14 +74,14 @@ export default function HomePage() {
               {/* Left Column: Copy */}
               <div className="lg:col-span-7 space-y-8 text-left max-w-2xl">
                 <motion.div variants={itemVariants}>
-                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/10 text-primary-foreground text-xs font-semibold tracking-wide uppercase">
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/10 text-primary dark:text-primary-foreground text-xs font-semibold tracking-wide uppercase shadow-sm shadow-primary/5">
                     <Sparkles className="h-3.5 w-3.5 text-primary" /> Nowa Generacja Automatyzacji
                   </span>
                 </motion.div>
 
                 <motion.h1
                   variants={itemVariants}
-                  className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.1] text-slate-100"
+                  className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.1] text-foreground"
                 >
                   Zautomatyzuj Swój <br />
                   <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-purple-400 to-pink-500">
@@ -92,7 +92,7 @@ export default function HomePage() {
 
                 <motion.p
                   variants={itemVariants}
-                  className="text-slate-400 text-lg md:text-xl font-normal leading-relaxed"
+                  className="text-muted-foreground text-lg md:text-xl font-normal leading-relaxed"
                 >
                   Nasza platforma SaaS integruje wszystkie Twoje kanały sprzedaży,
                   automatyzuje wysyłki oraz rozliczenia i pozwala Ci skupić się na tym, co
@@ -101,15 +101,15 @@ export default function HomePage() {
 
                 <motion.div variants={itemVariants} className="flex flex-wrap gap-4">
                   {_hasHydrated && isAuthenticated ? (
-                    <Button
-                      asChild
-                      size="lg"
-                      className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/95 hover:to-purple-600/95 text-white font-medium rounded-xl px-8 h-12 shadow-lg shadow-primary/25 hover:shadow-primary/35 transition-all hover:scale-[1.01] active:scale-[0.99] border-none"
-                    >
-                      <Link href="/dashboard" className="flex items-center gap-2">
-                        Przejdź do panelu <ArrowRight className="h-5 w-5" />
-                      </Link>
-                    </Button>
+                     <Button
+                       asChild
+                       size="lg"
+                       className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/95 hover:to-purple-600/95 text-white font-medium rounded-xl px-8 h-12 shadow-lg shadow-primary/25 hover:shadow-primary/35 transition-all hover:scale-[1.01] active:scale-[0.99] border-none"
+                     >
+                       <Link href="/dashboard" className="flex items-center gap-2">
+                         Przejdź do panelu <ArrowRight className="h-5 w-5" />
+                       </Link>
+                     </Button>
                   ) : (
                     <>
                       <Button
@@ -125,7 +125,7 @@ export default function HomePage() {
                         asChild
                         size="lg"
                         variant="outline"
-                        className="border-white/10 hover:border-white/20 text-slate-300 hover:text-slate-100 bg-slate-900/30 hover:bg-slate-900/50 backdrop-blur-sm rounded-xl px-8 h-12 transition-all"
+                        className="border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 text-foreground/80 hover:text-foreground bg-white/40 dark:bg-slate-900/30 hover:bg-slate-100/60 dark:hover:bg-slate-900/50 backdrop-blur-sm rounded-xl px-8 h-12 transition-all shadow-sm"
                       >
                         <a href="#features">Zobacz funkcje</a>
                       </Button>
@@ -143,17 +143,17 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-primary/10 blur-[80px] rounded-full scale-90 pointer-events-none" />
 
                 {/* Dashboard glass mockup */}
-                <div className="w-full max-w-[420px] rounded-2xl border border-white/10 bg-slate-900/40 backdrop-blur-xl p-5 shadow-2xl relative group overflow-hidden">
+                <div className="w-full max-w-[420px] rounded-2xl border border-slate-200/60 dark:border-white/10 bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl p-5 shadow-2xl relative group overflow-hidden">
                   <div className="absolute -top-12 -right-12 w-24 h-24 bg-primary/20 blur-2xl rounded-full" />
                   
                   {/* Top Bar with window control circles */}
-                  <div className="flex items-center justify-between pb-4 border-b border-white/5 mb-5">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/5 mb-5">
                     <div className="flex gap-1.5">
                       <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
                       <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
                     </div>
-                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">
+                    <span className="text-[10px] text-muted-foreground/60 uppercase tracking-widest font-semibold">
                       Live Panel
                     </span>
                   </div>
@@ -161,16 +161,16 @@ export default function HomePage() {
                   {/* Mockup content: stats and graph */}
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-slate-950/40 border border-white/5 rounded-xl">
-                        <span className="text-[10px] text-slate-500 font-semibold block">Dzisiejsza sprzedaż</span>
-                        <span className="text-lg font-bold text-slate-100 block mt-0.5">zł 12 458.00</span>
-                        <span className="text-[9px] text-emerald-400 font-semibold mt-1 inline-flex items-center gap-0.5">
+                      <div className="p-3 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-150 dark:border-white/5 rounded-xl shadow-sm">
+                        <span className="text-[10px] text-muted-foreground font-semibold block">Dzisiejsza sprzedaż</span>
+                        <span className="text-lg font-bold text-foreground block mt-0.5">zł 12 458.00</span>
+                        <span className="text-[9px] text-emerald-500 font-semibold mt-1 inline-flex items-center gap-0.5">
                           +18.4% dzisiaj
                         </span>
                       </div>
-                      <div className="p-3 bg-slate-950/40 border border-white/5 rounded-xl">
-                        <span className="text-[10px] text-slate-500 font-semibold block">Zlecone przesyłki</span>
-                        <span className="text-lg font-bold text-slate-100 block mt-0.5">142 paczek</span>
+                      <div className="p-3 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-150 dark:border-white/5 rounded-xl shadow-sm">
+                        <span className="text-[10px] text-muted-foreground font-semibold block">Zlecone przesyłki</span>
+                        <span className="text-lg font-bold text-foreground block mt-0.5">142 paczek</span>
                         <span className="text-[9px] text-primary font-semibold mt-1 inline-flex items-center gap-0.5">
                           99.2% skuteczności
                         </span>
@@ -178,33 +178,33 @@ export default function HomePage() {
                     </div>
 
                     {/* Stylized Integration Badges */}
-                    <div className="p-3 bg-slate-950/40 border border-white/5 rounded-xl space-y-2.5">
+                    <div className="p-3 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-150 dark:border-white/5 rounded-xl space-y-2.5">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400 font-medium">Status Integracji</span>
-                        <span className="text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
+                        <span className="text-muted-foreground font-medium">Status Integracji</span>
+                        <span className="text-emerald-500 dark:text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Aktywne
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg text-slate-300 font-medium flex items-center gap-1.5">
+                        <span className="text-[10px] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2.5 py-1 rounded-lg text-muted-foreground dark:text-slate-300 font-medium flex items-center gap-1.5 shadow-xs">
                           <Plug className="h-3 w-3 text-amber-500" /> Allegro
                         </span>
-                        <span className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg text-slate-300 font-medium flex items-center gap-1.5">
+                        <span className="text-[10px] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2.5 py-1 rounded-lg text-muted-foreground dark:text-slate-300 font-medium flex items-center gap-1.5 shadow-xs">
                           <Plug className="h-3 w-3 text-indigo-500" /> BaseLinker
                         </span>
-                        <span className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg text-slate-300 font-medium flex items-center gap-1.5">
+                        <span className="text-[10px] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2.5 py-1 rounded-lg text-muted-foreground dark:text-slate-300 font-medium flex items-center gap-1.5 shadow-xs">
                           <Plug className="h-3 w-3 text-rose-500" /> Apaczka
                         </span>
                       </div>
                     </div>
 
                     {/* Progress bar visualizer */}
-                    <div className="p-3 bg-slate-950/40 border border-white/5 rounded-xl space-y-2">
-                      <div className="flex justify-between text-[10px] text-slate-400">
+                    <div className="p-3 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-150 dark:border-white/5 rounded-xl space-y-2">
+                      <div className="flex justify-between text-[10px] text-muted-foreground">
                         <span>Automatyzacja procesów</span>
-                        <span className="text-slate-100 font-bold">85%</span>
+                        <span className="text-foreground font-bold">85%</span>
                       </div>
-                      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-100 dark:bg-white/5 h-2 rounded-full overflow-hidden">
                         <div className="bg-gradient-to-r from-primary to-purple-600 h-full w-[85%] rounded-full" />
                       </div>
                     </div>
@@ -216,7 +216,7 @@ export default function HomePage() {
         </section>
 
         {/* Features Grid Section */}
-        <section id="features" className="w-full py-20 border-t border-white/5 bg-slate-950 relative">
+        <section id="features" className="w-full py-20 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950 relative transition-colors duration-500">
           {/* Subtle glow effect behind features */}
           <div className="absolute bottom-0 right-1/4 w-[350px] h-[350px] bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
 
@@ -225,10 +225,10 @@ export default function HomePage() {
               <span className="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-3 py-1 rounded-full">
                 Zalety platformy
               </span>
-              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-100">
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
                 Wszystko czego potrzebujesz w jednym miejscu
               </h2>
-              <p className="text-slate-400 text-base md:text-lg leading-relaxed">
+              <p className="text-muted-foreground text-base md:text-lg leading-relaxed">
                 Poznaj potężne narzędzia automatyzacji, które pomogą Ci przeskalować sprzedaż,
                 zmniejszyć błędy operacyjne i zaoszczędzić godziny codziennej pracy.
               </p>
@@ -236,13 +236,13 @@ export default function HomePage() {
 
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {/* Feature 1 */}
-              <div className="glass border-white/5 bg-slate-900/50 backdrop-blur-xl p-6 rounded-2xl relative overflow-hidden group hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between">
+              <div className="glass border-slate-200/60 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl p-6 rounded-2xl relative overflow-hidden group hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between shadow-md hover:shadow-lg">
                 <div className="space-y-4">
                   <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
                     <Zap className="h-5 w-5" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-100">Pełna Automatyzacja</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed">
+                  <h3 className="text-lg font-bold text-foreground">Pełna Automatyzacja</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
                     Automatyczne pobieranie zamówień, aktualizacja stanów magazynowych oraz
                     wystawianie przesyłek bez konieczności klikania.
                   </p>
@@ -251,13 +251,13 @@ export default function HomePage() {
               </div>
 
               {/* Feature 2 */}
-              <div className="glass border-white/5 bg-slate-900/50 backdrop-blur-xl p-6 rounded-2xl relative overflow-hidden group hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between">
+              <div className="glass border-slate-200/60 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl p-6 rounded-2xl relative overflow-hidden group hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between shadow-md hover:shadow-lg">
                 <div className="space-y-4">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform duration-300">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform duration-300">
                     <TrendingUp className="h-5 w-5" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-100">Szybsza Skalowalność</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed">
+                  <h3 className="text-lg font-bold text-foreground">Szybsza Skalowalność</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
                     Rozwijaj swoją ofertę i wolumen sprzedaży na wielu platformach jednocześnie,
                     zarządzając wszystkim z jednego widoku.
                   </p>
@@ -266,13 +266,13 @@ export default function HomePage() {
               </div>
 
               {/* Feature 3 */}
-              <div className="glass border-white/5 bg-slate-900/50 backdrop-blur-xl p-6 rounded-2xl relative overflow-hidden group hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between">
+              <div className="glass border-slate-200/60 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl p-6 rounded-2xl relative overflow-hidden group hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between shadow-md hover:shadow-lg">
                 <div className="space-y-4">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform duration-300">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform duration-300">
                     <Layers className="h-5 w-5" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-100">Integracje Multichannel</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed">
+                  <h3 className="text-lg font-bold text-foreground">Integracje Multichannel</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
                     Jedno kliknięcie pozwala podpiąć konta Allegro, Empik, BaseLinker, KSeF
                     oraz czołowe firmy kurierskie.
                   </p>
@@ -281,13 +281,13 @@ export default function HomePage() {
               </div>
 
               {/* Feature 4 */}
-              <div className="glass border-white/5 bg-slate-900/50 backdrop-blur-xl p-6 rounded-2xl relative overflow-hidden group hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between">
+              <div className="glass border-slate-200/60 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl p-6 rounded-2xl relative overflow-hidden group hover:border-primary/30 transition-all duration-300 hover:scale-[1.02] flex flex-col justify-between shadow-md hover:shadow-lg">
                 <div className="space-y-4">
-                  <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 group-hover:scale-110 transition-transform duration-300">
+                  <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-600 dark:text-pink-400 group-hover:scale-110 transition-transform duration-300">
                     <ShieldCheck className="h-5 w-5" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-100">Stabilność i Bezpieczeństwo</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed">
+                  <h3 className="text-lg font-bold text-foreground">Stabilność i Bezpieczeństwo</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
                     Zaawansowane mechanizmy synchronizacji i ciągły monitoring zapobiegają
                     opóźnieniom i błędom w wysyłkach do Twoich klientów.
                   </p>

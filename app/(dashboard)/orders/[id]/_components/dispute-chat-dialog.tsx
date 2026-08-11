@@ -79,8 +79,8 @@ export function DisputeChatDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl h-[600px] flex flex-col bg-[#0a0c16]/95 border border-border/40 text-white rounded-2xl backdrop-blur-lg">
-        <DialogHeader className="border-b border-white/10 pb-4">
+      <DialogContent className="max-w-2xl h-[600px] flex flex-col bg-white dark:bg-[#0a0c16]/95 border border-slate-200 dark:border-border/40 text-foreground dark:text-white rounded-2xl backdrop-blur-lg">
+        <DialogHeader className="border-b border-slate-200 dark:border-white/10 pb-4">
           <div className="flex items-center gap-2">
             <AlertTriangle className={cn(
               "h-5 w-5",
@@ -91,12 +91,12 @@ export function DisputeChatDialog({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground/80 mt-1">
-            Typ: <span className="font-semibold text-white/80">{dispute.type}</span> | 
+            Typ: <span className="font-semibold text-foreground/80 dark:text-white/80">{dispute.type}</span> | 
             Status: <span className={cn(
               "font-bold uppercase",
-              dispute.status === "ONGOING" ? "text-red-400" : "text-emerald-400"
+              dispute.status === "ONGOING" ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
             )}>{dispute.status === "ONGOING" ? "W toku" : "Rozwiązana/Zamknięta"}</span> | 
-            Kupujący: <span className="font-semibold text-white/80 font-mono">{dispute.buyer_login}</span>
+            Kupujący: <span className="font-semibold text-foreground/80 dark:text-white/80 font-mono">{dispute.buyer_login}</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -118,10 +118,10 @@ export function DisputeChatDialog({
                     className={cn(
                       "flex flex-col max-w-[80%] rounded-xl p-3.5 text-xs relative border transition-all duration-300",
                       isSeller 
-                        ? "ml-auto bg-primary/20 border-primary/30 text-white rounded-tr-none shadow-md shadow-primary/5" 
+                        ? "ml-auto bg-primary/10 dark:bg-primary/20 border-primary/20 dark:border-primary/30 text-foreground dark:text-white rounded-tr-none shadow-md shadow-primary/5" 
                         : isBuyer
-                          ? "bg-slate-900/40 border-border/30 text-white/90 rounded-tl-none"
-                          : "mx-auto bg-amber-500/10 border-amber-500/20 text-amber-300 rounded-none w-full"
+                          ? "bg-slate-100 dark:bg-slate-900/40 border-slate-200 dark:border-border/30 text-foreground dark:text-white/90 rounded-tl-none"
+                          : "mx-auto bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-300 rounded-none w-full"
                     )}
                   >
                     <div className="flex items-center justify-between gap-4 mb-1.5 opacity-60 font-semibold text-[9px] uppercase tracking-wider">
@@ -136,14 +136,14 @@ export function DisputeChatDialog({
         </div>
 
         {/* Reply form */}
-        <form onSubmit={handleSendMessage} className="border-t border-white/10 p-4 bg-slate-950/20 flex gap-2 items-end">
+        <form onSubmit={handleSendMessage} className="border-t border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-slate-950/20 flex gap-2 items-end">
           <Textarea
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             placeholder={dispute.status === "ONGOING" ? "Napisz oficjalną odpowiedź w sporze..." : "Ta dyskusja została zamknięta."}
             disabled={isSending || dispute.status !== "ONGOING"}
             rows={2}
-            className="flex-1 bg-slate-950/60 border-border/30 focus:border-primary/50 text-white rounded-xl resize-none text-xs focus:ring-0 focus:ring-offset-0 placeholder:text-muted-foreground/50"
+            className="flex-1 bg-white dark:bg-slate-950/60 border-slate-200 dark:border-border/30 focus:border-primary/50 text-foreground dark:text-white rounded-xl resize-none text-xs focus:ring-0 focus:ring-offset-0 placeholder:text-muted-foreground/50"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

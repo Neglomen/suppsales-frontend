@@ -36,6 +36,7 @@ import { SuusManageTab } from "./providers/SuusManageTab";
 import { ABManageTab } from "./providers/ABManageTab";
 import { ApaczkaManageTab } from "./providers/ApaczkaManageTab";
 import { EmpikManageTab } from "./providers/EmpikManageTab";
+import { WooCommerceManageTab } from "./providers/WooCommerceManageTab";
 import { GeisManageTab } from "./providers/GeisManageTab";
 import { GeodisManageTab } from "./providers/GeodisManageTab";
 import { InPostBuyManageTab } from "./providers/InPostBuyManageTab";
@@ -202,6 +203,9 @@ export function ManageIntegrationDialog({
         geodis_warehouse_id: integration.api_config?.warehouse_id || "",
         geodis_is_test: integration.api_config?.is_test !== false,
         empik_token: integration.api_config?.api_token || "",
+        woocommerce_shop_url: integration.api_config?.shop_url || "",
+        woocommerce_consumer_key: integration.api_config?.consumer_key || "",
+        woocommerce_consumer_secret: integration.api_config?.consumer_secret || "",
         inpost_buy_client_id: integration.api_config?.client_id || "",
         inpost_buy_client_secret: integration.api_config?.client_secret || "",
         inpost_buy_organization_id: integration.api_config?.organization_id || "",
@@ -252,6 +256,9 @@ export function ManageIntegrationDialog({
       geodis_warehouse_id,
       geodis_is_test,
       empik_token,
+      woocommerce_shop_url,
+      woocommerce_consumer_key,
+      woocommerce_consumer_secret,
       inpost_buy_client_id,
       inpost_buy_client_secret,
       inpost_buy_organization_id,
@@ -271,7 +278,7 @@ export function ManageIntegrationDialog({
 
     const payload: Record<string, any> = { ...baseValues, api_config: {} };
 
-    if (["ALLEGRO", "BASELINKER", "EMPIK", "INPOST_BUY"].includes(integration.provider_type)) {
+    if (["ALLEGRO", "BASELINKER", "EMPIK", "INPOST_BUY", "WOOCOMMERCE"].includes(integration.provider_type)) {
       payload.sync_config = sync_config || {};
     }
 
@@ -281,6 +288,11 @@ export function ManageIntegrationDialog({
         break;
       case "EMPIK":
         if (empik_token) payload.api_config.api_token = empik_token;
+        break;
+      case "WOOCOMMERCE":
+        if (woocommerce_shop_url) payload.api_config.shop_url = woocommerce_shop_url;
+        if (woocommerce_consumer_key) payload.api_config.consumer_key = woocommerce_consumer_key;
+        if (woocommerce_consumer_secret) payload.api_config.consumer_secret = woocommerce_consumer_secret;
         break;
       case "INPOST_BUY":
         if (inpost_buy_client_id) payload.api_config.client_id = inpost_buy_client_id;
@@ -377,6 +389,8 @@ export function ManageIntegrationDialog({
         return <BaselinkerManageTab integrationId={integration.id} />;
       case "EMPIK":
         return <EmpikManageTab integrationId={integration.id} />;
+      case "WOOCOMMERCE":
+        return <WooCommerceManageTab integrationId={integration.id} />;
       case "INPOST_BUY":
         return <InPostBuyManageTab integrationId={integration.id} />;
       case "SUUS":
@@ -417,20 +431,20 @@ export function ManageIntegrationDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-h-[90vh] max-w-4xl flex flex-col bg-neutral-900 border border-white/10 text-white rounded-2xl shadow-2xl">
-        <DialogHeader className="pb-4 border-b border-white/10 flex flex-row items-center justify-between gap-4">
+      <DialogContent className="max-h-[90vh] max-w-4xl flex flex-col bg-background border border-border text-foreground rounded-2xl shadow-2xl">
+        <DialogHeader className="pb-4 border-b border-border flex flex-row items-center justify-between gap-4">
           <div className="space-y-1">
-            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-white">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
               Zarządzaj integracją: <span className="text-primary">{integration.name}</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-white/50">
+            <DialogDescription className="text-xs text-muted-foreground">
               Zarządzaj poświadczeniami połączenia, harmonogramem synchronizacji oraz śledź logi zdarzeń.
             </DialogDescription>
           </div>
           
           <FormProvider {...formMethods}>
-            <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 shrink-0">
-              <span className="text-xs text-white/60 font-semibold">Status:</span>
+            <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-xl border border-border shrink-0">
+              <span className="text-xs text-muted-foreground font-semibold">Status:</span>
               <FormField
                 control={formMethods.control}
                 name="is_active"
@@ -451,22 +465,22 @@ export function ManageIntegrationDialog({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 pt-4">
-          <TabsList className="grid grid-cols-3 bg-white/5 border border-white/10 rounded-xl p-1 mb-6 shrink-0">
+          <TabsList className="grid grid-cols-3 bg-muted border border-border rounded-xl p-1 mb-6 shrink-0">
             <TabsTrigger 
               value="config" 
-              className="rounded-lg py-2.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-black transition-all"
+              className="rounded-lg py-2.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground transition-all"
             >
               Konfiguracja
             </TabsTrigger>
             <TabsTrigger 
               value="logs" 
-              className="rounded-lg py-2.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-black transition-all"
+              className="rounded-lg py-2.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground transition-all"
             >
               Logi zdarzeń
             </TabsTrigger>
             <TabsTrigger 
               value="actions" 
-              className="rounded-lg py-2.5 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-black transition-all"
+              className="rounded-lg py-2.5 text-xs font-semibold data-[state=active]:bg-background data-[state=active]:text-foreground transition-all"
             >
               Akcje i konserwacja
             </TabsTrigger>
@@ -487,7 +501,7 @@ export function ManageIntegrationDialog({
 
             <TabsContent value="logs" className="mt-0 focus-visible:outline-none focus-visible:ring-0 h-full flex flex-col gap-4">
               <div className="flex justify-between items-center shrink-0">
-                <div className="text-xs text-white/50">
+                <div className="text-xs text-muted-foreground">
                   Ostatnie 50 logów operacji synchronizacji zamówień i ERP.
                 </div>
                 <Button
@@ -495,7 +509,7 @@ export function ManageIntegrationDialog({
                   variant="outline"
                   onClick={loadLogs}
                   disabled={loadingLogs}
-                  className="h-8 bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-lg"
+                  className="h-8 rounded-lg"
                 >
                   {loadingLogs ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
@@ -507,13 +521,13 @@ export function ManageIntegrationDialog({
               </div>
 
               {loadingLogs ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-20 text-white/50">
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-muted-foreground">
                   <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
                   Ładowanie logów zdarzeń...
                 </div>
               ) : logs.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-16 text-white/40 border border-dashed border-white/10 rounded-xl bg-white/5">
-                  <History className="h-8 w-8 text-white/20 mb-2" />
+                <div className="flex-1 flex flex-col items-center justify-center py-16 text-muted-foreground/80 border border-dashed border-border rounded-xl bg-muted/20">
+                  <History className="h-8 w-8 text-muted-foreground/40 mb-2" />
                   Brak zarejestrowanych logów dla tej integracji.
                 </div>
               ) : (
@@ -531,7 +545,7 @@ export function ManageIntegrationDialog({
                             ? "bg-red-500/5 border-red-500/20 hover:border-red-500/35" 
                             : isSuccess 
                               ? "bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/35" 
-                              : "bg-white/5 border-white/10 hover:border-white/20"
+                              : "bg-muted/30 border-border hover:border-border/80"
                         )}
                       >
                         <div className="flex items-start justify-between gap-4">
@@ -543,15 +557,15 @@ export function ManageIntegrationDialog({
                               >
                                 {log.type}
                               </Badge>
-                              <span className="text-[10px] text-white/40 font-mono">
+                              <span className="text-[10px] text-muted-foreground/60 font-mono">
                                 {format(new Date(log.occurred_at), "yyyy-MM-dd HH:mm:ss")}
                               </span>
                             </div>
-                            <p className="text-sm font-semibold text-white mt-1.5 leading-relaxed">
+                            <p className="text-sm font-semibold text-foreground mt-1.5 leading-relaxed">
                               {log.summary}
                             </p>
                             {log.external_order_id && (
-                              <div className="text-xs text-white/50 flex items-center gap-1 mt-1 font-mono">
+                              <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1 font-mono">
                                 Zamówienie:{" "}
                                 <Link 
                                   href={`/orders/${log.order_id}`} 
@@ -563,17 +577,17 @@ export function ManageIntegrationDialog({
                               </div>
                             )}
                           </div>
-                          <span className="text-[10px] text-white/30 uppercase font-bold font-mono tracking-wider shrink-0 bg-white/5 px-2 py-1 rounded-md border border-white/5">
+                          <span className="text-[10px] text-muted-foreground/50 uppercase font-bold font-mono tracking-wider shrink-0 bg-muted px-2 py-1 rounded-md border border-border">
                             {log.source}
                           </span>
                         </div>
                         {log.details && Object.keys(log.details).length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-white/5">
+                          <div className="mt-3 pt-3 border-t border-border">
                             <details className="group cursor-pointer">
-                              <summary className="text-[10px] text-white/50 group-hover:text-white transition-colors select-none outline-none">
+                              <summary className="text-[10px] text-muted-foreground group-hover:text-foreground transition-colors select-none outline-none">
                                 Zobacz szczegóły techniczne
                               </summary>
-                              <pre className="mt-2 text-[10px] font-mono text-white/70 bg-black/40 p-3 rounded-lg overflow-x-auto border border-white/5 leading-relaxed">
+                              <pre className="mt-2 text-[10px] font-mono text-foreground/90 bg-muted/60 p-3 rounded-lg overflow-x-auto border border-border leading-relaxed">
                                 {JSON.stringify(log.details, null, 2)}
                               </pre>
                             </details>
@@ -587,10 +601,10 @@ export function ManageIntegrationDialog({
             </TabsContent>
 
             <TabsContent value="actions" className="mt-0 focus-visible:outline-none focus-visible:ring-0 space-y-6">
-              <section className="space-y-4 bg-white/5 p-5 rounded-xl border border-white/10">
+              <section className="space-y-4 bg-muted/40 p-5 rounded-xl border border-border">
                 <div>
-                  <h3 className="font-semibold text-white">Akcje i narzędzia</h3>
-                  <p className="text-xs text-white/50 mt-1">
+                  <h3 className="font-semibold text-foreground">Akcje i narzędzia</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
                     Ręczne sterowanie zadaniami synchronizacji oraz autoryzacją połączenia.
                   </p>
                 </div>
@@ -599,7 +613,7 @@ export function ManageIntegrationDialog({
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full justify-start h-11 bg-white/5 border-white/10 hover:bg-white/10 text-xs font-semibold rounded-xl text-white"
+                      className="w-full justify-start h-11 text-xs font-semibold rounded-xl"
                       onClick={() => onReconnect(integration.id)}
                     >
                       <LinkIcon className="mr-2 h-4 w-4 text-primary" /> Odśwież uprawnienia Allegro
@@ -610,32 +624,32 @@ export function ManageIntegrationDialog({
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full justify-start h-11 bg-white/5 border-white/10 hover:bg-white/10 text-xs font-semibold rounded-xl text-white"
+                        className="w-full justify-start h-11 text-xs font-semibold rounded-xl"
                         onClick={() => onManualSync(integration.id)}
                       >
                         <RefreshCw className="mr-2 h-4 w-4 text-primary" /> Wymuś synchronizację zamówień
                       </Button>
+                      {["ALLEGRO", "EMPIK"].includes(integration.provider_type) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-start h-11 text-xs font-semibold rounded-xl"
+                          onClick={() => onManualMessageSync(integration.id)}
+                          disabled={!integration.sync_messages}
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4 text-primary" /> Wymuś synchronizację wiadomości
+                        </Button>
+                      )}
                       {integration.provider_type === "ALLEGRO" && (
-                        <>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full justify-start h-11 bg-white/5 border-white/10 hover:bg-white/10 text-xs font-semibold rounded-xl text-white"
-                            onClick={() => onManualMessageSync(integration.id)}
-                            disabled={!integration.sync_messages}
-                          >
-                            <RefreshCw className="mr-2 h-4 w-4 text-primary" /> Wymuś synchronizację wiadomości
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full justify-start h-11 bg-white/5 border-white/10 hover:bg-white/10 text-xs font-semibold rounded-xl text-white"
-                            onClick={() => onManualReturnSync(integration.id)}
-                            disabled={!integration.sync_returns}
-                          >
-                            <RefreshCw className="mr-2 h-4 w-4 text-primary" /> Wymuś synchronizację zwrotów
-                          </Button>
-                        </>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-start h-11 text-xs font-semibold rounded-xl"
+                          onClick={() => onManualReturnSync(integration.id)}
+                          disabled={!integration.sync_returns}
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4 text-primary" /> Wymuś synchronizację zwrotów
+                        </Button>
                       )}
                     </>
                   )}
@@ -645,7 +659,7 @@ export function ManageIntegrationDialog({
               <section className="space-y-4 bg-red-500/5 p-5 rounded-xl border border-red-500/20">
                 <div>
                   <h3 className="font-semibold text-red-400">Strefa niebezpieczna</h3>
-                  <p className="text-xs text-white/50 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Operacje niszczące, których nie można cofnąć.
                   </p>
                 </div>
@@ -659,21 +673,21 @@ export function ManageIntegrationDialog({
                       <Trash2 className="mr-2 h-4 w-4" /> Usuń integrację
                     </Button>
                   </AlertDialogTrigger>
-                  <AlertDialogContent className="bg-neutral-900 border border-white/10 rounded-2xl max-w-md">
+                  <AlertDialogContent className="bg-background border border-border rounded-2xl max-w-md">
                     <AlertDialogHeader>
-                      <AlertDialogTitle className="text-white text-lg font-bold">
+                      <AlertDialogTitle className="text-foreground text-lg font-bold">
                         Czy na pewno chcesz usunąć tę integrację?
                       </AlertDialogTitle>
-                      <AlertDialogDescription className="text-white/60 text-sm">
+                      <AlertDialogDescription className="text-muted-foreground text-sm">
                         Tej operacji nie można cofnąć. Spowoduje to trwałe usunięcie integracji{" "}
-                        <span className="font-bold text-white">
+                        <span className="font-bold text-foreground">
                           {integration.name}
                         </span>{" "}
                         wraz ze wszystkimi poświadczeniami.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl">
+                      <AlertDialogCancel className="rounded-xl">
                         Anuluj
                       </AlertDialogCancel>
                       <AlertDialogAction
@@ -690,11 +704,11 @@ export function ManageIntegrationDialog({
           </div>
         </Tabs>
 
-        <DialogFooter className="flex-shrink-0 pt-4 border-t border-white/10">
+        <DialogFooter className="flex-shrink-0 pt-4 border-t border-border">
           <Button
             type="button"
             variant="ghost"
-            className="text-white hover:bg-white/5 rounded-xl"
+            className="rounded-xl"
             onClick={() => setIsOpen(false)}
           >
             Anuluj

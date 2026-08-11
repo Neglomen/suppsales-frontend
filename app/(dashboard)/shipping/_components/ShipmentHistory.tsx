@@ -105,9 +105,14 @@ export function ShipmentHistory({
             className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border rounded-md"
           >
             <div className="flex-1 mb-2 sm:mb-0">
-              <div className="flex items-center text-sm font-semibold">
-                <Package className="h-4 w-4 mr-2 text-muted-foreground" />
+              <div className="flex items-center text-sm font-semibold gap-2">
+                <Package className="h-4 w-4 text-muted-foreground" />
                 <span>{shipment.tracking_number || "Oczekuje na numer"}</span>
+                {(shipment.is_return || (shipment.package_details as any)?.is_return) && (
+                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                    ZWROT
+                  </Badge>
+                )}
               </div>
               <div className="text-xs text-muted-foreground pl-6">
                 {new Date(shipment.created_at).toLocaleString()}

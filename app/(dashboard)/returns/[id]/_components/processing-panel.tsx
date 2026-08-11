@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import api from "@/lib/api";
+import api, { getMediaUrl } from "@/lib/api";
 import toast from "react-hot-toast";
 import {
   Loader2,
@@ -10,15 +10,17 @@ import {
   ArrowRightLeft,
   Truck,
   FileText,
-  Copy,
   MessageSquare,
   ExternalLink,
   Info,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/components/ui/modal";
+import { Input } from "@/components/ui/input";
 
 interface ProcessingPanelProps {
   returnData: any;
@@ -29,13 +31,25 @@ interface ProcessingPanelProps {
 export function ProcessingPanel({ returnData, orderData, onRefresh }: ProcessingPanelProps) {
   const [activeAction, setActiveAction] = useState<string | null>(null);
 
+  // Stany potwierdzenia akcji
+  const [confirmAction, setConfirmAction] = useState<{
+    type: string;
+    title: string;
+    description: string;
+    requiresAmount?: boolean;
+    defaultAmount?: string;
+  } | null>(null);
+
+  const [refundAmountVal, setRefundAmountVal] = useState<string>("");
+
   // Trigger backend BOK action
-  const handleTriggerAction = async (actionType: string) => {
+  const handleTriggerAction = async (actionType: string, additionalPayload: any = {}) => {
     setActiveAction(actionType);
     try {
       const response = await api.post(`/returns/${returnData.id}/process-action`, {
         action_type: actionType,
-        reason: returnData.warehouse_notes || ""
+        reason: returnData.warehouse_notes || "",
+        ...additionalPayload
       });
       toast.success(response.data.message || "Akcja wykonana pomyślnie!");
       onRefresh();
@@ -46,37 +60,48 @@ export function ProcessingPanel({ returnData, orderData, onRefresh }: Processing
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Skopiowano szablon do schowka!");
+  const handleConfirm = async () => {
+    if (!confirmAction) return;
+    const type = confirmAction.type;
+    setConfirmAction(null);
+
+    if (type === "ALLEGRO_REFUND_FULL") {
+      await handleTriggerAction("ALLEGRO_REFUND", {
+        refund_type: "FULL",
+        amount: parseFloat(orderData?.total_to_pay || 0.0)
+      });
+    } else if (type === "ALLEGRO_REFUND_PARTIAL") {
+      const amt = parseFloat(refundAmountVal);
+      if (isNaN(amt) || amt <= 0) {
+        toast.error("Podaj prawidłową kwotę zwrotu.");
+        return;
+      }
+      await handleTriggerAction("ALLEGRO_REFUND", {
+        refund_type: "PARTIAL",
+        amount: amt
+      });
+      setRefundAmountVal("");
+    } else if (type === "WAREHOUSE_RECEIPT") {
+      setActiveAction("WAREHOUSE_RECEIPT");
+      try {
+        await api.post(`/returns/${returnData.id}/receipt`, {
+          warehouse_status: "RECEIVED",
+          warehouse_notes: "Zwrot przyjęty w systemie przez BOK (Biuro Obsługi Klienta)",
+          photos: returnData.photos || [],
+          waybill_number: returnData.waybill_number || null,
+          items_received: []
+        });
+        toast.success("Towar został pomyślnie przyjęty na magazyn!");
+        onRefresh();
+      } catch (err: any) {
+        toast.error(err?.response?.data?.detail || "Nie udało się przyjąć towaru.");
+      } finally {
+        setActiveAction(null);
+      }
+    } else {
+      await handleTriggerAction(type);
+    }
   };
-
-  // Predefined templates
-  const refundAmount = returnData.details_payload?.refund?.amount?.amount || orderData?.total_to_pay || "—";
-  const notes = returnData.warehouse_notes || "brak szczegółów";
-  const waybill = returnData.reshipment_waybill || "—";
-
-  const templateFullRefund = `Dzień dobry,
-Informujemy, że otrzymaliśmy paczkę zwrotną. Zwrot środków na kwotę ${refundAmount} PLN został pomyślnie zlecony za pośrednictwem Allegro Pay/PayU i powinien pojawić się na Twoim koncie w ciągu 2-3 dni roboczych.
-
-Pozdrawiamy,
-Dział Obsługi Klienta`;
-
-  const templatePartialRefund = `Dzień dobry,
-Informujemy, że otrzymaliśmy paczkę zwrotną. Po weryfikacji stanu faktycznego towaru na magazynie stwierzono ślady użytkowania lub braki w akcesoriach (Uwagi magazyniera: ${notes}). 
-
-W związku z powyższym, zwrot środków został pomniejszony o koszt przywrócenia towaru do stanu pierwotnego. Zlecenie częściowego zwrotu zostało przekazane do realizacji.
-
-Pozdrawiamy,
-Dział Obsługi Klienta`;
-
-  const templateRejected = `Dzień dobry,
-Po weryfikacji technicznej odesłanego produktu zmuszeni jesteśmy odrzucić zgłoszenie reklamacyjne / zwrot z powodu uszkodzeń powstałych z winy użytkownika (Uwagi magazyniera: ${notes}).
-
-Paczka zostaje odesłana na Twój adres. Numer śledzenia przesyłki zwrotnej to: ${waybill}.
-
-Pozdrawiamy,
-Dział Obsługi Klienta`;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -138,12 +163,12 @@ Dział Obsługi Klienta`;
                   {returnData.photos.map((url: string, idx: number) => (
                     <a
                       key={idx}
-                      href={url}
+                      href={getMediaUrl(url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/30 transition-all block bg-slate-100 dark:bg-black/40"
                     >
-                      <img src={url} alt="Magazyn" className="w-full h-full object-cover" />
+                      <img src={getMediaUrl(url)} alt="Magazyn" className="w-full h-full object-cover" />
                     </a>
                   ))}
                 </div>
@@ -153,7 +178,7 @@ Dział Obsługi Klienta`;
         </Card>
       </div>
 
-      {/* Right Column: Processing Actions and templates (split-span-2) */}
+      {/* Right Column: Processing Actions */}
       <div className="lg:col-span-2 space-y-6">
         
         {/* Processing Operations Card */}
@@ -187,15 +212,33 @@ Dział Obsługi Klienta`;
                       )}
                     </div>
                     {returnData.refund_status !== "SUCCESS" && (
-                      <Button
-                        size="sm"
-                        disabled={activeAction !== null}
-                        onClick={() => handleTriggerAction("ALLEGRO_REFUND")}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-                      >
-                        {activeAction === "ALLEGRO_REFUND" && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
-                        Zleć zwrot Allegro
-                      </Button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          size="sm"
+                          disabled={activeAction !== null}
+                          onClick={() => setConfirmAction({
+                            type: "ALLEGRO_REFUND_FULL",
+                            title: "Pełny Zwrot Środków",
+                            description: `Czy na pewno chcesz zlecić PEŁNY zwrot środków na kwotę ${orderData?.total_to_pay || 0.0} PLN dla klienta ${returnData.buyer_login}?`
+                          })}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] uppercase px-1 rounded-lg"
+                        >
+                          Pełny zwrot
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={activeAction !== null}
+                          onClick={() => setConfirmAction({
+                            type: "ALLEGRO_REFUND_PARTIAL",
+                            title: "Częściowy Zwrot Środków",
+                            description: `Czy na pewno chcesz zlecić CZĘŚCIOWY zwrot środków dla klienta ${returnData.buyer_login}? Wprowadź kwotę zwrotu.`,
+                            requiresAmount: true
+                          })}
+                          className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] uppercase px-1 rounded-lg"
+                        >
+                          Częściowy
+                        </Button>
+                      </div>
                     )}
                   </div>
 
@@ -216,10 +259,13 @@ Dział Obsługi Klienta`;
                         size="sm"
                         variant="outline"
                         disabled={activeAction !== null}
-                        onClick={() => handleTriggerAction("ALLEGRO_COMMISSION_REFUND")}
-                        className="w-full border-primary/20 text-primary hover:bg-primary/10 font-bold text-xs"
+                        onClick={() => setConfirmAction({
+                          type: "ALLEGRO_COMMISSION_REFUND",
+                          title: "Zwrot Prowizji Allegro",
+                          description: `Czy na pewno chcesz złożyć wniosek o zwrot prowizji (rabat transakcyjny) dla tego zwrotu?`
+                        })}
+                        className="w-full border-primary/20 text-primary hover:bg-primary/10 font-bold text-xs rounded-lg"
                       >
-                        {activeAction === "ALLEGRO_COMMISSION_REFUND" && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
                         Złóż wniosek o prowizję
                       </Button>
                     )}
@@ -241,10 +287,13 @@ Dział Obsługi Klienta`;
                       <Button
                         size="sm"
                         disabled={activeAction !== null}
-                        onClick={() => handleTriggerAction("ERP_CORRECTION")}
-                        className="w-full bg-primary/20 hover:bg-primary/30 text-primary-foreground font-bold text-xs border border-primary/30"
+                        onClick={() => setConfirmAction({
+                          type: "ERP_CORRECTION",
+                          title: "Wystawienie Korekty w ERP",
+                          description: `Czy na pewno chcesz wygenerować fakturę korygującą (korektę) w zintegrowanym systemie ERP Subiekt dla tego zwrotu?`
+                        })}
+                        className="w-full bg-primary/20 hover:bg-primary/30 text-primary-foreground font-bold text-xs border border-primary/30 rounded-lg"
                       >
-                        {activeAction === "ERP_CORRECTION" && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
                         Wystaw korektę w Subiekcie
                       </Button>
                     )}
@@ -282,10 +331,13 @@ Dział Obsługi Klienta`;
                       <Button
                         size="sm"
                         disabled={activeAction !== null}
-                        onClick={() => handleTriggerAction("REPLACEMENT")}
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                        onClick={() => setConfirmAction({
+                          type: "REPLACEMENT",
+                          title: "Zlecenie Zamówienia Wymiany",
+                          description: `Czy na pewno chcesz utworzyć nowe darmowe zamówienie wymiany (0 PLN) na te same produkty z oryginalnego zamówienia?`
+                        })}
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-lg"
                       >
-                        {activeAction === "REPLACEMENT" && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
                         Zleć wymianę (0 PLN)
                       </Button>
                     )}
@@ -308,11 +360,42 @@ Dział Obsługi Klienta`;
                         size="sm"
                         variant="outline"
                         disabled={activeAction !== null}
-                        onClick={() => handleTriggerAction("RENEW_WAYBILL")}
-                        className="w-full border-indigo-500/20 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/10 font-bold text-xs"
+                        onClick={() => setConfirmAction({
+                          type: "RENEW_WAYBILL",
+                          title: "Generowanie Etykiety Zwrotnej",
+                          description: `Czy na pewno chcesz wygenerować nową etykietę przesyłki zwrotnej (reshipment waybill) w systemie logistycznym?`
+                        })}
+                        className="w-full border-indigo-500/20 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/10 font-bold text-xs rounded-lg"
                       >
-                        {activeAction === "RENEW_WAYBILL" && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
                         Generuj list przewozowy
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Warehouse Receipt */}
+                  <div className="flex flex-col gap-2 pt-2 border-t border-slate-200/40 dark:border-white/5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">Przyjęcie Magazynowe (Zwrot Towaru)</span>
+                      {returnData.warehouse_status === "RECEIVED" ? (
+                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[9px] font-bold">
+                          Przyjęto
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground/60 border-slate-200 dark:border-white/10 text-[9px]">Oczekuje</Badge>
+                      )}
+                    </div>
+                    {returnData.warehouse_status !== "RECEIVED" && (
+                      <Button
+                        size="sm"
+                        disabled={activeAction !== null}
+                        onClick={() => setConfirmAction({
+                          type: "WAREHOUSE_RECEIPT",
+                          title: "Przyjęcie Towaru na Magazyn",
+                          description: `Czy na pewno chcesz zatwierdzić fizyczny zwrot towaru i przyjąć go na stan magazynowy? Status zwrotu zostanie zmieniony na ODEBRANY.`
+                        })}
+                        className="w-full bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-foreground dark:text-white font-bold text-xs rounded-lg"
+                      >
+                        Przyjmij towar na magazyn
                       </Button>
                     )}
                   </div>
@@ -321,74 +404,62 @@ Dział Obsługi Klienta`;
             </div>
           </CardContent>
         </Card>
-
-        {/* Messaging Templates Card */}
-        <Card className="bg-white/60 dark:bg-[#0c0f1d]/50 border-slate-200/50 dark:border-white/10 backdrop-blur-xl shadow-xl">
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/90 font-mono pb-2 border-b border-slate-200/40 dark:border-white/5">
-              <MessageSquare className="h-3.5 w-3.5 text-primary/70" />
-              <span>Szablony wiadomości dla klienta</span>
-            </div>
-
-            <div className="space-y-4">
-              
-              {/* Szablon 1: Full Refund */}
-              <div className="p-3.5 rounded-xl bg-slate-50/50 dark:bg-white/5 border border-slate-200/40 dark:border-white/5 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-foreground">1. Potwierdzenie przyjęcia i pełny zwrot</span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
-                    onClick={() => copyToClipboard(templateFullRefund)}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <pre className="text-[10px] text-foreground/80 whitespace-pre-wrap font-sans bg-slate-100 dark:bg-black/30 p-2.5 rounded-lg border border-slate-200/60 dark:border-white/5 leading-relaxed">
-                  {templateFullRefund}
-                </pre>
-              </div>
-
-              {/* Szablon 2: Partial Refund */}
-              <div className="p-3.5 rounded-xl bg-slate-50/80 dark:bg-white/5 border border-slate-200/60 dark:border-white/5 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-foreground">2. Zwrot częściowy (potrącenie za braki)</span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
-                    onClick={() => copyToClipboard(templatePartialRefund)}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <pre className="text-[10px] text-foreground/80 whitespace-pre-wrap font-sans bg-slate-100 dark:bg-black/30 p-2.5 rounded-lg border border-slate-200/60 dark:border-white/5 leading-relaxed">
-                  {templatePartialRefund}
-                </pre>
-              </div>
-
-              {/* Szablon 3: Rejected */}
-              <div className="p-3.5 rounded-xl bg-slate-50/80 dark:bg-white/5 border border-slate-200/60 dark:border-white/5 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-foreground">3. Odrzucenie reklamacji (zwrot towaru do klienta)</span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
-                    onClick={() => copyToClipboard(templateRejected)}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                <pre className="text-[10px] text-foreground/80 whitespace-pre-wrap font-sans bg-slate-100 dark:bg-black/30 p-2.5 rounded-lg border border-slate-200/60 dark:border-white/5 leading-relaxed">
-                  {templateRejected}
-                </pre>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
+
+      {/* Confirmation Modal */}
+      <Modal
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        title={confirmAction?.title}
+        className="bg-slate-900 border-white/10"
+      >
+        <ModalHeader>
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+            {confirmAction?.title}
+          </h3>
+        </ModalHeader>
+        <ModalBody className="space-y-4">
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {confirmAction?.description}
+          </p>
+          {confirmAction?.requiresAmount && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Kwota zwrotu (PLN)</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={refundAmountVal}
+                onChange={(e) => setRefundAmountVal(e.target.value)}
+                className="bg-black/40 border-white/10 text-white rounded-xl h-9 text-xs"
+                placeholder="np. 49.99"
+                autoFocus
+              />
+            </div>
+          )}
+          <p className="text-[10px] text-rose-400 font-semibold bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
+            Uwaga: Jest to operacja wrażliwa i zostanie natychmiast przekazana do zewnętrznych systemów integracji.
+          </p>
+        </ModalBody>
+        <ModalFooter className="bg-slate-950/40">
+          <Button
+            variant="ghost"
+            onClick={() => setConfirmAction(null)}
+            className="text-xs text-slate-400 hover:text-white rounded-xl h-8 px-3"
+          >
+            Anuluj
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={activeAction !== null || (confirmAction?.requiresAmount && !refundAmountVal.trim())}
+            className="text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl h-8 px-4"
+          >
+            {activeAction !== null && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
+            Potwierdzam
+          </Button>
+        </ModalFooter>
+      </Modal>
+
     </div>
   );
 }

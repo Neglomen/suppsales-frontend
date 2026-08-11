@@ -120,9 +120,8 @@ export function ThreeDGlobe() {
       // Sort by depth (Z-buffer) so back particles are drawn first
       projectedPoints.sort((a, b) => b.z - a.z);
 
-      // Get colors from CSS Variables (Primary & Foreground)
-      const primaryColor = "oklch(0.55 0.18 290)"; // Deep Purple/Violet fallback
-      const foregroundColor = "oklch(0.98 0.01 260)";
+      // Detect theme dynamically
+      const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
 
       // Draw connections/constellations
       ctx.lineWidth = 0.5;
@@ -148,7 +147,9 @@ export function ThreeDGlobe() {
             const distOpacity = 1 - dist / 120;
             const opacity = distOpacity * depthOpacity * 0.18;
 
-            ctx.strokeStyle = `rgba(168, 85, 247, ${opacity})`; // Violet accent line
+            ctx.strokeStyle = isDark 
+              ? `rgba(168, 85, 247, ${opacity})` 
+              : `rgba(147, 51, 234, ${opacity * 1.3})`; // Darker violet for better visibility in light mode
             ctx.beginPath();
             ctx.moveTo(p1.px!, p1.py!);
             ctx.lineTo(p2.px!, p2.py!);
@@ -168,7 +169,9 @@ export function ThreeDGlobe() {
         
         if (p.z > 0) {
           // Back particles
-          gradient.addColorStop(0, `rgba(100, 116, 139, ${depthOpacity * 0.5})`);
+          gradient.addColorStop(0, isDark 
+            ? `rgba(100, 116, 139, ${depthOpacity * 0.5})`
+            : `rgba(148, 163, 184, ${depthOpacity * 0.3})`);
           gradient.addColorStop(1, "rgba(100, 116, 139, 0)");
         } else {
           // Front particles (glowing violet)
@@ -183,7 +186,9 @@ export function ThreeDGlobe() {
         ctx.fill();
 
         // Draw tiny solid core
-        ctx.fillStyle = p.z > 0 ? `rgba(100, 116, 139, ${depthOpacity * 0.6})` : `rgba(255, 255, 255, ${depthOpacity * 0.8})`;
+        ctx.fillStyle = p.z > 0 
+          ? (isDark ? `rgba(100, 116, 139, ${depthOpacity * 0.6})` : `rgba(148, 163, 184, ${depthOpacity * 0.4})`) 
+          : (isDark ? `rgba(255, 255, 255, ${depthOpacity * 0.8})` : `rgba(147, 51, 234, ${depthOpacity * 0.95})`);
         ctx.beginPath();
         ctx.arc(p.px!, p.py!, pointRadius * 0.7, 0, Math.PI * 2);
         ctx.fill();

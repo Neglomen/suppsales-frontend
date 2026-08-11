@@ -10,7 +10,7 @@ export function OrdersAndBatchesTab() {
   return (
     <div className="space-y-4 p-2 sm:p-4">
       <Tabs defaultValue="drafts" className="w-full space-y-4">
-        <TabsList className="border border-white/10 bg-slate-900/60 p-1 rounded-2xl glass shadow-md flex flex-wrap h-auto gap-1 self-start shrink-0">
+        <TabsList className="bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/50 dark:border-white/10 p-1 rounded-2xl flex flex-wrap h-auto gap-1 self-start shrink-0 shadow-sm">
           <TabsTrigger
             value="drafts"
             className="rounded-xl gap-2 px-4 py-2 text-xs font-bold data-[state=active]:bg-primary/15 data-[state=active]:text-primary transition-all duration-200"

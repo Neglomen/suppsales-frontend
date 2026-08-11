@@ -18,12 +18,14 @@ import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
 import { usePlanFeatures } from "@/hooks/use-plan-features";
 import { UpgradePrompt } from "@/components/shared/upgrade-prompt";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useMobile } from "@/hooks/use-mobile";
 
 interface UnifiedMessage {
   id: string;
   thread_id: string;
   author_login: string;
-  author_role: "BUYER" | "SELLER" | "ADMIN" | "SYSTEM";
+  author_role: "BUYER" | "SELLER" | "ADMIN" | "SYSTEM" | "AUTORESPONDER";
   text: string;
   created_at: string;
   attachments?: { id?: string; url?: string; fileName?: string; name?: string }[];
@@ -53,6 +55,8 @@ interface OrderContext {
     purchased_at: string;
     tracking_numbers: string[];
     erp_sales_document_number?: string;
+    details_payload?: any;
+    integration_provider_type?: string;
   };
   buyer: {
     login: string;
@@ -82,7 +86,7 @@ interface OrderContext {
     city?: string;
     zip_code?: string;
     country_code?: string;
-  };
+  } | null;
   payment: {
     type: string;
     provider: string;
@@ -101,6 +105,123 @@ interface OrderContext {
     items_summary?: string;
     total?: string;
   }>;
+}
+
+// --- Funkcje Pomocnicze do Śledzenia Przesyłek ---
+function getTrackingUrl(trackingNumber: string, providerType?: string, serviceCode?: string): string | null {
+  if (!trackingNumber) return null;
+  const cleanNum = trackingNumber.trim();
+  const numOnly = cleanNum.replace(/\s+/g, "");
+  const providerUp = (providerType || "").toUpperCase().trim();
+
+  if (providerUp === "SUUS" || providerUp === "ROHLIG_SUUS") {
+    return `https://portal.suus.com/order-details/${numOnly}`;
+  }
+  if (providerUp === "RABEN") {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (providerUp === "GEIS") {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "GEODIS") {
+    return `https://tracking.geodis.pl/?reference=${numOnly}`;
+  }
+  if (providerUp === "INPOST" || providerUp === "INPOST_BUY" || providerUp === "INPOST_KURIER") {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "DHL") {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+  if (providerUp === "DPD" || providerUp === "DPD_PL") {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (providerUp === "GLS") {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (providerUp === "UPS") {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (providerUp === "FEDEX") {
+    return `https://www.fedex.com/fedextrack/?trknbr=${numOnly}`;
+  }
+  if (providerUp === "POCZTA_POLSKA" || providerUp === "POCZTEX") {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  if (providerUp === "ALLEGRO" || providerUp === "ALLEGRO_ONE" || providerUp === "ALLEGRO_ONE_PICKUP" || providerUp === "ALLEGRO_ONE_MOBILE" || providerUp === "ALLEGRO_DELIVERY") {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+
+  const codeLower = (serviceCode || "").toLowerCase();
+  if (codeLower.includes("inpost") || codeLower.includes("paczkomat")) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (codeLower.includes("dpd")) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (codeLower.includes("dhl")) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+  if (codeLower.includes("gls")) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (codeLower.includes("ups")) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (codeLower.includes("raben")) {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (codeLower.includes("geis")) {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+
+  // Allegro Delivery (zaczynające się na A, np. A000..., AD..., ALE..., AL...)
+  if (/^A[A-Z0-9]+$/i.test(numOnly)) {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+  if (/^1Z[A-Z0-9]{16}$/i.test(numOnly)) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (/^\d{24}$/.test(numOnly)) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (/^\d{13,14}[A-Za-z]?$/.test(numOnly)) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (/^[A-Z]{2}\d{9}[A-Z]{2}$/i.test(numOnly) || /^\d{20}$/.test(numOnly)) {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  if (/^\d{12}$/.test(numOnly)) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (/^\d{10,11}$/.test(numOnly)) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+
+  return `https://www.google.com/search?q=${encodeURIComponent("śledzenie przesyłki")}+${numOnly}`;
+}
+
+function getAllegroCarrierForWaybill(detailsPayload: any, waybill: string): string | undefined {
+  if (!detailsPayload) return undefined;
+  const shipments: any[] = detailsPayload?.shipments || [];
+  const shipMatch = shipments.find((s: any) => s.waybill === waybill || s.waybill?.trim() === waybill.trim());
+  if (shipMatch?.carrierId) return shipMatch.carrierId;
+
+  const methodName: string = (detailsPayload?.delivery?.method?.name || "").toLowerCase();
+  if (!methodName) return undefined;
+
+  if (methodName.includes("inpost") || methodName.includes("paczkomat")) return "INPOST";
+  if (methodName.includes("dpd")) return "DPD";
+  if (methodName.includes("dhl")) return "DHL";
+  if (methodName.includes("gls")) return "GLS";
+  if (methodName.includes("ups")) return "UPS";
+  if (methodName.includes("fedex")) return "FEDEX";
+  if (methodName.includes("raben")) return "RABEN";
+  if (methodName.includes("geis")) return "GEIS";
+  if (methodName.includes("suus") || methodName.includes("rohlig")) return "SUUS";
+  if (methodName.includes("allegro one") || methodName.includes("allegroone")) return "ALLEGRO_ONE";
+  if (methodName.includes("poczta") || methodName.includes("pocztex")) return "POCZTA_POLSKA";
+
+  return undefined;
 }
 
 interface ResponseTemplate {
@@ -133,20 +254,50 @@ export default function CommunicationCenterPage() {
     }
   }, [activeThreadId]);
   
+  const handleSelectThread = useCallback((threadId: string) => {
+    setActiveThreadId(threadId);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("thread", threadId);
+      window.history.replaceState(null, "", url.toString());
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const queryThreadId = params.get("thread") || params.get("thread_id");
+      if (queryThreadId) {
+        setActiveThreadId(queryThreadId);
+      }
+    }
+  }, []);
+  
   // Plan features
   const { hasFeature, planInfo } = usePlanFeatures();
   const canUseAI = hasFeature("ai_assistant");
+  const isMobileOrLaptop = useMobile(1439);
 
   // UI states
   const [mainTab, setMainTab] = useState<"MESSAGES" | "DISPUTES">("MESSAGES");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"ALL" | "UNREAD" | "SLA">("UNREAD");
+  const [selectedDays, setSelectedDays] = useState<number>(30);
+  const [selectedSource, setSelectedSource] = useState<string>("ALL");
   const [replyText, setReplyText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isExpandedReply, setIsExpandedReply] = useState(false);
+  const [showRightSidebar, setShowRightSidebar] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setShowRightSidebar(window.innerWidth >= 1440);
+    }
+  }, []);
+
   const [previewModal, setPreviewModal] = useState<{
     attachments: { id?: string; url?: string; fileName?: string; name?: string }[];
     currentIndex: number;
@@ -164,10 +315,15 @@ export default function CommunicationCenterPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Pobierz wątki
-  const fetchThreads = async (silent = false) => {
+  const fetchThreads = async (silent = false, daysOverride?: number, sourceOverride?: string) => {
     if (!silent) setLoading(true);
+    const d = daysOverride !== undefined ? daysOverride : selectedDays;
+    const s = sourceOverride !== undefined ? sourceOverride : selectedSource;
     try {
-      const response = await api.get<UnifiedThread[]>("/communication/threads");
+      const params: any = {};
+      if (d > 0) params.days = d;
+      if (s !== "ALL") params.provider_type = s;
+      const response = await api.get<UnifiedThread[]>("/communication/threads", { params });
       setThreads(response.data);
     } catch (err) {
       toast.error(getErrorMessage(err) || "Błąd wczytywania wątków");
@@ -197,6 +353,21 @@ export default function CommunicationCenterPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleToggleReadStatus = async (targetStatus?: boolean) => {
+    if (!activeThread) return;
+    const newStatus = targetStatus !== undefined ? targetStatus : !activeThread.read;
+    try {
+      await api.patch(`/communication/threads/${activeThread.id}/read?read=${newStatus}`);
+      setActiveThread((prev) => (prev ? { ...prev, read: newStatus } : null));
+      setThreads((prev) =>
+        prev.map((t) => (t.id === activeThread.id ? { ...t, read: newStatus } : t))
+      );
+      toast.success(newStatus ? "Oznaczono wątek jako przeczytany" : "Oznaczono wątek jako nieprzeczytany");
+    } catch (err) {
+      toast.error(getErrorMessage(err) || "Błąd aktualizacji statusu przeczytania");
+    }
+  };
+
   // Załaduj aktywny wątek i powiązane zamówienie
   useEffect(() => {
     if (!activeThreadId) {
@@ -209,6 +380,11 @@ export default function CommunicationCenterPage() {
       try {
         const response = await api.get<UnifiedThread>(`/communication/threads/${activeThreadId}`);
         setActiveThread(response.data);
+
+        // Zaktualizuj status w lokalnej liście wątków
+        setThreads((prev) =>
+          prev.map((t) => (t.id === activeThreadId ? { ...t, read: response.data.read } : t))
+        );
         
         // Jeśli wątek ma order_id, pobierz szczegóły zamówienia do kontekstu
         if (response.data.order_id) {
@@ -227,6 +403,8 @@ export default function CommunicationCenterPage() {
                 purchased_at: new Date(rawOrder.purchased_at).toLocaleString("pl-PL"),
                 tracking_numbers: rawOrder.tracking_numbers || [],
                 erp_sales_document_number: rawOrder.erp_sales_document_number || details.invoice?.number || undefined,
+                details_payload: rawOrder.details_payload,
+                integration_provider_type: rawOrder.integration?.provider_type || rawOrder.service_integration?.provider_type || undefined,
               },
               buyer: {
                 login: rawOrder.buyer_login || "",
@@ -297,6 +475,14 @@ export default function CommunicationCenterPage() {
     fetchThreadTasks();
   }, [activeThreadId, fetchThreadTasks]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchThreadTasks();
+    };
+    window.addEventListener("refresh-tasks", handleRefresh);
+    return () => window.removeEventListener("refresh-tasks", handleRefresh);
+  }, [fetchThreadTasks]);
+
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -320,9 +506,9 @@ export default function CommunicationCenterPage() {
     // 3. Filtrowanie po zakładce statusu
     if (activeTab === "UNREAD") {
       const isRecent = new Date(t.last_message_at).getTime() > new Date().getTime() - 60 * 24 * 60 * 60 * 1000;
-      return !t.read && isRecent;
+      return (!t.read || t.id === activeThreadId) && isRecent;
     }
-    if (activeTab === "SLA") return t.sla_deadline !== null && !t.read;
+    if (activeTab === "SLA") return t.sla_deadline !== null && (!t.read || t.id === activeThreadId);
     
     return true;
   });
@@ -733,26 +919,404 @@ export default function CommunicationCenterPage() {
     );
   };
 
+  const handleTriggerSync = async () => {
+    setLoading(true);
+    try {
+      await api.post("/communication/sync");
+      toast.success("Zlecono pobranie wiadomości z Allegro i Empik!");
+      setTimeout(() => fetchThreads(true), 2000);
+    } catch (err) {
+      toast.error(getErrorMessage(err) || "Błąd zlecania synchronizacji");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderCustomerDetails = () => {
+    if (!activeOrder) {
+      return (
+        <div className="h-36 flex flex-col items-center justify-center text-muted-foreground text-center space-y-1">
+          <ShoppingBag className="h-6 w-6 opacity-30" />
+          <p className="text-[11px]">Brak powiązanego zamówienia dla tego wątku</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4 text-xs">
+        
+        {/* Sekcja 1: Zamówienie */}
+        <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/5 pb-1.5">
+            <span className="font-bold text-foreground/90 dark:text-slate-300">Zamówienie</span>
+            <div className="flex items-center gap-1.5">
+              <Badge variant="outline" className="text-[9px] font-extrabold uppercase py-0.5">
+                {activeOrder.order.status}
+              </Badge>
+              <a 
+                href={`/orders/${activeOrder.order.id}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:bg-primary/20 bg-primary/10 p-1 rounded-md transition-colors"
+                title="Otwórz szczegóły zamówienia w nowej karcie"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </div>
+          
+          <div className="space-y-1 text-[11px] text-muted-foreground dark:text-slate-400">
+            <div className="flex justify-between">
+              <span>ID Zewnętrzne:</span>
+              <span className="font-mono text-foreground dark:text-slate-200">{activeOrder.order.external_order_id}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Data zakupu:</span>
+              <span className="text-foreground dark:text-slate-200">{activeOrder.order.purchased_at}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Płatność:</span>
+              <span className="text-foreground dark:text-slate-200">{activeOrder.payment.total} ({activeOrder.payment.type})</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Sekcja 2: Dane Kupującego */}
+        <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-xl p-3 space-y-2">
+          <div className="font-bold text-foreground/90 dark:text-slate-300 border-b border-slate-200/50 dark:border-white/5 pb-1.5 flex items-center gap-1">
+            <User className="h-3.5 w-3.5 text-muted-foreground dark:text-slate-400" /> Kupujący
+          </div>
+          <div className="space-y-1 text-[11px] text-muted-foreground dark:text-slate-400">
+            <p className="text-foreground dark:text-slate-200 font-semibold">
+              {activeOrder.buyer.first_name} {activeOrder.buyer.last_name}
+            </p>
+            <p className="truncate">Email: {activeOrder.buyer.email}</p>
+            {activeOrder.buyer.phone_number && <p>Tel: {activeOrder.buyer.phone_number}</p>}
+          </div>
+        </div>
+
+        {/* Sekcja 3: Produkty */}
+        <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-xl p-3 space-y-2">
+          <div className="font-bold text-foreground/90 dark:text-slate-300 border-b border-slate-200/50 dark:border-white/5 pb-1.5">
+            Zakupione Produkty
+          </div>
+          <div className="space-y-2 max-h-28 overflow-y-auto">
+            {activeOrder.line_items.map((item, idx) => (
+              <div key={idx} className="flex justify-between items-start gap-2 text-[11px] text-muted-foreground dark:text-slate-400">
+                <span className="line-clamp-2 text-foreground/80 dark:text-slate-300">{item.name}</span>
+                <span className="font-bold text-foreground dark:text-slate-200 shrink-0">x{item.quantity}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sekcja 4: Dostawa & Adres z Podglądem Tooltip */}
+        <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-xl p-3 space-y-2">
+          <div className="font-bold text-foreground/90 dark:text-slate-300 border-b border-slate-200/50 dark:border-white/5 pb-1.5 flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Truck className="h-3.5 w-3.5 text-muted-foreground dark:text-slate-400" /> Dostawa & Paczka
+            </div>
+            <div className="group relative">
+              <button type="button" className="p-1 text-muted-foreground dark:text-slate-400 hover:text-primary transition-colors">
+                <MapPin className="h-3.5 w-3.5" />
+              </button>
+              {/* Tooltip ze szczegółami adresu dostawy */}
+              <div className="absolute right-0 bottom-full mb-2 w-64 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-foreground dark:text-slate-300 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 space-y-1">
+                <p className="font-bold text-foreground dark:text-slate-200 border-b border-slate-200 dark:border-white/10 pb-1 flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-primary" /> Adres Dostawy
+                </p>
+                {activeOrder.delivery.address ? (
+                  <>
+                    <p className="font-semibold text-foreground dark:text-slate-200">
+                      {activeOrder.delivery.address.first_name} {activeOrder.delivery.address.last_name}
+                      {activeOrder.delivery.address.company_name && ` (${activeOrder.delivery.address.company_name})`}
+                    </p>
+                    <p>{activeOrder.delivery.address.street}</p>
+                    <p>{activeOrder.delivery.address.zip_code} {activeOrder.delivery.address.city}</p>
+                    {activeOrder.delivery.address.country_code && <p className="text-[10px] text-muted-foreground dark:text-slate-500 uppercase">{activeOrder.delivery.address.country_code}</p>}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground/60 italic">Brak pełnego adresu dostawy</p>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="space-y-1.5 text-[11px] text-muted-foreground dark:text-slate-400">
+            <p className="text-foreground dark:text-slate-200 font-semibold truncate">
+              {activeOrder.delivery.method_name}
+            </p>
+            {activeOrder.delivery.address && (
+              <p className="text-[10px] text-muted-foreground dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
+                <MapPin className="h-3 w-3 text-muted-foreground dark:text-slate-400 shrink-0" />
+                <span>{activeOrder.delivery.address.street || ""}, {activeOrder.delivery.address.city || ""}</span>
+              </p>
+            )}
+            
+            {activeOrder.order.tracking_numbers && activeOrder.order.tracking_numbers.length > 0 ? (
+              <div className="space-y-1 pt-1">
+                <span className="text-[10px] font-bold text-muted-foreground/80 dark:text-slate-500 uppercase block">Numery listów:</span>
+                {activeOrder.order.tracking_numbers.map((track, i) => {
+                  const allegroCarrier = getAllegroCarrierForWaybill(activeOrder.order.details_payload, track);
+                  const trackingUrl = getTrackingUrl(track, allegroCarrier || activeOrder.order.integration_provider_type);
+                  return (
+                    <div key={i} className="flex items-center justify-between bg-white dark:bg-slate-950/50 p-1.5 rounded-lg border border-slate-200/50 dark:border-white/5 font-mono text-[10px] text-foreground dark:text-slate-300">
+                      <span>{track}</span>
+                      {trackingUrl && (
+                        <a
+                          href={trackingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:text-primary-focus"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-muted-foreground/60 italic">Brak numerów śledzenia przesyłki</p>
+            )}
+          </div>
+        </div>
+
+        {/* Sekcja 5: Faktura VAT (FV) z Akcjami i Tooltipem */}
+        <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-xl p-3 space-y-2">
+          <div className="font-bold text-foreground/90 dark:text-slate-300 border-b border-slate-200/50 dark:border-white/5 pb-1.5 flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Receipt className="h-3.5 w-3.5 text-muted-foreground dark:text-slate-400" /> Faktura VAT (FV)
+            </div>
+            {activeOrder.invoice_address && (
+              <div className="group relative">
+                <button type="button" className="p-1 text-muted-foreground dark:text-slate-400 hover:text-primary transition-colors">
+                  <Building2 className="h-3.5 w-3.5" />
+                </button>
+                {/* Tooltip ze szczegółami adresu do faktury */}
+                <div className="absolute right-0 bottom-full mb-2 w-64 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-foreground dark:text-slate-300 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 space-y-1">
+                  <p className="font-bold text-foreground dark:text-slate-200 border-b border-slate-200 dark:border-white/10 pb-1 flex items-center gap-1">
+                    <Receipt className="h-3 w-3 text-primary" /> Dane do Faktury
+                  </p>
+                  <p className="font-semibold text-foreground dark:text-slate-200">
+                    {activeOrder.invoice_address.company_name || `${activeOrder.invoice_address.first_name || ""} ${activeOrder.invoice_address.last_name || ""}`}
+                  </p>
+                  {activeOrder.invoice_address.tax_id && (
+                    <p className="font-mono text-primary text-[11px] font-bold">NIP: {activeOrder.invoice_address.tax_id}</p>
+                  )}
+                  <p>{activeOrder.invoice_address.street}</p>
+                  <p>{activeOrder.invoice_address.zip_code} {activeOrder.invoice_address.city}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2 text-[11px]">
+            {activeOrder.invoice_address ? (
+              <div className="space-y-0.5">
+                <p className="text-foreground dark:text-slate-200 font-semibold truncate">
+                  {activeOrder.invoice_address.company_name || `${activeOrder.invoice_address.first_name || ""} ${activeOrder.invoice_address.last_name || ""}`}
+                </p>
+                {activeOrder.invoice_address.tax_id && (
+                  <p className="text-primary font-mono font-bold text-[10px]">
+                    NIP: {activeOrder.invoice_address.tax_id}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground italic">Brak danych do faktury (paragon)</p>
+            )}
+
+            {/* Numer dokumentu FV z ERP */}
+            {activeOrder.order.erp_sales_document_number ? (
+              <>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-250 dark:border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="font-mono text-emerald-700 dark:text-emerald-300 font-bold text-[10px] truncate">
+                    {activeOrder.order.erp_sales_document_number}
+                  </span>
+                </div>
+
+                {/* Przycisk Podglądu, Dołączenia i Pobierania FV */}
+                <div className="flex items-center gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewInvoice(activeOrder.order.id, activeOrder.order.erp_sales_document_number)}
+                    className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary text-[10px] font-bold transition-all"
+                    title="Podgląc faktury VAT"
+                  >
+                    <Eye className="h-3 w-3" /> Podgląd
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAttachInvoiceToReply(activeOrder.order.id, activeOrder.order.erp_sales_document_number)}
+                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 text-[10px] font-bold transition-all"
+                    title="Dołącz fakturę PDF do odpowiedzi"
+                  >
+                    <Paperclip className="h-3 w-3" /> Dołącz FV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadInvoice(activeOrder.order.id, activeOrder.order.erp_sales_document_number)}
+                    className="inline-flex items-center justify-center p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-white/10 text-foreground dark:text-slate-300 transition-colors"
+                    title="Pobierz fakturę PDF"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground/60 italic text-[10px]">Faktura nie została jeszcze wystawiona w ERP</p>
+            )}
+          </div>
+        </div>
+
+        {/* Sekcja 6: Inne zamówienia klienta */}
+        {activeOrder.related_orders && activeOrder.related_orders.length > 0 && (
+          <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-xl p-3 space-y-2">
+            <div className="font-bold text-foreground/90 dark:text-slate-300 border-b border-slate-200/50 dark:border-white/5 pb-1.5 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <ShoppingBag className="h-3.5 w-3.5 text-primary" /> Inne zamówienia ({activeOrder.related_orders.length})
+              </div>
+              <span className="text-[9px] text-muted-foreground/60 dark:text-slate-500 font-normal">Kupujący</span>
+            </div>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {activeOrder.related_orders.map((ro) => (
+                <a 
+                  key={ro.id} 
+                  href={`/orders/${ro.id}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  title={ro.items_summary || ro.external_order_id}
+                  className="relative block bg-white dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-white/5 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-all group space-y-1.5 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span 
+                      title={ro.items_summary || ro.external_order_id}
+                      className="text-xs font-semibold text-foreground dark:text-slate-200 group-hover:text-primary transition-colors line-clamp-2 leading-tight"
+                    >
+                      {ro.items_summary || ro.external_order_id}
+                    </span>
+                    <Badge variant="outline" className="text-[9px] font-extrabold uppercase shrink-0 px-1.5 py-0.5 border-primary/30 text-primary bg-primary/5">
+                      {translateOrderStatus(ro.status)}
+                    </Badge>
+                  </div>
+
+                  {/* Tooltip po najechaniu z pełną nazwą zamówienia */}
+                  <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block z-50 w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs text-foreground dark:text-slate-200 shadow-2xl pointer-events-none">
+                    <p className="font-bold text-[9px] text-muted-foreground uppercase tracking-wider mb-0.5">Zamówiony towar:</p>
+                    <p className="font-semibold text-foreground dark:text-slate-100 leading-snug">{ro.items_summary}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground dark:text-slate-400 font-mono pt-1 border-t border-slate-100 dark:border-white/5">
+                    <span className="flex items-center gap-1 text-foreground/80 dark:text-slate-300 font-sans font-medium">
+                      📅 <span className="font-semibold text-foreground dark:text-slate-200">{ro.purchased_at}</span>
+                    </span>
+                    {ro.total && <span className="font-bold text-foreground dark:text-slate-200">{ro.total}</span>}
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sekcja: Zadania i decyzje wątku */}
+        <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-xl p-3 space-y-2">
+          <div className="font-bold text-foreground/90 dark:text-slate-300 border-b border-slate-200/50 dark:border-white/5 pb-1.5 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <ClipboardList className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" /> Zadania i decyzje
+            </div>
+            <Badge variant="outline" className="text-[10px] bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 border-indigo-500/10">
+              {threadTasks.length}
+            </Badge>
+          </div>
+
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {isThreadTasksLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-indigo-500 dark:text-indigo-400" />
+              </div>
+            ) : threadTasks.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground italic py-1">Brak zadań powiązanych z tym wątkiem.</p>
+            ) : (
+              threadTasks.map((task) => {
+                const statusColor = 
+                  task.status === "NEW" ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" :
+                  task.status === "IN_PROGRESS" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" :
+                  task.status === "RESOLVED" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
+                  "bg-slate-150 text-muted-foreground border-slate-200/50 dark:border-white/10";
+
+                return (
+                  <div 
+                    key={task.id} 
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("open-internal-task", { detail: { taskId: task.id } }));
+                    }}
+                    className="bg-white dark:bg-slate-950/60 p-2 rounded-lg border border-slate-200/50 dark:border-white/5 hover:border-indigo-500/30 hover:bg-slate-50 dark:hover:bg-slate-900 transition-all cursor-pointer space-y-1"
+                  >
+                    <div className="flex items-center justify-between text-[9px]">
+                      <span className="font-semibold text-muted-foreground dark:text-slate-400">
+                        {task.created_by.name || task.created_by.email.split("@")[0]}
+                      </span>
+                      <Badge variant="outline" className={`text-[8px] px-1 py-0 h-3.5 border-none font-bold rounded ${statusColor}`}>
+                        {task.status === "NEW" ? "Nowe" : task.status === "IN_PROGRESS" ? "W toku" : task.status === "RESOLVED" ? "Odpowiedź" : "Zamknięte"}
+                      </Badge>
+                    </div>
+                    <p className="font-bold text-[10px] text-foreground dark:text-slate-200 truncate leading-tight">{task.title}</p>
+                    {task.description && (
+                      <p className="text-[9px] text-muted-foreground dark:text-slate-500 line-clamp-1 leading-normal">{task.description}</p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <Button
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("open-internal-task", { detail: { taskId: "", threadId: activeThreadId } }));
+            }}
+            variant="outline"
+            size="sm"
+            className="w-full h-7 text-[10px] bg-slate-100 dark:bg-slate-900 border-slate-200/50 dark:border-white/10 text-foreground dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/5 hover:text-foreground dark:hover:text-white rounded-lg flex items-center justify-center gap-1"
+          >
+            <Plus className="h-3 w-3" /> Zgłoś prośbę / zadanie
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col space-y-4">
+    <div className="h-[calc(100dvh-190px)] md:h-[calc(100vh-100px)] lg:h-[calc(100vh-120px)] flex flex-col space-y-3 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
             Centrum Komunikacji
           </h1>
-          <p className="text-slate-400 mt-1 text-sm">
+          <p className="text-muted-foreground mt-1 text-sm">
             Zintegrowana skrzynka odbiorcza dla wiadomości, dyskusji i incydentów z marketplace.
           </p>
         </div>
-        <button
-          onClick={() => fetchThreads()}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 px-4 py-2 text-sm font-semibold transition-all"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          Odśwież
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchThreads()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-800 text-foreground dark:text-slate-300 px-4 py-2 text-sm font-semibold transition-all"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Odśwież
+          </button>
+          <button
+            onClick={handleTriggerSync}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary/20 border border-primary/30 hover:bg-primary/30 text-primary px-4 py-2 text-sm font-semibold transition-all"
+            title="Pobierz najnowsze wiadomości z API Allegro i Empik"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Pobierz z Marketplace
+          </button>
+        </div>
       </div>
 
       {/* Wybór Widoku: Wiadomości vs Dyskusje */}
@@ -766,7 +1330,7 @@ export default function CommunicationCenterPage() {
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border ${
             mainTab === "MESSAGES"
               ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105"
-              : "bg-slate-900/40 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              : "bg-slate-100 dark:bg-slate-900/40 border-slate-200/50 dark:border-white/5 text-muted-foreground hover:text-foreground hover:bg-slate-200 dark:hover:bg-slate-800"
           }`}
         >
           <MessageSquare className="h-4 w-4" />
@@ -786,7 +1350,7 @@ export default function CommunicationCenterPage() {
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border ${
             mainTab === "DISPUTES"
               ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-600/20 scale-105"
-              : "bg-slate-900/40 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              : "bg-slate-100 dark:bg-slate-900/40 border-slate-200/50 dark:border-white/5 text-muted-foreground hover:text-foreground hover:bg-slate-200 dark:hover:bg-slate-800"
           }`}
         >
           <ShieldAlert className="h-4 w-4" />
@@ -802,9 +1366,44 @@ export default function CommunicationCenterPage() {
       {/* Main Grid */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-hidden min-h-0">
         
-        {/* Kolumna 1 (Lewa): Lista Wątków (lg:col-span-3 lub 4) */}
-        <Card className="lg:col-span-3 flex flex-col border-white/5 bg-slate-900/50 backdrop-blur-xl overflow-hidden min-h-0">
+        {/* Kolumna 1 (Lewa): Lista Wątków */}
+        <Card className={`col-span-1 lg:col-span-3 flex flex-col border-slate-200/50 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl overflow-hidden min-h-0 ${activeThreadId ? "hidden lg:flex" : "flex"}`}>
           <CardHeader className="p-4 pb-2 space-y-3 shrink-0">
+            {/* Filtry źródła i okresu */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <select
+                  value={selectedSource}
+                  onChange={(e) => {
+                    const newSource = e.target.value;
+                    setSelectedSource(newSource);
+                    fetchThreads(false, selectedDays, newSource);
+                  }}
+                  className="w-full bg-white dark:bg-slate-950/60 border border-slate-200/50 dark:border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:border-primary/50"
+                >
+                  <option value="ALL">Wszystkie źródła</option>
+                  <option value="ALLEGRO">Allegro</option>
+                  <option value="EMPIK">Empik</option>
+                </select>
+              </div>
+              <div>
+                <select
+                  value={selectedDays}
+                  onChange={(e) => {
+                    const newDays = Number(e.target.value);
+                    setSelectedDays(newDays);
+                    fetchThreads(false, newDays, selectedSource);
+                  }}
+                  className="w-full bg-white dark:bg-slate-950/60 border border-slate-200/50 dark:border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:border-primary/50"
+                >
+                  <option value={30}>Ostatnie 30 dni</option>
+                  <option value={90}>Ostatnie 90 dni</option>
+                  <option value={180}>Ostatnie 180 dni</option>
+                  <option value={0}>Wszystkie okresy</option>
+                </select>
+              </div>
+            </div>
+
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
               <input
@@ -812,12 +1411,12 @@ export default function CommunicationCenterPage() {
                 placeholder="Szukaj klienta, tematu..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-950/40 border border-white/5 rounded-xl pl-9 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-primary/50 transition-colors"
+                className="w-full bg-white dark:bg-slate-950/40 border border-slate-200/50 dark:border-white/5 rounded-xl pl-9 pr-4 py-2 text-sm text-foreground dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-primary/50 transition-colors"
               />
             </div>
 
             {/* Tabsy filtrów */}
-            <div className="flex flex-wrap gap-1 p-0.5 bg-slate-950/50 rounded-xl border border-white/5">
+            <div className="flex flex-wrap gap-1 p-0.5 bg-slate-100 dark:bg-slate-950/50 rounded-xl border border-slate-200/50 dark:border-white/5">
               {[
                 { id: "ALL", label: "Wszystkie" },
                 { id: "UNREAD", label: "Nieprzeczytane" },
@@ -829,7 +1428,7 @@ export default function CommunicationCenterPage() {
                   className={`flex-1 text-[10px] font-bold py-1.5 px-2 rounded-lg transition-all ${
                     activeTab === tab.id
                       ? "bg-primary text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                      : "text-muted-foreground hover:text-foreground hover:bg-slate-200 dark:hover:bg-white/5"
                   }`}
                 >
                   {tab.label}
@@ -842,11 +1441,11 @@ export default function CommunicationCenterPage() {
             {loading ? (
               <div className="space-y-2 p-2">
                 {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-full bg-slate-800/40 rounded-xl" />
+                  <Skeleton key={i} className="h-16 w-full bg-slate-200 dark:bg-slate-800/40 rounded-xl" />
                 ))}
               </div>
             ) : filteredThreads.length === 0 ? (
-              <div className="text-center py-16 space-y-2 text-slate-500">
+              <div className="text-center py-16 space-y-2 text-muted-foreground">
                 <MessageSquare className="h-8 w-8 mx-auto opacity-30" />
                 <p className="text-xs">Brak wątków pasujących do filtra</p>
               </div>
@@ -855,26 +1454,35 @@ export default function CommunicationCenterPage() {
                 const isSelected = thread.id === activeThreadId;
                 const isAllegro = thread.provider_type.toUpperCase() === "ALLEGRO";
                 const isDispute = thread.type === "DISPUTE";
+                const lastMsg = thread.messages && thread.messages.length > 0 ? thread.messages[thread.messages.length - 1] : null;
+                const isAutoLast = lastMsg?.author_role === "AUTORESPONDER";
 
                 return (
                   <div
                     key={thread.id}
-                    onClick={() => setActiveThreadId(thread.id)}
+                    onClick={() => handleSelectThread(thread.id)}
                     className={`flex flex-col gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
                       isSelected
                         ? "bg-primary/10 border-primary/30 shadow-md shadow-primary/5"
-                        : "bg-slate-950/20 border-white/5 hover:bg-white/5"
+                        : "bg-slate-50 dark:bg-slate-950/20 border-slate-200/50 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/5"
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      {/* Badge Platformy */}
-                      <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
-                        isAllegro 
-                          ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" 
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      }`}>
-                        {thread.provider_type}
-                      </span>
+                      {/* Badge Platformy & Autoresponder */}
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
+                          isAllegro 
+                            ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" 
+                            : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                        }`}>
+                          {thread.provider_type}
+                        </span>
+                        {isAutoLast && (
+                          <span className="text-[9px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 rounded-md">
+                            Auto-odpowiedź
+                          </span>
+                        )}
+                      </div>
 
                       {/* SLA Timer */}
                       {renderSLATimer(thread.sla_deadline)}
@@ -883,7 +1491,7 @@ export default function CommunicationCenterPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         {isDispute && <ShieldAlert className="h-3.5 w-3.5 text-red-400 shrink-0" />}
-                        <p className="font-semibold text-xs text-slate-200 truncate">
+                        <p className="font-semibold text-xs text-foreground dark:text-slate-200 truncate">
                           {thread.interlocutor_login}
                         </p>
                         {!thread.read && (
@@ -892,19 +1500,19 @@ export default function CommunicationCenterPage() {
                       </div>
 
                       {thread.subject && (
-                        <p className="text-[10px] text-slate-400 font-medium truncate mt-0.5">
+                        <p className="text-[10px] text-muted-foreground dark:text-slate-400 font-medium truncate mt-0.5">
                           {thread.subject}
                         </p>
                       )}
 
                       {thread.messages && thread.messages.length > 0 && (
-                        <p className="text-[11px] text-slate-500 truncate mt-1">
+                        <p className="text-[11px] text-muted-foreground/80 dark:text-slate-500 truncate mt-1">
                           {thread.messages[thread.messages.length - 1].text}
                         </p>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between text-[9px] text-slate-500 border-t border-white/5 pt-1.5 mt-0.5">
+                    <div className="flex items-center justify-between text-[9px] text-muted-foreground dark:text-slate-500 border-t border-slate-100 dark:border-white/5 pt-1.5 mt-0.5">
                       <span>{new Date(thread.last_message_at).toLocaleDateString("pl-PL")}</span>
                       <span>{new Date(thread.last_message_at).toLocaleTimeString("pl-PL", { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
@@ -915,54 +1523,134 @@ export default function CommunicationCenterPage() {
           </CardContent>
         </Card>
 
-        {/* Kolumna 2 (Środkowa): Rozmowa (lg:col-span-6) */}
-        <Card className="lg:col-span-6 flex flex-col border-white/5 bg-slate-900/50 backdrop-blur-xl overflow-hidden min-h-0">
+        {/* Kolumna 2 (Środkowa): Rozmowa */}
+        <Card className={`${showRightSidebar && !isMobileOrLaptop ? "xl:col-span-6" : "xl:col-span-9 lg:col-span-9"} flex flex-col border-slate-200/50 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl overflow-hidden min-h-0 transition-all duration-300 ${activeThreadId ? "flex" : "hidden lg:flex"}`}>
           {activeThread ? (
             <>
               {/* Header Czatu */}
-              <div className="p-4 border-b border-white/5 bg-slate-950/20 shrink-0 flex items-center justify-between">
+              <div className="p-4 border-b border-slate-200/50 dark:border-white/5 bg-slate-50 dark:bg-slate-950/20 shrink-0 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-200">
+                  {/* Przycisk wstecz na małych ekranach */}
+                  <button
+                    type="button"
+                    onClick={() => setActiveThreadId(null)}
+                    className="lg:hidden p-2 -ml-1 mr-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-white/5 text-foreground dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-all"
+                    title="Wróć do listy wątków"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  
+                  <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-200 shrink-0">
                     <User className="h-4 w-4" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-200 flex items-center gap-1.5">
-                      {activeThread.interlocutor_login}
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm text-foreground dark:text-slate-200 flex flex-wrap items-center gap-1.5 truncate">
+                      <span className="truncate">{activeThread.interlocutor_login}</span>
                       {activeThread.type === "DISPUTE" && (
-                        <Badge variant="destructive" className="text-[9px] font-extrabold uppercase py-0.5 px-1.5">
+                        <Badge variant="destructive" className="text-[9px] font-extrabold uppercase py-0.5 px-1.5 shrink-0">
                           DYSKUSJA / SPÓR
                         </Badge>
                       )}
                     </h3>
                     {activeThread.order_id && (
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-[10px] text-muted-foreground truncate">
                         Wątek powiązany z zamówieniem: <span className="font-mono">#{activeThread.order_id}</span>
                       </p>
                     )}
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2">
+                  {activeOrder && (
+                    <button
+                      type="button"
+                      onClick={() => setShowRightSidebar(!showRightSidebar)}
+                      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+                        showRightSidebar
+                          ? "bg-primary/20 border-primary/30 text-primary hover:bg-primary/30"
+                          : "bg-slate-100 dark:bg-slate-900 border-slate-200/50 dark:border-white/10 text-muted-foreground hover:text-foreground hover:bg-slate-200 dark:hover:bg-slate-800"
+                      }`}
+                      title={showRightSidebar ? "Ukryj szczegóły zamówienia" : "Pokaż szczegóły zamówienia"}
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                      {showRightSidebar ? "Ukryj szczegóły" : "Szczegóły"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleReadStatus()}
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+                      activeThread.read
+                        ? "bg-slate-100 dark:bg-slate-900 border-slate-200/50 dark:border-white/10 text-muted-foreground hover:text-foreground hover:bg-slate-200 dark:hover:bg-slate-800"
+                        : "bg-primary/20 border-primary/30 text-primary hover:bg-primary/30"
+                    }`}
+                    title={activeThread.read ? "Oznacz jako nieprzeczytany" : "Oznacz jako przeczytany"}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    {activeThread.read ? "Oznacz nieprzeczytane" : "Oznacz przeczytane"}
+                  </button>
+                </div>
               </div>
 
               {/* Oś czasu czatu */}
-              <div className="flex-1 p-4 overflow-y-auto min-h-0 space-y-4 bg-slate-950/10">
+              <div className="flex-1 p-4 overflow-y-auto min-h-0 space-y-4 bg-slate-50/50 dark:bg-slate-950/10">
                 {activeThread.messages && activeThread.messages.length > 0 ? (
                   activeThread.messages.map((msg) => {
                     const isMerchant = msg.author_role === "SELLER";
+                    const isAutoresponder = msg.author_role === "AUTORESPONDER";
                     const isSystem = msg.author_role === "SYSTEM" || msg.author_role === "ADMIN";
 
                     if (isSystem) {
                       return (
                         <div key={msg.id} className="flex justify-center my-2">
                           <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-2.5 max-w-md text-center space-y-1">
-                            <div className="flex items-center justify-center gap-1.5 text-amber-400 text-xs font-bold uppercase tracking-wider">
+                            <div className="flex items-center justify-center gap-1.5 text-amber-500 dark:text-amber-400 text-xs font-bold uppercase tracking-wider">
                               <ShieldAlert className="h-3.5 w-3.5" /> Moderator Marketplace
                             </div>
-                            <p className="text-xs text-slate-300 font-medium">
+                            <p className="text-xs text-foreground dark:text-slate-300 font-medium">
                               {msg.text}
                             </p>
-                            <span className="block text-[9px] text-slate-500 font-mono">
+                            <span className="block text-[9px] text-muted-foreground dark:text-slate-500 font-mono">
                               {new Date(msg.created_at).toLocaleString("pl-PL")}
                             </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (isAutoresponder) {
+                      return (
+                        <div key={msg.id} className="flex justify-end">
+                          <div className="max-w-[75%] rounded-2xl p-3.5 space-y-1.5 shadow-md bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-violet-500/30 text-foreground dark:text-slate-200 rounded-tr-none">
+                            <div className="flex items-center gap-1.5 text-violet-600 dark:text-violet-400 text-[10px] font-bold uppercase tracking-wider pb-1 border-b border-slate-200/50 dark:border-violet-500/10">
+                              <Sparkles className="h-3 w-3" /> System (Autoresponder)
+                            </div>
+                            <p className="text-xs whitespace-pre-wrap leading-relaxed">
+                              {msg.text}
+                            </p>
+                            {msg.attachments && msg.attachments.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {msg.attachments.map((att, idx) => {
+                                  const fileName = att.fileName || att.name || "Załącznik";
+                                  const lower = fileName.toLowerCase();
+                                  const isImg = lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp") || lower.endsWith(".gif");
+
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border bg-white dark:bg-slate-950/60 border-slate-200/50 dark:border-white/10 text-foreground dark:text-slate-200"
+                                    >
+                                      {isImg ? <ImageIcon className="h-3.5 w-3.5 text-blue-400 shrink-0" /> : <Paperclip className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
+                                      <span className="truncate max-w-[160px]" title={fileName}>{fileName}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between text-[9px] text-muted-foreground dark:text-slate-400 font-medium gap-2 pt-0.5 border-t border-slate-200/50 dark:border-white/5">
+                              <span className="font-semibold text-violet-600 dark:text-violet-300">System (Auto-odpowiedź)</span>
+                              <span className="font-mono">{new Date(msg.created_at).toLocaleString("pl-PL", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
                           </div>
                         </div>
                       );
@@ -973,7 +1661,7 @@ export default function CommunicationCenterPage() {
                         <div className={`max-w-[75%] rounded-2xl p-3.5 space-y-1.5 shadow-md ${
                           isMerchant
                             ? "bg-gradient-to-tr from-primary to-violet-600 text-white rounded-tr-none"
-                            : "bg-slate-900 border border-white/5 text-slate-200 rounded-tl-none"
+                            : "bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-white/5 text-foreground dark:text-slate-200 rounded-tl-none"
                         }`}>
                           <p className="text-xs whitespace-pre-wrap leading-relaxed">
                             {msg.text}
@@ -982,8 +1670,8 @@ export default function CommunicationCenterPage() {
                             <div className="flex flex-wrap gap-2 mt-2">
                               {msg.attachments.map((att, idx) => {
                                 const fileName = att.fileName || att.name || "Załącznik";
-                                const lower = fileName.toLowerCase();
-                                const isImg = lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp") || lower.endsWith(".gif");
+                                  const lower = fileName.toLowerCase();
+                                  const isImg = lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp") || lower.endsWith(".gif");
 
                                 return (
                                   <div
@@ -991,12 +1679,12 @@ export default function CommunicationCenterPage() {
                                     className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border transition-all ${
                                       isMerchant 
                                         ? "bg-white/15 border-white/20 text-white" 
-                                        : "bg-slate-950/60 border-white/10 text-slate-200"
+                                        : "bg-white dark:bg-slate-950/60 border-slate-200/50 dark:border-white/10 text-foreground dark:text-slate-200"
                                     }`}
                                   >
                                     {isImg ? <ImageIcon className="h-3.5 w-3.5 text-blue-400 shrink-0" /> : <Paperclip className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
                                     <span className="truncate max-w-[160px]" title={fileName}>{fileName}</span>
-                                    <div className="flex items-center gap-1 ml-1 pl-1 border-l border-white/10">
+                                    <div className="flex items-center gap-1 ml-1 pl-1 border-l border-slate-200/50 dark:border-white/10">
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1005,7 +1693,7 @@ export default function CommunicationCenterPage() {
                                           const globalIndex = allAtts.findIndex((a) => getAttachmentId(a) === targetId);
                                           loadAttachmentAtIndex(allAtts.length > 0 ? allAtts : msg.attachments!, globalIndex >= 0 ? globalIndex : idx);
                                         }}
-                                        className="p-1 rounded-md hover:bg-white/20 transition-colors"
+                                        className="p-1 rounded-md hover:bg-white/20 hover:text-white transition-colors"
                                         title="Podgląd załącznika"
                                       >
                                         <Eye className="h-3.5 w-3.5" />
@@ -1013,7 +1701,7 @@ export default function CommunicationCenterPage() {
                                       <button
                                         type="button"
                                         onClick={() => handleDownloadAttachment(att)}
-                                        className="p-1 rounded-md hover:bg-white/20 transition-colors"
+                                        className="p-1 rounded-md hover:bg-white/20 hover:text-white transition-colors"
                                         title="Pobierz załącznik"
                                       >
                                         <Download className="h-3.5 w-3.5" />
@@ -1025,7 +1713,7 @@ export default function CommunicationCenterPage() {
                             </div>
                           )}
                           <div className={`flex items-center justify-between text-[9px] ${
-                            isMerchant ? "text-white/60" : "text-slate-500"
+                            isMerchant ? "text-white/60" : "text-muted-foreground dark:text-slate-500"
                           } font-medium gap-2 pt-0.5`}>
                             <span className="font-semibold">{isMerchant ? "Ty (SuppSales)" : msg.author_login}</span>
                             <span className="font-mono">{new Date(msg.created_at).toLocaleString("pl-PL", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
@@ -1035,7 +1723,7 @@ export default function CommunicationCenterPage() {
                     );
                   })
                 ) : (
-                  <div className="h-full flex items-center justify-center text-slate-500 text-xs">
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-xs">
                     Brak wiadomości w historii
                   </div>
                 )}
@@ -1043,32 +1731,32 @@ export default function CommunicationCenterPage() {
               </div>
 
               {/* Edytor Odpowiedzi */}
-              <div className="p-4 border-t border-white/5 bg-slate-950/30 shrink-0 space-y-3 relative">
+              <div className="p-4 border-t border-slate-200/50 dark:border-white/5 bg-slate-50 dark:bg-slate-950/30 shrink-0 space-y-3 relative">
                 
                 {/* Toolbar narzędziowy */}
                 <div className="flex items-center justify-between gap-2 shrink-0">
                   <div className="relative">
                     <button
                       onClick={() => setShowTemplatesDropdown(!showTemplatesDropdown)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 px-3 py-1.5 text-xs font-semibold transition-all"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-800 text-foreground dark:text-slate-300 px-3 py-1.5 text-xs font-semibold transition-all"
                     >
                       <FileText className="h-3.5 w-3.5" />
                       Wstaw szablon
                     </button>
                     
                     {showTemplatesDropdown && (
-                      <div className="absolute bottom-10 left-0 w-64 bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-1 z-50 max-h-48 overflow-y-auto">
-                        <div className="p-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-white/5">
+                      <div className="absolute bottom-10 left-0 w-64 bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-white/10 rounded-xl shadow-2xl p-1 z-50 max-h-48 overflow-y-auto">
+                        <div className="p-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-slate-100 dark:border-white/5">
                           Dostępne szablony
                         </div>
                         {templates.length === 0 ? (
-                          <div className="p-3 text-center text-xs text-slate-600">Brak szablonów</div>
+                          <div className="p-3 text-center text-xs text-muted-foreground">Brak szablonów</div>
                         ) : (
                           templates.map((tpl) => (
                             <button
                               key={tpl.id}
                               onClick={() => insertTemplate(tpl)}
-                              className="w-full text-left text-xs text-slate-300 hover:bg-white/5 p-2 rounded-lg truncate transition-all"
+                              className="w-full text-left text-xs text-foreground dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 p-2 rounded-lg truncate transition-all"
                             >
                               {tpl.title}
                             </button>
@@ -1089,7 +1777,7 @@ export default function CommunicationCenterPage() {
                     />
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 px-3 py-1.5 text-xs font-semibold transition-all"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-white/5 hover:bg-slate-200 dark:hover:bg-slate-800 text-foreground dark:text-slate-300 px-3 py-1.5 text-xs font-semibold transition-all"
                     >
                       <Paperclip className="h-3.5 w-3.5" />
                       Załącznik
@@ -1112,14 +1800,14 @@ export default function CommunicationCenterPage() {
                     <div className="group relative inline-flex">
                       <button
                         disabled
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800/60 border border-white/10 text-slate-500 px-3.5 py-1.5 text-xs font-bold cursor-not-allowed"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-slate-200 dark:bg-slate-800/60 border border-slate-300 dark:border-white/10 text-muted-foreground/60 px-3.5 py-1.5 text-xs font-bold cursor-not-allowed"
                       >
                         <Lock className="h-3.5 w-3.5" />
                         Szkic AI Gemini
                       </button>
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-xl bg-slate-800 border border-white/10 text-xs text-slate-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl z-50">
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-850 border border-slate-200/50 dark:border-white/10 text-xs text-foreground dark:text-slate-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl z-50">
                         Dostępne od planu <span className="font-bold text-primary">PRO</span>
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white dark:border-t-slate-850" />
                       </div>
                     </div>
                   )}
@@ -1128,10 +1816,10 @@ export default function CommunicationCenterPage() {
                 {/* Pole edycji */}
                 <div className="relative">
                   {aiLoading && (
-                    <div className="absolute inset-0 bg-slate-950/60 rounded-xl flex items-center justify-center z-10">
+                    <div className="absolute inset-0 bg-white/60 dark:bg-slate-950/60 rounded-xl flex items-center justify-center z-10">
                       <div className="flex flex-col items-center gap-2">
                         <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                        <span className="text-xs text-slate-400 font-semibold">Gemini generuje propozycję...</span>
+                        <span className="text-xs text-muted-foreground font-semibold">Gemini generuje propozycję...</span>
                       </div>
                     </div>
                   )}
@@ -1139,31 +1827,31 @@ export default function CommunicationCenterPage() {
                     <button
                       type="button"
                       onClick={() => setIsExpandedReply(!isExpandedReply)}
-                      className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-white/10 transition-colors"
+                      className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200 border border-slate-200/50 dark:border-white/10 transition-colors"
                       title={isExpandedReply ? "Zmniejsz okno edycji" : "Powiększ okno edycji"}
                     >
                       {isExpandedReply ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
                     </button>
                   </div>
                   <textarea
-                    rows={isExpandedReply ? 16 : 8}
+                    rows={isExpandedReply ? 12 : 4}
                     placeholder="Wpisz odpowiedź do klienta..."
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    className={`w-full bg-slate-950/50 border border-white/10 rounded-xl p-4 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-primary/60 transition-all resize-y font-normal leading-relaxed ${
-                      isExpandedReply ? "min-h-[360px]" : "min-h-[180px]"
+                    className={`w-full bg-white dark:bg-slate-950/50 border border-slate-200/50 dark:border-white/10 rounded-xl p-4 text-sm text-foreground placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-primary/60 transition-all resize-y font-normal leading-relaxed ${
+                      isExpandedReply ? "min-h-[280px]" : "min-h-[100px]"
                     }`}
                   />
                 </div>
 
                 {/* Selected Files Preview */}
                 {selectedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200/50 dark:border-white/5">
                     {selectedFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1 text-[10px] text-slate-300">
-                        <Paperclip className="h-3 w-3 text-slate-500" />
+                      <div key={idx} className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200/50 dark:border-white/10 rounded-lg px-2.5 py-1 text-[10px] text-foreground dark:text-slate-300">
+                        <Paperclip className="h-3 w-3 text-muted-foreground" />
                         <span className="truncate max-w-[150px]">{file.name}</span>
-                        <button onClick={() => removeFile(idx)} className="text-slate-500 hover:text-red-400 ml-1">
+                        <button onClick={() => removeFile(idx)} className="text-muted-foreground hover:text-red-500 ml-1">
                           <X className="h-3 w-3" />
                         </button>
                       </div>
@@ -1192,352 +1880,29 @@ export default function CommunicationCenterPage() {
               </div>
             </>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-2">
               <MessageSquare className="h-12 w-12 opacity-20" />
               <p className="text-xs font-medium">Wybierz konwersację z lewego panelu, aby rozpocząć czat</p>
             </div>
           )}
         </Card>
 
-        {/* Kolumna 3 (Prawa): Kontekst Zamówienia (lg:col-span-3) */}
-        <Card className="lg:col-span-3 flex flex-col border-white/5 bg-slate-900/50 backdrop-blur-xl overflow-y-auto min-h-0 p-4 space-y-4">
-          
-          <div className="border-b border-white/5 pb-2">
-            <h3 className="font-extrabold text-sm text-slate-200 flex items-center gap-1.5">
-              <ShoppingBag className="h-4.5 w-4.5 text-primary" /> Kontekst Klienta
-            </h3>
-            <p className="text-[10px] text-slate-500">Powiązane dane transakcyjne z marketplace</p>
-          </div>
+        {/* Kolumna 3 (Prawa): Kontekst Zamówienia - inline tylko na dużych ekranach */}
+        {showRightSidebar && !isMobileOrLaptop && (
+          <Card className="hidden xl:flex xl:col-span-3 flex-col border-slate-200/50 dark:border-white/5 bg-white/60 dark:bg-slate-900/50 backdrop-blur-xl overflow-y-auto min-h-0 p-4 space-y-4 animate-in slide-in-from-right duration-300">
+            {renderCustomerDetails()}
+          </Card>
+        )}
 
-          {activeOrder ? (
-            <div className="space-y-4 text-xs">
-              
-              {/* Sekcja 1: Zamówienie */}
-              <div className="bg-slate-950/20 border border-white/5 rounded-xl p-3 space-y-2">
-                <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
-                  <span className="font-bold text-slate-300">Zamówienie</span>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="text-[9px] font-extrabold uppercase py-0.5">
-                      {activeOrder.order.status}
-                    </Badge>
-                    <a 
-                      href={`/orders/${activeOrder.order.id}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-primary hover:bg-primary/20 bg-primary/10 p-1 rounded-md transition-colors"
-                      title="Otwórz szczegóły zamówienia w nowej karcie"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  </div>
-                </div>
-                
-                <div className="space-y-1 text-[11px] text-slate-400">
-                  <div className="flex justify-between">
-                    <span>ID Zewnętrzne:</span>
-                    <span className="font-mono text-slate-200">{activeOrder.order.external_order_id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Data zakupu:</span>
-                    <span className="text-slate-200">{activeOrder.order.purchased_at}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Płatność:</span>
-                    <span className="text-slate-200">{activeOrder.payment.total} ({activeOrder.payment.type})</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sekcja 2: Dane Kupującego */}
-              <div className="bg-slate-950/20 border border-white/5 rounded-xl p-3 space-y-2">
-                <div className="font-bold text-slate-300 border-b border-white/5 pb-1.5 flex items-center gap-1">
-                  <User className="h-3.5 w-3.5 text-slate-400" /> Kupujący
-                </div>
-                <div className="space-y-1 text-[11px] text-slate-400">
-                  <p className="text-slate-200 font-semibold">
-                    {activeOrder.buyer.first_name} {activeOrder.buyer.last_name}
-                  </p>
-                  <p className="truncate">Email: {activeOrder.buyer.email}</p>
-                  {activeOrder.buyer.phone_number && <p>Tel: {activeOrder.buyer.phone_number}</p>}
-                </div>
-              </div>
-
-              {/* Sekcja 3: Produkty */}
-              <div className="bg-slate-950/20 border border-white/5 rounded-xl p-3 space-y-2">
-                <div className="font-bold text-slate-300 border-b border-white/5 pb-1.5">
-                  Zakupione Produkty
-                </div>
-                <div className="space-y-2 max-h-28 overflow-y-auto">
-                  {activeOrder.line_items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-start gap-2 text-[11px] text-slate-400">
-                      <span className="line-clamp-2 text-slate-300">{item.name}</span>
-                      <span className="font-bold text-slate-200 shrink-0">x{item.quantity}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sekcja 4: Dostawa & Adres z Podglądem Tooltip */}
-              <div className="bg-slate-950/20 border border-white/5 rounded-xl p-3 space-y-2">
-                <div className="font-bold text-slate-300 border-b border-white/5 pb-1.5 flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <Truck className="h-3.5 w-3.5 text-slate-400" /> Dostawa & Paczka
-                  </div>
-                  <div className="group relative">
-                    <button type="button" className="p-1 text-slate-400 hover:text-primary transition-colors">
-                      <MapPin className="h-3.5 w-3.5" />
-                    </button>
-                    {/* Tooltip ze szczegółami adresu dostawy */}
-                    <div className="absolute right-0 bottom-full mb-2 w-64 p-3 rounded-xl bg-slate-900 border border-white/10 text-xs text-slate-300 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 space-y-1">
-                      <p className="font-bold text-slate-200 border-b border-white/10 pb-1 flex items-center gap-1">
-                        <MapPin className="h-3 w-3 text-primary" /> Adres Dostawy
-                      </p>
-                      {activeOrder.delivery.address ? (
-                        <>
-                          <p className="font-semibold text-slate-200">
-                            {activeOrder.delivery.address.first_name} {activeOrder.delivery.address.last_name}
-                            {activeOrder.delivery.address.company_name && ` (${activeOrder.delivery.address.company_name})`}
-                          </p>
-                          <p>{activeOrder.delivery.address.street}</p>
-                          <p>{activeOrder.delivery.address.zip_code} {activeOrder.delivery.address.city}</p>
-                          {activeOrder.delivery.address.country_code && <p className="text-[10px] text-slate-500 uppercase">{activeOrder.delivery.address.country_code}</p>}
-                        </>
-                      ) : (
-                        <p className="text-slate-500 italic">Brak pełnego adresu dostawy</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-1.5 text-[11px] text-slate-400">
-                  <p className="text-slate-200 font-semibold truncate">
-                    {activeOrder.delivery.method_name}
-                  </p>
-                  {activeOrder.delivery.address && (
-                    <p className="text-[10px] text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
-                      <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                      <span>{activeOrder.delivery.address.street || ""}, {activeOrder.delivery.address.city || ""}</span>
-                    </p>
-                  )}
-                  
-                  {activeOrder.order.tracking_numbers && activeOrder.order.tracking_numbers.length > 0 ? (
-                    <div className="space-y-1 pt-1">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase block">Numery listów:</span>
-                      {activeOrder.order.tracking_numbers.map((track, i) => (
-                        <div key={i} className="flex items-center justify-between bg-slate-950/50 p-1.5 rounded-lg border border-white/5 font-mono text-[10px] text-slate-300">
-                          <span>{track}</span>
-                          <a
-                            href={`https://allegro.pl/sledz-przesylke?numer=${track}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:text-primary-focus"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-slate-600 italic">Brak numerów śledzenia przesyłki</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Sekcja 5: Faktura VAT (FV) z Akcjami i Tooltipem */}
-              <div className="bg-slate-950/20 border border-white/5 rounded-xl p-3 space-y-2">
-                <div className="font-bold text-slate-300 border-b border-white/5 pb-1.5 flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <Receipt className="h-3.5 w-3.5 text-slate-400" /> Faktura VAT (FV)
-                  </div>
-                  {activeOrder.invoice_address && (
-                    <div className="group relative">
-                      <button type="button" className="p-1 text-slate-400 hover:text-primary transition-colors">
-                        <Building2 className="h-3.5 w-3.5" />
-                      </button>
-                      {/* Tooltip ze szczegółami adresu do faktury */}
-                      <div className="absolute right-0 bottom-full mb-2 w-64 p-3 rounded-xl bg-slate-900 border border-white/10 text-xs text-slate-300 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 space-y-1">
-                        <p className="font-bold text-slate-200 border-b border-white/10 pb-1 flex items-center gap-1">
-                          <Receipt className="h-3 w-3 text-primary" /> Dane do Faktury
-                        </p>
-                        <p className="font-semibold text-slate-200">
-                          {activeOrder.invoice_address.company_name || `${activeOrder.invoice_address.first_name || ""} ${activeOrder.invoice_address.last_name || ""}`}
-                        </p>
-                        {activeOrder.invoice_address.tax_id && (
-                          <p className="font-mono text-primary text-[11px] font-bold">NIP: {activeOrder.invoice_address.tax_id}</p>
-                        )}
-                        <p>{activeOrder.invoice_address.street}</p>
-                        <p>{activeOrder.invoice_address.zip_code} {activeOrder.invoice_address.city}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 text-[11px]">
-                  {activeOrder.invoice_address ? (
-                    <div className="space-y-0.5">
-                      <p className="text-slate-200 font-semibold truncate">
-                        {activeOrder.invoice_address.company_name || `${activeOrder.invoice_address.first_name || ""} ${activeOrder.invoice_address.last_name || ""}`}
-                      </p>
-                      {activeOrder.invoice_address.tax_id && (
-                        <p className="text-primary font-mono font-bold text-[10px]">
-                          NIP: {activeOrder.invoice_address.tax_id}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 italic">Brak danych do faktury (paragon)</p>
-                  )}
-
-                  {/* Przycisk Podglądu, Dołączenia i Pobierania FV */}
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => handlePreviewInvoice(activeOrder.order.id, activeOrder.order.erp_sales_document_number)}
-                      className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary text-[10px] font-bold transition-all"
-                      title="Podgląd faktury VAT"
-                    >
-                      <Eye className="h-3 w-3" /> Podgląd
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAttachInvoiceToReply(activeOrder.order.id, activeOrder.order.erp_sales_document_number)}
-                      className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 text-[10px] font-bold transition-all"
-                      title="Dołącz fakturę PDF do odpowiedzi"
-                    >
-                      <Paperclip className="h-3 w-3" /> Dołącz FV
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadInvoice(activeOrder.order.id, activeOrder.order.erp_sales_document_number)}
-                      className="inline-flex items-center justify-center p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-300 transition-colors"
-                      title="Pobierz fakturę PDF"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sekcja 6: Inne zamówienia klienta */}
-              {activeOrder.related_orders && activeOrder.related_orders.length > 0 && (
-                <div className="bg-slate-950/20 border border-white/5 rounded-xl p-3 space-y-2">
-                  <div className="font-bold text-slate-300 border-b border-white/5 pb-1.5 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <ShoppingBag className="h-3.5 w-3.5 text-primary" /> Inne zamówienia ({activeOrder.related_orders.length})
-                    </div>
-                    <span className="text-[9px] text-slate-500 font-normal">Kupujący</span>
-                  </div>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {activeOrder.related_orders.map((ro) => (
-                      <a 
-                        key={ro.id} 
-                        href={`/orders/${ro.id}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        title={ro.items_summary || ro.external_order_id}
-                        className="relative block bg-slate-950/60 p-2.5 rounded-xl border border-white/5 hover:border-primary/50 hover:bg-slate-900 transition-all group space-y-1.5 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <span 
-                            title={ro.items_summary || ro.external_order_id}
-                            className="text-xs font-semibold text-slate-200 group-hover:text-primary transition-colors line-clamp-2 leading-tight"
-                          >
-                            {ro.items_summary || ro.external_order_id}
-                          </span>
-                          <Badge variant="outline" className="text-[9px] font-extrabold uppercase shrink-0 px-1.5 py-0.5 border-primary/30 text-primary bg-primary/5">
-                            {translateOrderStatus(ro.status)}
-                          </Badge>
-                        </div>
-
-                        {/* Tooltip po najechaniu z pełną nazwą zamówienia */}
-                        <div className="absolute left-0 bottom-full mb-1 hidden group-hover:block z-50 w-full p-2 rounded-lg bg-slate-900 border border-white/10 text-xs text-slate-200 shadow-2xl pointer-events-none">
-                          <p className="font-bold text-[9px] text-slate-400 uppercase tracking-wider mb-0.5">Zamówiony towar:</p>
-                          <p className="font-semibold text-slate-100 leading-snug">{ro.items_summary}</p>
-                        </div>
-
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-white/5">
-                          <span className="flex items-center gap-1 text-slate-300 font-sans font-medium">
-                            📅 <span className="font-semibold text-slate-200">{ro.purchased_at}</span>
-                          </span>
-                          {ro.total && <span className="font-bold text-slate-200">{ro.total}</span>}
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
+        {/* Szuflada boczna dla laptopów i mniejszych ekranów */}
+        <Sheet open={showRightSidebar && isMobileOrLaptop} onOpenChange={setShowRightSidebar}>
+          <SheetContent side="right" className="w-[350px] sm:w-[400px] glass p-0 border-l border-border/20 bg-background/95 backdrop-blur-xl">
+            <SheetTitle className="sr-only">Szczegóły zamówienia</SheetTitle>
+            <div className="h-full overflow-y-auto p-5 space-y-5">
+              {renderCustomerDetails()}
             </div>
-          ) : (
-            <div className="h-36 flex flex-col items-center justify-center text-slate-600 text-center space-y-1">
-              <ShoppingBag className="h-6 w-6 opacity-30" />
-              <p className="text-[11px]">Brak powiązanego zamówienia dla tego wątku</p>
-            </div>
-          )}
-
-          {/* Sekcja: Zadania i decyzje wątku */}
-          <div className="bg-slate-950/20 border border-white/5 rounded-xl p-3 space-y-2 mt-4">
-            <div className="font-bold text-slate-300 border-b border-white/5 pb-1.5 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <ClipboardList className="h-3.5 w-3.5 text-indigo-400" /> Zadania i decyzje
-              </div>
-              <Badge variant="outline" className="text-[10px] bg-indigo-500/5 text-indigo-400 border-indigo-500/10">
-                {threadTasks.length}
-              </Badge>
-            </div>
-
-            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {isThreadTasksLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-indigo-400" />
-                </div>
-              ) : threadTasks.length === 0 ? (
-                <p className="text-[10px] text-slate-500 italic py-1">Brak zadań powiązanych z tym wątkiem.</p>
-              ) : (
-                threadTasks.map((task) => {
-                  const statusColor = 
-                    task.status === "NEW" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
-                    task.status === "IN_PROGRESS" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                    task.status === "RESOLVED" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                    "bg-slate-500/10 text-slate-400 border-white/10";
-
-                  return (
-                    <div 
-                      key={task.id} 
-                      onClick={() => {
-                        window.dispatchEvent(new CustomEvent("open-internal-task", { detail: { taskId: task.id } }));
-                      }}
-                      className="bg-slate-950/60 p-2 rounded-lg border border-white/5 hover:border-indigo-500/30 hover:bg-slate-900 transition-all cursor-pointer space-y-1"
-                    >
-                      <div className="flex items-center justify-between text-[9px]">
-                        <span className="font-semibold text-slate-400">
-                          {task.created_by.name || task.created_by.email.split("@")[0]}
-                        </span>
-                        <Badge variant="outline" className={`text-[8px] px-1 py-0 h-3.5 border-none font-bold rounded ${statusColor}`}>
-                          {task.status === "NEW" ? "Nowe" : task.status === "IN_PROGRESS" ? "W toku" : task.status === "RESOLVED" ? "Odpowiedź" : "Zamknięte"}
-                        </Badge>
-                      </div>
-                      <p className="font-bold text-[10px] text-slate-200 truncate leading-tight">{task.title}</p>
-                      {task.description && (
-                        <p className="text-[9px] text-slate-500 line-clamp-1 leading-normal">{task.description}</p>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <Button
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent("open-internal-task", { detail: { taskId: "", threadId: activeThreadId } }));
-              }}
-              variant="outline"
-              size="sm"
-              className="w-full h-7 text-[10px] bg-slate-900 border-white/10 text-slate-300 hover:bg-white/5 hover:text-white rounded-lg flex items-center justify-center gap-1"
-            >
-              <Plus className="h-3 w-3" /> Zgłoś prośbę / zadanie
-            </Button>
-          </div>
-        </Card>
+          </SheetContent>
+        </Sheet>
 
       </div>
 

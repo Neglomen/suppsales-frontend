@@ -87,6 +87,8 @@ const getIntegrationStyle = (providerType: string | undefined) => {
 
 const getReturnStatusConfig = (status: string) => {
   switch (status?.toUpperCase()) {
+    case "CREATED":
+      return { label: "Utworzony", className: "bg-slate-500/10 text-slate-400 border-slate-500/20", icon: <AlertCircle className="h-4 w-4" />, dot: "bg-slate-400" };
     case "SENT":
       return { label: "Wysłany", className: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: <Truck className="h-4 w-4" />, dot: "bg-blue-400" };
     case "DELIVERED":
@@ -318,6 +320,8 @@ function ReturnDetailsContent() {
       ? payload.currency
       : "PLN";
 
+  const otherOrders = (orderData?.related_orders || []).filter((o: any) => o.id !== orderData?.id);
+
   return (
     <div className="space-y-6 pb-10">
 
@@ -368,7 +372,7 @@ function ReturnDetailsContent() {
                 </p>
                 <div className="flex items-center gap-3 mt-0.5">
                   <h1 className="text-xl font-black text-foreground dark:text-white leading-none tracking-tight dark:drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]">
-                    #{returnData.external_return_id || returnData.reference_number || returnData.id.slice(0, 8)}
+                    #{returnData.details_payload?.referenceNumber || returnData.external_return_id || returnData.reference_number || returnData.id.slice(0, 8)}
                   </h1>
                   <Badge
                     variant="outline"
@@ -406,7 +410,7 @@ function ReturnDetailsContent() {
           <TabsTrigger value="details" className="text-xs font-semibold px-4 py-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             Szczegóły Zwrotu i Zamówienia
           </TabsTrigger>
-          <TabsTrigger value="communication" className="text-xs font-semibold px-4 py-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground flex items-center gap-2">
+          <TabsTrigger value="communication" className="hidden md:flex text-xs font-semibold px-4 py-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground items-center gap-2">
             Dyskusje i Wiadomości
             {orderData?.disputes?.filter((d: any) => d.status === "ONGOING").length > 0 && (
               <Badge className="bg-red-500 text-white font-mono text-[9px] px-1.5 py-0.5 animate-pulse">
@@ -414,9 +418,17 @@ function ReturnDetailsContent() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="processing" className="text-xs font-semibold px-4 py-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger value="processing" className="hidden md:flex text-xs font-semibold px-4 py-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             Przetwarzanie Zwrotu (BOK)
           </TabsTrigger>
+          <TabsTrigger value="order-logs" className="text-xs font-semibold px-4 py-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            Logi Zamówienia
+          </TabsTrigger>
+          {otherOrders.length > 0 && (
+            <TabsTrigger value="other-orders" className="text-xs font-semibold px-4 py-2 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              Inne Zamówienia ({otherOrders.length})
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ── TAB 1: DETAILS ── */}
@@ -432,7 +444,7 @@ function ReturnDetailsContent() {
                   <SectionHeader title="Informacje o zwrocie" icon={<Info className="h-3.5 w-3.5" />} />
                   <div className="space-y-0">
                     <InfoRow label="ID zwrotu" value={returnData.external_return_id} mono />
-                    <InfoRow label="Nr referencyjny" value={returnData.reference_number} mono />
+                    <InfoRow label="Nr referencyjny" value={returnData.details_payload?.referenceNumber || returnData.reference_number} mono />
                     <InfoRow label="Status" value={statusCfg.label} />
                     <InfoRow label="Login kupującego" value={returnData.buyer_login} />
                     <InfoRow label="Data zgłoszenia" value={createdAt ? format(createdAt, "dd.MM.yyyy HH:mm") : null} />
@@ -827,6 +839,104 @@ function ReturnDetailsContent() {
             onRefresh={loadData}
           />
         </TabsContent>
+
+        <TabsContent value="order-logs" className="space-y-6 outline-none focus:ring-0">
+          <Card className="bg-white/60 dark:bg-[#0c0f1d]/50 border-slate-200/50 dark:border-white/10 backdrop-blur-xl shadow-xl">
+            <CardContent className="p-5">
+              <SectionHeader title="Logi i Historia Zamówienia" icon={<Clock className="h-3.5 w-3.5" />} />
+              {orderData?.event_logs && orderData.event_logs.length > 0 ? (
+                <div className="relative border-l border-slate-200 dark:border-white/10 ml-3 pl-6 space-y-6 py-2">
+                  {orderData.event_logs.map((log: any) => (
+                    <div key={log.id} className="relative">
+                      {/* Timeline dot */}
+                      <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 border border-primary/40 ring-4 ring-slate-900">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      </span>
+                      
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-bold text-foreground dark:text-white leading-snug">
+                            {log.summary}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px]">
+                            <Badge variant="outline" className="px-1.5 h-4 bg-primary/5 text-primary border-primary/10">
+                              Źródło: {log.source}
+                            </Badge>
+                            <Badge variant="outline" className="px-1.5 h-4 bg-slate-100 dark:bg-white/5 text-muted-foreground border-slate-200 dark:border-white/10">
+                              Typ: {log.type}
+                            </Badge>
+                          </div>
+                          {log.details_payload && Object.keys(log.details_payload).length > 0 && (
+                            <details className="mt-2 text-[10px] text-muted-foreground cursor-pointer">
+                              <summary className="hover:text-foreground transition-colors select-none font-bold">Pokaż szczegóły logu</summary>
+                              <pre className="mt-1 p-2 bg-black/40 rounded border border-white/5 font-mono overflow-x-auto text-[9px] max-w-full">
+                                {JSON.stringify(log.details_payload, null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                        <span className="text-[10px] font-mono text-muted-foreground shrink-0 mt-0.5">
+                          {format(new Date(log.occurred_at), "dd.MM.yyyy HH:mm:ss")}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic text-center py-6">Brak logów zdarzeń dla tego zamówienia.</p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {otherOrders.length > 0 && (
+          <TabsContent value="other-orders" className="space-y-6 outline-none focus:ring-0">
+            <Card className="bg-white/60 dark:bg-[#0c0f1d]/50 border-slate-200/50 dark:border-white/10 backdrop-blur-xl shadow-xl">
+              <CardContent className="p-5">
+                <SectionHeader title="Inne Zamówienia Tego Klienta" icon={<ShoppingBag className="h-3.5 w-3.5" />} />
+                <div className="space-y-4">
+                  {otherOrders.map((ord: any) => (
+                    <div
+                      key={ord.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:border-primary/30 transition-all duration-300"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-foreground dark:text-white font-mono">
+                            #{ord.external_order_id}
+                          </span>
+                          <Badge variant="outline" className={cn("text-[9px] font-bold", getOrderStatusConfig(ord.status).className)}>
+                            {getOrderStatusConfig(ord.status).label}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                          <span>Data zakupu: {ord.purchased_at ? format(new Date(ord.purchased_at), "dd.MM.yyyy HH:mm") : "—"}</span>
+                          <span>•</span>
+                          <span>Metoda: {ord.payment_type || "—"}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 justify-between sm:justify-end">
+                        <div className="text-right">
+                          <p className="text-[10px] text-muted-foreground">Wartość</p>
+                          <p className="text-sm font-extrabold text-foreground dark:text-white">{ord.total_to_pay} PLN</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => router.push(`/orders/${ord.id}`)}
+                          className="text-xs font-semibold border-slate-200 dark:border-white/10 hover:bg-primary/5 hover:text-primary transition-all rounded-xl"
+                        >
+                          Pokaż Zamówienie
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* ── DISPUTE CHAT DIALOG ── */}

@@ -17,10 +17,104 @@ import api from "@/lib/api";
 import { DataTable } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Printer } from "lucide-react";
+import { Download, Printer, ExternalLink } from "lucide-react";
 import { ShipmentStatus } from "@/types/shipment";
 import { usePrintHub } from "@/hooks/use-print-hub";
 import { printHubService } from "@/lib/print-hub-service";
+import { useShippingConfig } from "@/app/(dashboard)/shipping/_hooks/use-shipping-config";
+
+// --- Funkcja Pomocnicza do Budowania Linków Śledzenia ---
+function getTrackingUrl(trackingNumber: string, providerType?: string, serviceCode?: string): string | null {
+  if (!trackingNumber) return null;
+  const cleanNum = trackingNumber.trim();
+  const numOnly = cleanNum.replace(/\s+/g, "");
+  const providerUp = (providerType || "").toUpperCase().trim();
+
+  if (providerUp === "SUUS" || providerUp === "ROHLIG_SUUS") {
+    return `https://portal.suus.com/order-details/${numOnly}`;
+  }
+  if (providerUp === "RABEN") {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (providerUp === "GEIS") {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "GEODIS") {
+    return `https://tracking.geodis.pl/?reference=${numOnly}`;
+  }
+  if (providerUp === "INPOST" || providerUp === "INPOST_BUY" || providerUp === "INPOST_KURIER") {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "DHL") {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+  if (providerUp === "DPD" || providerUp === "DPD_PL") {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (providerUp === "GLS") {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (providerUp === "UPS") {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (providerUp === "FEDEX") {
+    return `https://www.fedex.com/fedextrack/?trknbr=${numOnly}`;
+  }
+  if (providerUp === "POCZTA_POLSKA" || providerUp === "POCZTEX") {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  if (providerUp === "ALLEGRO" || providerUp === "ALLEGRO_ONE" || providerUp === "ALLEGRO_ONE_PICKUP" || providerUp === "ALLEGRO_ONE_MOBILE" || providerUp === "ALLEGRO_DELIVERY") {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+
+  const codeLower = (serviceCode || "").toLowerCase();
+  if (codeLower.includes("inpost") || codeLower.includes("paczkomat")) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (codeLower.includes("dpd")) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (codeLower.includes("dhl")) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+  if (codeLower.includes("gls")) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (codeLower.includes("ups")) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (codeLower.includes("raben")) {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (codeLower.includes("geis")) {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+
+  // Allegro Delivery (zaczynające się na A, np. A000..., AD..., ALE..., AL...)
+  if (/^A[A-Z0-9]+$/i.test(numOnly)) {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+  if (/^1Z[A-Z0-9]{16}$/i.test(numOnly)) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (/^\d{24}$/.test(numOnly)) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (/^\d{13,14}[A-Za-z]?$/.test(numOnly)) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (/^[A-Z]{2}\d{9}[A-Z]{2}$/i.test(numOnly) || /^\d{20}$/.test(numOnly)) {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  if (/^\d{12}$/.test(numOnly)) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (/^\d{10,11}$/.test(numOnly)) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+
+  return `https://www.google.com/search?q=${encodeURIComponent("śledzenie przesyłki")}+${numOnly}`;
+}
 
 interface OrderBriefForShipment {
   id: string;
@@ -56,6 +150,7 @@ interface PaginatedShipmentsResponse {
 
 export function ShippingHistoryTable() {
   const { isEnabled: printHubEnabled, status: printHubStatus, defaultLabelPrinter } = usePrintHub();
+  const { data: shippingConfig } = useShippingConfig();
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
@@ -238,11 +333,26 @@ export function ShippingHistoryTable() {
               <Badge variant="outline" className={`font-semibold ${statusColor}`}>
                 {shipment.status}
               </Badge>
-              {shipment.tracking_number && (
-                <span className="text-xs font-mono text-muted-foreground mt-1">
-                  {shipment.tracking_number}
-                </span>
-              )}
+              {shipment.tracking_number && (() => {
+                const courierInteg = shippingConfig?.couriers.find((c) => c.id === shipment.courier_integration_id);
+                const trackingUrl = getTrackingUrl(shipment.tracking_number, courierInteg?.provider_type, shipment.courier_service_code);
+                return (
+                  <span className="text-xs font-mono mt-1">
+                    {trackingUrl ? (
+                      <a
+                        href={trackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1"
+                      >
+                        {shipment.tracking_number} <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">{shipment.tracking_number}</span>
+                    )}
+                  </span>
+                );
+              })()}
             </div>
           );
         },
@@ -288,7 +398,7 @@ export function ShippingHistoryTable() {
         },
       },
     ],
-    []
+    [shippingConfig]
   );
 
 

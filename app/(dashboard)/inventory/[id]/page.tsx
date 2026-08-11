@@ -777,12 +777,16 @@ export default function ProductDetailsPage() {
                     ? `https://allegro.pl/oferta/${offer.external_offer_id}`
                     : providerType === "EMPIK"
                     ? `https://www.empik.com/p,${offer.external_offer_id}`
+                    : providerType === "WOOCOMMERCE" && integration?.api_config?.shop_url
+                    ? `${integration.api_config.shop_url.replace(/\/$/, "")}/wp-admin/post.php?post=${offer.external_offer_id.split("-")[0]}&action=edit`
                     : null;
 
                   const providerStyle = providerType === "ALLEGRO"
                     ? { bg: "bg-orange-500/10 border-orange-500/20 text-orange-500", label: "Allegro" }
                     : providerType === "EMPIK"
                     ? { bg: "bg-yellow-500/10 border-yellow-500/20 text-yellow-500 dark:text-yellow-400", label: "Empik" }
+                    : providerType === "WOOCOMMERCE"
+                    ? { bg: "bg-purple-500/10 border-purple-500/20 text-purple-400", label: "WooCommerce" }
                     : { bg: "bg-blue-500/10 border-blue-500/20 text-blue-400", label: providerType };
 
                   return (

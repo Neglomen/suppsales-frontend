@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import api from "@/lib/api";
 import { MarketplaceOrder } from "@/types/marketplace-order";
 import { useShippingConfig } from "../_hooks/use-shipping-config";
+import { ReturnLabelDialog } from "./ReturnLabelDialog";
 import {
   Card,
   CardContent,
@@ -37,6 +38,7 @@ import {
   File as FileIcon,
   StickyNote,
   CreditCard,
+  ExternalLink,
   CheckCircle,
   MessageSquare,
   Package,
@@ -56,7 +58,10 @@ import {
   ClipboardList,
   Plus,
   Trash,
-  User
+  User,
+  Undo2,
+  Download,
+  FileCheck2
 } from "lucide-react";
 
 import {
@@ -198,6 +203,75 @@ const OrderInfoCard = ({
   const [isEditInvoiceOpen, setIsEditInvoiceOpen] = useState(false);
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [isSalesCorrectionOpen, setIsSalesCorrectionOpen] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<string | null>(null);
+
+  const kfsDetails = useMemo(() => {
+    if (!order) return null;
+    if (order.erp_sales_correction_number) {
+      return {
+        hasKfs: true,
+        kfsDocNumber: order.erp_sales_correction_number,
+      };
+    }
+
+    const flags = Array.isArray(order.flags) ? order.flags : [];
+    const hasFlag = flags.includes("KFS_ISSUED");
+
+    let kfsDocNumber = "";
+    const events = (order as any)?.events;
+    if (Array.isArray(events)) {
+      for (const ev of events) {
+        if (ev.summary?.includes("KFS") || ev.summary?.includes("Korekty Faktury") || ev.summary?.includes("Korekta Faktury")) {
+          if (ev.details?.subiekt_document_number) {
+            kfsDocNumber = ev.details.subiekt_document_number;
+            break;
+          }
+          const match = ev.summary?.match(/(KFS\s*[A-Za-z0-9\/\-_]+)/i);
+          if (match) {
+            kfsDocNumber = match[1];
+            break;
+          }
+        }
+      }
+    }
+
+    if (!hasFlag && !kfsDocNumber) return null;
+
+    return {
+      hasKfs: true,
+      kfsDocNumber: kfsDocNumber || (order.erp_sales_document_number ? order.erp_sales_document_number.replace(/^FS/i, "KFS") : "KFS"),
+    };
+  }, [order]);
+
+  const handleDownloadSalesDoc = async (docNumber?: string) => {
+    if (!order) return;
+    const targetDoc = docNumber || order.erp_sales_document_number;
+    if (!targetDoc) return;
+    setIsDownloadingPdf(targetDoc);
+    const tid = toast.loading(`Pobieranie dokumentu ${targetDoc}...`);
+    try {
+      const params = docNumber ? { doc_number: docNumber } : {};
+      const res = await api.get(`/orders/${order.id}/sales-invoice/pdf`, {
+        params,
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeName = targetDoc.replace(/\//g, "-").replace(/\s+/g, "_");
+      link.href = url;
+      link.download = `${safeName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(`Pobrano dokument ${targetDoc}!`, { id: tid });
+    } catch (err: any) {
+      toast.error(`Nie udało się pobrać PDF: ${err.message || "Błąd serwera"}`, { id: tid });
+    } finally {
+      setIsDownloadingPdf(null);
+    }
+  };
 
   const handleCreateInvoice = async () => {
     try {
@@ -521,13 +595,13 @@ const OrderInfoCard = ({
     <div className={cn(!onlyHeader && "space-y-6")}>
       {/* ── HERO HEADER (Premium Design) ── */}
       {!hideHeader && (
-        <div className="relative rounded-2xl overflow-hidden border border-border/30 bg-slate-900/40 backdrop-blur-md shadow-xl shrink-0">
+        <div className="relative rounded-2xl overflow-hidden border border-slate-200/50 dark:border-border/30 bg-slate-100/80 dark:bg-slate-900/40 backdrop-blur-md shadow-xl shrink-0">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent pointer-events-none" />
           <div className="relative p-5">
             <div className="flex flex-col md:flex-row md:items-start gap-5">
               {/* Icon + integration */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-slate-950/10 dark:bg-white/10 border border-border/30 flex items-center justify-center shadow-lg">
+                <div className="w-12 h-12 rounded-xl bg-slate-50 dark:bg-slate-950/10 dark:bg-white/10 border border-slate-200/50 dark:border-border/30 flex items-center justify-center shadow-lg">
                   {!providerType && <Package className="h-6 w-6 text-foreground/70" />}
                   {providerType === "ALLEGRO" && <AllegroIcon className="max-h-6 max-w-[80%] w-auto shrink-0" />}
                   {providerType === "BASELINKER" && <BaseLinkerIcon className="max-h-6 max-w-[80%] w-auto shrink-0" />}
@@ -560,14 +634,14 @@ const OrderInfoCard = ({
 
               {/* Stats pills */}
               <div className="flex flex-wrap gap-2 md:ml-auto">
-                <div className="flex items-center gap-2 bg-slate-950/5 dark:bg-white/5 rounded-lg px-2.5 py-1.5 border border-border/30">
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950/5 dark:bg-white/5 rounded-lg px-2.5 py-1.5 border border-slate-200/50 dark:border-border/30">
                   <span className="text-muted-foreground"><CreditCard className="h-3 w-3" /></span>
                   <div className="min-w-0">
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Kwota</p>
                     <p className="text-xs font-semibold text-foreground truncate">{paymentInfo.amount} {payload.currency || "PLN"}</p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-2 bg-slate-950/5 dark:bg-white/5 rounded-lg px-2.5 py-1.5 border border-border/30 ${paymentInfo.color}`}>
+                <div className={`flex items-center gap-2 bg-slate-50 dark:bg-slate-950/5 dark:bg-white/5 rounded-lg px-2.5 py-1.5 border border-slate-200/50 dark:border-border/30 ${paymentInfo.color}`}>
                   <span className={paymentInfo.color}>{paymentInfo.icon}</span>
                   <div>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Status</p>
@@ -600,14 +674,14 @@ const OrderInfoCard = ({
                 <div className="text-sm space-y-3">
                   {/* Dane odbiorcy - zawsze widoczne i czytelne */}
                   <div className="space-y-0.5">
-                    <p className="font-semibold text-slate-200">{deliveryInfo.name || "Brak odbiorcy"}</p>
+                    <p className="font-semibold text-foreground dark:text-slate-200">{deliveryInfo.name || "Brak odbiorcy"}</p>
                     {deliveryInfo.phone && (
                       <p className="text-xs text-muted-foreground font-mono">Tel: {deliveryInfo.phone}</p>
                     )}
                   </div>
 
                   {pickupPointInfo || overridePointId ? (
-                    <div className="pt-2.5 border-t border-white/5 space-y-1.5 bg-primary/5 rounded-lg p-2.5 border border-primary/10">
+                    <div className="pt-2.5 border-t border-slate-200/50 dark:border-white/5 space-y-1.5 bg-primary/5 rounded-lg p-2.5 border border-primary/10">
                       <div className="flex items-center gap-1.5 text-primary">
                         <MapPin className="h-3.5 w-3.5" />
                         <span className="font-bold text-[10px] uppercase tracking-wider">Punkt Odbioru / Paczkomat</span>
@@ -633,7 +707,7 @@ const OrderInfoCard = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="pt-2.5 border-t border-white/5 space-y-0.5">
+                    <div className="pt-2.5 border-t border-slate-200/50 dark:border-white/5 space-y-0.5">
                       <p className="text-muted-foreground">{deliveryInfo.street || "Brak ulicy"}</p>
                       <p className="text-muted-foreground">
                         {deliveryInfo.zipCode} {deliveryInfo.city}
@@ -643,7 +717,7 @@ const OrderInfoCard = ({
 
                   {/* ID Punktu Paczkomatu wejściowe bezpośrednio w okienku adresu */}
                   {showPickupPoint && setOverridePointId && (
-                    <div className="mt-3 pt-2.5 border-t border-white/5 space-y-1.5">
+                    <div className="mt-3 pt-2.5 border-t border-slate-200/50 dark:border-white/5 space-y-1.5">
                       <Label htmlFor="address-point-id" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         <MapPin className="w-3.5 h-3.5 text-primary" /> Szybka zmiana ID punktu
                       </Label>
@@ -690,26 +764,62 @@ const OrderInfoCard = ({
                     </div>
                   )}
 
-                  {/* Status Faktury i Przycisk Tworzenia / Korekty */}
+                  {/* Status Faktury i Przycisk Tworzenia / Pobierania / Korekty */}
                   {order.erp_sales_document_number ? (
                     <div className="mt-3 pt-3 border-t border-emerald-500/20 space-y-2">
                       <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 p-2.5 text-xs text-emerald-400">
                         <div className="flex items-center gap-2 min-w-0">
                           <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
                           <div className="min-w-0">
-                            <p className="font-semibold">Wystawiono fakturę:</p>
+                            <p className="font-semibold">Faktura Sprzedaży (FS):</p>
                             <p className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-white mt-1 truncate inline-block">
                               {order.erp_sales_document_number}
                             </p>
                           </div>
                         </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 gap-1"
+                          disabled={isDownloadingPdf === order.erp_sales_document_number}
+                          onClick={() => handleDownloadSalesDoc(order.erp_sales_document_number!)}
+                        >
+                          {isDownloadingPdf === order.erp_sales_document_number ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                          PDF FS
+                        </Button>
                       </div>
+
+                      {/* Wyświetlanie informacji i pobieranie Korekty KFS jeśli istnieje */}
+                      {kfsDetails?.hasKfs && (
+                        <div className="flex items-center justify-between rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5 text-xs text-amber-300">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileCheck2 className="h-4 w-4 text-amber-400 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-semibold text-amber-400">Wystawiono Korektę (KFS):</p>
+                              <p className="font-mono bg-amber-500/20 px-1.5 py-0.5 rounded text-[10px] text-amber-200 mt-1 truncate inline-block">
+                                {kfsDetails.kfsDocNumber}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 gap-1 font-semibold"
+                            disabled={isDownloadingPdf === kfsDetails.kfsDocNumber}
+                            onClick={() => handleDownloadSalesDoc(kfsDetails.kfsDocNumber)}
+                          >
+                            {isDownloadingPdf === kfsDetails.kfsDocNumber ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                            PDF KFS
+                          </Button>
+                        </div>
+                      )}
+
                       <Button
                         onClick={() => setIsSalesCorrectionOpen(true)}
                         className="w-full h-8 text-xs font-semibold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 rounded-lg transition-all flex items-center justify-center gap-1.5"
                       >
                         <FileText className="h-3.5 w-3.5" />
-                        Wystaw Korektę (KFS)
+                        {kfsDetails?.hasKfs ? "Wystaw Kolejną Korektę (KFS)" : "Wystaw Korektę (KFS)"}
                       </Button>
                     </div>
                   ) : (
@@ -945,6 +1055,123 @@ interface PackageState {
   is_nstd: boolean;
 }
 
+// --- Funkcje Pomocnicze do Śledzenia Przesyłek ---
+function getTrackingUrl(trackingNumber: string, providerType?: string, serviceCode?: string): string | null {
+  if (!trackingNumber) return null;
+  const cleanNum = trackingNumber.trim();
+  const numOnly = cleanNum.replace(/\s+/g, "");
+  const providerUp = (providerType || "").toUpperCase().trim();
+
+  if (providerUp === "SUUS" || providerUp === "ROHLIG_SUUS") {
+    return `https://portal.suus.com/order-details/${numOnly}`;
+  }
+  if (providerUp === "RABEN") {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (providerUp === "GEIS") {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "GEODIS") {
+    return `https://tracking.geodis.pl/?reference=${numOnly}`;
+  }
+  if (providerUp === "INPOST" || providerUp === "INPOST_BUY" || providerUp === "INPOST_KURIER") {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "DHL") {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+  if (providerUp === "DPD" || providerUp === "DPD_PL") {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (providerUp === "GLS") {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (providerUp === "UPS") {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (providerUp === "FEDEX") {
+    return `https://www.fedex.com/fedextrack/?trknbr=${numOnly}`;
+  }
+  if (providerUp === "POCZTA_POLSKA" || providerUp === "POCZTEX") {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  if (providerUp === "ALLEGRO" || providerUp === "ALLEGRO_ONE" || providerUp === "ALLEGRO_ONE_PICKUP" || providerUp === "ALLEGRO_ONE_MOBILE" || providerUp === "ALLEGRO_DELIVERY") {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+
+  const codeLower = (serviceCode || "").toLowerCase();
+  if (codeLower.includes("inpost") || codeLower.includes("paczkomat")) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (codeLower.includes("dpd")) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (codeLower.includes("dhl")) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+  if (codeLower.includes("gls")) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (codeLower.includes("ups")) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (codeLower.includes("raben")) {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (codeLower.includes("geis")) {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+
+  // Allegro Delivery (zaczynające się na A, np. A000..., AD..., ALE..., AL...)
+  if (/^A[A-Z0-9]+$/i.test(numOnly)) {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+  if (/^1Z[A-Z0-9]{16}$/i.test(numOnly)) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (/^\d{24}$/.test(numOnly)) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (/^\d{13,14}[A-Za-z]?$/.test(numOnly)) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  if (/^[A-Z]{2}\d{9}[A-Z]{2}$/i.test(numOnly) || /^\d{20}$/.test(numOnly)) {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  if (/^\d{12}$/.test(numOnly)) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  if (/^\d{10,11}$/.test(numOnly)) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+
+  return `https://www.google.com/search?q=${encodeURIComponent("śledzenie przesyłki")}+${numOnly}`;
+}
+
+function getAllegroCarrierForWaybill(detailsPayload: any, waybill: string): string | undefined {
+  if (!detailsPayload) return undefined;
+  const shipments: any[] = detailsPayload?.shipments || [];
+  const shipMatch = shipments.find((s: any) => s.waybill === waybill || s.waybill?.trim() === waybill.trim());
+  if (shipMatch?.carrierId) return shipMatch.carrierId;
+
+  const methodName: string = (detailsPayload?.delivery?.method?.name || "").toLowerCase();
+  if (!methodName) return undefined;
+
+  if (methodName.includes("inpost") || methodName.includes("paczkomat")) return "INPOST";
+  if (methodName.includes("dpd")) return "DPD";
+  if (methodName.includes("dhl")) return "DHL";
+  if (methodName.includes("gls")) return "GLS";
+  if (methodName.includes("ups")) return "UPS";
+  if (methodName.includes("fedex")) return "FEDEX";
+  if (methodName.includes("raben")) return "RABEN";
+  if (methodName.includes("geis")) return "GEIS";
+  if (methodName.includes("suus") || methodName.includes("rohlig")) return "SUUS";
+  if (methodName.includes("allegro one") || methodName.includes("allegroone")) return "ALLEGRO_ONE";
+  if (methodName.includes("poczta") || methodName.includes("pocztex")) return "POCZTA_POLSKA";
+
+  return undefined;
+}
+
 interface OrderDetailsColumnProps {
   order: MarketplaceOrder | null;
   onShipmentCreated: (orderId: string) => void;
@@ -1121,6 +1348,17 @@ export function OrderDetailsColumn({
     refetchSubiektStock();
   };
 
+  const isCodOrder = useMemo(
+    () =>
+      order?.payment_type === "CASH_ON_DELIVERY" ||
+      order?.details_payload?.payment?.type === "CASH_ON_DELIVERY" ||
+      (order?.service_integration?.provider_type === "EMPIK" && 
+        !!((order?.details_payload?.payment_type || order?.details_payload?.paymentType) && 
+           String(order?.details_payload?.payment_type || order?.details_payload?.paymentType).toLowerCase().includes("pobran"))) ||
+      String(order?.details_payload?.payment_method_cod) === "1",
+    [order]
+  );
+
   // --- Stany ręcznego wyboru kuriera (przeniesione wyżej, by zapobiec błędom kompilacji) ---
   const [isManualCourier, setIsManualCourier] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState<number | null>(null);
@@ -1135,6 +1373,16 @@ export function OrderDetailsColumn({
   const [pickupDate, setPickupDate] = useState("");
   const [pickupHoursFrom, setPickupHoursFrom] = useState("09:00");
   const [pickupHoursTo, setPickupHoursTo] = useState("17:00");
+  const [codEnabled, setCodEnabled] = useState(true);
+  const [isReturnLabel, setIsReturnLabel] = useState(false);
+  const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false);
+  const [codMismatchConfirmed, setCodMismatchConfirmed] = useState(false);
+
+  useEffect(() => {
+    setCodEnabled(isCodOrder);
+    setIsReturnLabel(false);
+    setCodMismatchConfirmed(false);
+  }, [order?.id, isCodOrder]);
 
   const lineItems = useMemo(() => {
     if (!order) return [];
@@ -1322,16 +1570,9 @@ export function OrderDetailsColumn({
     enabled: !!order,
   });
 
-  const isCodOrder = useMemo(
-    () =>
-      order?.payment_type === "CASH_ON_DELIVERY" ||
-      order?.details_payload?.payment?.type === "CASH_ON_DELIVERY" ||
-      (order?.service_integration?.provider_type === "EMPIK" && 
-        !!((order?.details_payload?.payment_type || order?.details_payload?.paymentType) && 
-           String(order?.details_payload?.payment_type || order?.details_payload?.paymentType).toLowerCase().includes("pobran"))) ||
-      String(order?.details_payload?.payment_method_cod) === "1",
-    [order]
-  );
+
+
+  const effectiveIsCodOrder = codEnabled;
 
   const shippingCost = useMemo(() => {
     if (!order || !order.details_payload) return "0.00";
@@ -1350,16 +1591,33 @@ export function OrderDetailsColumn({
       ? parseFloat(payload.delivery_price).toFixed(2)
       : "0.00";
   }, [order]);
+
   const totalCodAmount = useMemo(() => {
-    if (!isCodOrder || !order) return 0;
-    const payload = order.details_payload;
+    if (!order) return 0;
+    const payload = order.details_payload || {};
     return parseFloat(
       payload.cashOnDelivery?.amount ||
         payload.payment_done ||
         order.total_to_pay ||
         "0"
     );
-  }, [order, isCodOrder]);
+  }, [order]);
+
+  const hasCodMismatch = useMemo(() => {
+    if (!order) return false;
+    const orderTotal = totalCodAmount;
+    const packagesCodSum = packages.reduce((sum, pkg) => {
+      const amt = pkg.codAmount ? parseFloat(pkg.codAmount.replace(",", ".")) : 0;
+      return sum + (isNaN(amt) ? 0 : amt);
+    }, 0);
+
+    if (isCodOrder) {
+      if (!codEnabled) return true;
+      return Math.abs(packagesCodSum - orderTotal) > 0.01;
+    } else {
+      return codEnabled && packagesCodSum > 0.01;
+    }
+  }, [order, isCodOrder, codEnabled, packages, totalCodAmount]);
 
   const { mappedCourier, mappedPackageId, mappedServiceCode = "", mappingWarning } = useMemo(() => {
     if (!order || !config)
@@ -1509,7 +1767,7 @@ export function OrderDetailsColumn({
 
   useEffect(() => {
     if (order && suggestedPackageInfo) {
-      const initialCodAmount = isCodOrder ? totalCodAmount.toFixed(2) : "";
+      const initialCodAmount = effectiveIsCodOrder ? totalCodAmount.toFixed(2) : "";
       setPackages([
         {
           id: crypto.randomUUID(),
@@ -1529,7 +1787,7 @@ export function OrderDetailsColumn({
     } else if (!order) {
       setPackages([]);
     }
-  }, [order, suggestedPackageInfo, isCodOrder, totalCodAmount]);
+  }, [order, suggestedPackageInfo, effectiveIsCodOrder, totalCodAmount]);
 
   useEffect(() => {
     if (order?.buyer_login && order.service_integration) {
@@ -1627,9 +1885,37 @@ export function OrderDetailsColumn({
     );
   };
 
+  const handleToggleCod = (enabled: boolean) => {
+    setCodEnabled(enabled);
+    if (!enabled) {
+      setPackages((pkgs) => pkgs.map((p) => ({ ...p, codAmount: "" })));
+    } else {
+      const numPackages = packages.length;
+      if (numPackages > 0) {
+        const totalCents = Math.round(totalCodAmount * 100);
+        const baseCents = Math.floor(totalCents / numPackages);
+        let remainderCents = totalCents % numPackages;
+
+        setPackages((pkgs) =>
+          pkgs.map((pkg) => {
+            let packageCents = baseCents;
+            if (remainderCents > 0) {
+              packageCents += 1;
+              remainderCents--;
+            }
+            return {
+              ...pkg,
+              codAmount: (packageCents / 100).toFixed(2),
+            };
+          })
+        );
+      }
+    }
+  };
+
   const splitCodForPackages = (currentPackages: PackageState[]) => {
     const numPackages = currentPackages.length;
-    if (!isCodOrder || numPackages === 0) return;
+    if (!effectiveIsCodOrder || numPackages === 0) return;
 
     const totalCents = Math.round(totalCodAmount * 100);
     const baseCents = Math.floor(totalCents / numPackages);
@@ -1651,7 +1937,7 @@ export function OrderDetailsColumn({
   };
 
   const addPackage = () => {
-    const newCodAmount = isCodOrder ? "0.00" : "";
+    const newCodAmount = effectiveIsCodOrder ? "0.00" : "";
     const newPackage: PackageState = {
       id: crypto.randomUUID(),
       mode: "predefined",
@@ -1668,7 +1954,7 @@ export function OrderDetailsColumn({
     };
     const newPackages = [...packages, newPackage];
     setPackages(newPackages);
-    if (isCodOrder) {
+    if (effectiveIsCodOrder) {
       splitCodForPackages(newPackages);
     }
   };
@@ -1676,7 +1962,7 @@ export function OrderDetailsColumn({
   const removePackage = (id: string) => {
     const newPackages = packages.filter((p) => p.id !== id);
     setPackages(newPackages);
-    if (isCodOrder && newPackages.length > 0) {
+    if (effectiveIsCodOrder && newPackages.length > 0) {
       splitCodForPackages(newPackages);
     }
   };
@@ -1754,17 +2040,9 @@ export function OrderDetailsColumn({
 
   const handleGenerateLabels = async () => {
     if (!order || !config) return;
-    if (isCodOrder) {
-      const totalEnteredCod = packages.reduce(
-        (sum, pkg) => sum + parseFloat(pkg.codAmount.replace(",", ".") || "0"),
-        0
-      );
-      if (Math.abs(totalEnteredCod - totalCodAmount) > 0.01) {
-        toast.error(
-          "Suma kwot pobrania nie zgadza się z wartością zamówienia."
-        );
-        return;
-      }
+    if (hasCodMismatch && !codMismatchConfirmed) {
+      toast.error("Wykryto niezgodność kwoty pobrania. Potwierdź zmianę przed realizacją zamówienia!");
+      return;
     }
     setIsGenerating(true);
     const packagesPayload = [];
@@ -1780,7 +2058,7 @@ export function OrderDetailsColumn({
           config.packages.find((p) => p.id === pkg.selectedPackageId) || null;
       }
       const currentPayload: any = {
-        cod_amount: isCodOrder
+        cod_amount: effectiveIsCodOrder
           ? parseFloat(pkg.codAmount.replace(",", "."))
           : undefined,
         package_definition: packageDef,
@@ -1826,6 +2104,7 @@ export function OrderDetailsColumn({
         hours_from: pickupHoursFrom,
         hours_to: pickupHoursTo,
       },
+      is_return: isReturnLabel,
     };
     if (isManualCourier && selectedCourierId) {
       finalPayload.override_courier_integration_id = selectedCourierId;
@@ -1932,7 +2211,7 @@ export function OrderDetailsColumn({
         (p.mode === "custom" &&
           (Object.values(p.customPackage).some((v) => v === "") ||
             !p.courier_code)) ||
-        (isCodOrder && (p.codAmount === "" || isNaN(parseFloat(p.codAmount))))
+        (effectiveIsCodOrder && (p.codAmount === "" || isNaN(parseFloat(p.codAmount))))
     );
 
   const isApaczkaSelected = courierProvider === "APACZKA";
@@ -2037,12 +2316,12 @@ export function OrderDetailsColumn({
       />
 
       {buyerMessage && (
-        <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-200 shrink-0">
-          <AlertCircle className="h-4 w-4 text-amber-400" />
-          <AlertTitle className="text-xs font-semibold flex items-center gap-1.5">
-            <StickyNote className="h-3.5 w-3.5 text-amber-400" /> Uwaga! Wiadomość od kupującego
+        <Alert className="border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200 shrink-0">
+          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <AlertTitle className="text-xs font-bold flex items-center gap-1.5 text-amber-950 dark:text-amber-300">
+            <StickyNote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" /> Uwaga! Wiadomość od kupującego
           </AlertTitle>
-          <AlertDescription className="mt-1 text-sm font-semibold italic">
+          <AlertDescription className="mt-1 text-sm font-semibold italic text-amber-900 dark:text-amber-200">
             "{buyerMessage}"
           </AlertDescription>
         </Alert>
@@ -2050,56 +2329,96 @@ export function OrderDetailsColumn({
 
       {/* Warning: Invoice already exists */}
       {organization?.warn_invoice_exists && (order.erp_sales_document_number || order.erpSalesDocumentNumber) && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[11px] text-amber-200 font-medium shrink-0">
-          <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-900 dark:text-amber-200 font-medium shrink-0">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
           <span>
-            Faktura już istnieje w ERP: <strong className="font-mono bg-amber-500/20 px-1.5 py-0.5 rounded text-white ml-0.5">{order.erp_sales_document_number || order.erpSalesDocumentNumber}</strong>
+            Faktura już istnieje w ERP: <strong className="font-mono bg-amber-500/20 dark:bg-amber-500/30 border border-amber-500/30 px-1.5 py-0.5 rounded text-amber-950 dark:text-white ml-0.5">{order.erp_sales_document_number || order.erpSalesDocumentNumber}</strong>
           </span>
         </div>
       )}
 
       {/* Warning: Waybill already exists */}
       {organization?.warn_waybill_exists && order.tracking_numbers && order.tracking_numbers.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[11px] text-amber-200 font-medium shrink-0">
-          <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-          <span>
-            Wygenerowano już list przewozowy: <strong className="font-mono bg-amber-500/20 px-1.5 py-0.5 rounded text-white ml-0.5">{order.tracking_numbers.join(", ")}</strong>
-          </span>
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-900 dark:text-amber-200 font-medium shrink-0">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>Wygenerowano już list przewozowy:</span>
+            {order.tracking_numbers.map((t, idx) => {
+              const sysShipment = shipments?.find((s) => s.tracking_number === t);
+              const sysCourierInteg = sysShipment
+                ? config?.couriers.find((c: ServiceIntegration) => c.id === sysShipment.courier_integration_id)
+                : undefined;
+              const allegroCarrier = !sysShipment ? getAllegroCarrierForWaybill(order.details_payload, t) : undefined;
+              const trackingUrl = getTrackingUrl(
+                t,
+                sysCourierInteg?.provider_type ?? allegroCarrier ?? order.service_integration?.provider_type,
+                sysShipment?.courier_service_code
+              );
+
+              return (
+                <span key={idx} className="inline-flex items-center gap-1 font-mono bg-amber-500/20 dark:bg-amber-500/30 border border-amber-500/30 px-1.5 py-0.5 rounded text-amber-950 dark:text-white text-[10px] font-semibold">
+                  {trackingUrl ? (
+                    <a
+                      href={trackingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline flex items-center gap-0.5 text-amber-900 dark:text-amber-200 hover:text-amber-950 dark:hover:text-white font-bold"
+                    >
+                      {t} <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  ) : (
+                    t
+                  )}
+                </span>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {/* Warning: COD Mismatch */}
-      {organization?.warn_cod_mismatch && (() => {
-        const orderTotal = order.total_to_pay || 0;
+      {(() => {
+        if (!hasCodMismatch) return null;
+        
+        const orderTotal = totalCodAmount;
         const packagesCodSum = packages.reduce((sum, pkg) => {
           const amt = pkg.codAmount ? parseFloat(pkg.codAmount.replace(",", ".")) : 0;
           return sum + (isNaN(amt) ? 0 : amt);
         }, 0);
 
+        let alertMessage = "";
         if (isCodOrder) {
-          if (Math.abs(packagesCodSum - orderTotal) > 0.01) {
-            return (
-              <div className="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-1.5 text-[11px] text-rose-200 font-medium shrink-0">
-                <AlertCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                <span>
-                  Niezgodność pobrania (COD): suma w paczkach (<strong className="text-white">{packagesCodSum.toFixed(2)} PLN</strong>) różni się od wartości zamówienia (<strong className="text-white">{orderTotal.toFixed(2)} PLN</strong>)
-                </span>
-              </div>
-            );
+          if (!codEnabled) {
+            alertMessage = `Usunięto pobranie (COD) dla zamówienia pobraniowego o wartości ${orderTotal.toFixed(2)} PLN (wygenerowana przesyłka będzie opłacona z góry).`;
+          } else {
+            alertMessage = `Niezgodność pobrania (COD): suma w paczkach (${packagesCodSum.toFixed(2)} PLN) różni się od wartości zamówienia (${orderTotal.toFixed(2)} PLN).`;
           }
         } else {
-          if (packagesCodSum > 0.01) {
-            return (
-              <div className="flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/5 px-3 py-1.5 text-[11px] text-rose-200 font-medium shrink-0">
-                <AlertCircle className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                <span>
-                  Zamówienie opłacone, ale w paczkach zdefiniowano kwotę pobrania (<strong className="text-white">{packagesCodSum.toFixed(2)} PLN</strong>)
-                </span>
-              </div>
-            );
-          }
+          alertMessage = `Zamówienie opłacone z góry, ale na paczce ustawiono pobranie (COD) o wartości ${packagesCodSum.toFixed(2)} PLN.`;
         }
-        return null;
+
+        return (
+          <div className="flex flex-col gap-2 rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-3 text-xs text-rose-700 dark:text-rose-200 font-medium shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 animate-pulse" />
+              <span className="font-bold">⚠️ Ostrzeżenie: Niezgodność płatności pobraniowej</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+              {alertMessage} Upewnij się, że modyfikacja kwoty pobrania jest celowa.
+            </p>
+            <div className="flex items-center space-x-2 mt-1.5 pt-1.5 border-t border-rose-500/10">
+              <Checkbox
+                id="cod-mismatch-confirm"
+                checked={codMismatchConfirmed}
+                onCheckedChange={(checked) => setCodMismatchConfirmed(!!checked)}
+                className="h-4 w-4 border-rose-500/50 data-[state=checked]:bg-rose-500 data-[state=checked]:text-black"
+              />
+              <label htmlFor="cod-mismatch-confirm" className="text-[11px] font-bold text-rose-600 dark:text-rose-300 cursor-pointer select-none leading-tight">
+                Potwierdzam, że kwota pobrania jest inna niż w zamówieniu.
+              </label>
+            </div>
+          </div>
+        );
       })()}
 
       {sellerNote && (
@@ -2115,7 +2434,7 @@ export function OrderDetailsColumn({
       )}
 
       <Tabs defaultValue="main" className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="grid w-full grid-cols-4 bg-slate-950/40 p-1 border border-white/5 rounded-xl shrink-0">
+        <TabsList className="grid w-full grid-cols-4 bg-slate-100/80 dark:bg-slate-950/40 p-1 border border-slate-200/50 dark:border-white/5 rounded-xl shrink-0">
           <TabsTrigger value="main" className="flex items-center justify-center gap-2 rounded-lg py-2 data-[state=active]:bg-primary/20 data-[state=active]:text-white">
             <Info className="h-4 w-4" />
             <span className="text-xs font-medium">Główna</span>
@@ -2353,15 +2672,47 @@ export function OrderDetailsColumn({
       </div>
         {/* Metoda wysyłki continues above, main tab remains open here */}
       {/* ── PRZYGOTUJ PRZESYŁKĘ (Sleek Compact Glass Layout) ── */}
-      <div className="rounded-xl border border-white/5 bg-slate-900/20 shadow-lg mt-4 overflow-hidden">
-        <div className="flex flex-col px-4 py-3 bg-white/5 border-b border-white/5 gap-0.5">
-          <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
-            <Package className="h-4 w-4 text-primary" /> Przygotuj Przesyłkę
-          </h3>
-          <p className="text-[10px] text-muted-foreground">
-            Skonfiguruj paczki i wygeneruj etykiety.
-          </p>
+      <div className="rounded-xl border border-slate-200/50 dark:border-white/5 bg-slate-50 dark:bg-slate-900/20 shadow-lg mt-4 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-slate-100/50 dark:bg-white/5 border-b border-slate-200/50 dark:border-white/5">
+          <div className="flex flex-col gap-0.5">
+            <h3 className="text-sm font-semibold text-foreground dark:text-slate-200 flex items-center gap-1.5">
+              <Package className="h-4 w-4 text-primary" /> Przygotuj Przesyłkę
+            </h3>
+            <p className="text-[10px] text-muted-foreground">
+              Skonfiguruj paczki i wygeneruj etykiety.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center space-x-2 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg">
+              <Checkbox
+                id="cod-toggle-main"
+                checked={codEnabled}
+                onCheckedChange={(checked) => handleToggleCod(!!checked)}
+                className="h-3.5 w-3.5 border-amber-500/50 data-[state=checked]:bg-amber-500 data-[state=checked]:text-black"
+              />
+              <label htmlFor="cod-toggle-main" className="text-xs font-semibold text-amber-300 cursor-pointer select-none">
+                Pobranie (COD)
+              </label>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20 gap-1.5"
+              onClick={() => setIsReturnDialogOpen(true)}
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              Stwórz paczkę zwrotną
+            </Button>
+          </div>
         </div>
+
+        {order && (
+          <ReturnLabelDialog
+            isOpen={isReturnDialogOpen}
+            onClose={() => setIsReturnDialogOpen(false)}
+            order={order}
+          />
+        )}
         <div className="space-y-3 p-3">
           {isConfigLoading && (
             <div className="flex items-center text-sm text-muted-foreground">
@@ -2388,7 +2739,7 @@ export function OrderDetailsColumn({
           {packages.map((pkg, index) => (
             <div
               key={pkg.id}
-              className="p-3 border border-white/5 rounded-xl space-y-2.5 relative bg-slate-950/40 shadow-inner"
+              className="p-3 border border-slate-200/50 dark:border-white/5 rounded-xl space-y-2.5 relative bg-slate-50 dark:bg-slate-950/40 shadow-inner"
             >
               <div className="flex justify-between items-center h-5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Paczka #{index + 1}</span>
@@ -2406,14 +2757,14 @@ export function OrderDetailsColumn({
               
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex bg-slate-900/80 rounded-lg p-0.5 border border-white/5 w-fit">
+                  <div className="flex bg-slate-100 dark:bg-slate-900/80 rounded-lg p-0.5 border border-slate-200/50 dark:border-white/5 w-fit">
                     <button
                       type="button"
                       onClick={() => handlePackageChange(index, "mode", "predefined")}
                       className={`text-[9px] font-medium py-1 px-2.5 rounded-md transition-all ${
                         pkg.mode === "predefined"
                           ? "bg-primary text-primary-foreground shadow font-semibold"
-                          : "text-slate-400 hover:text-slate-200"
+                          : "text-muted-foreground dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200"
                       }`}
                     >
                       Predefiniowane
@@ -2424,7 +2775,7 @@ export function OrderDetailsColumn({
                       className={`text-[9px] font-medium py-1 px-2.5 rounded-md transition-all ${
                         pkg.mode === "custom"
                           ? "bg-primary text-primary-foreground shadow font-semibold"
-                          : "text-slate-400 hover:text-slate-200"
+                          : "text-muted-foreground dark:text-slate-400 hover:text-foreground dark:hover:text-slate-200"
                       }`}
                     >
                       Własne wymiary
@@ -2444,7 +2795,7 @@ export function OrderDetailsColumn({
                       className={`h-[22px] px-2 rounded-md border text-[9px] font-semibold transition-all flex items-center justify-center ${
                         pkg.is_nstd
                           ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                          : "bg-slate-900/40 text-slate-400 border-white/5 hover:text-slate-300"
+                          : "bg-slate-100 dark:bg-slate-900/40 text-muted-foreground dark:text-slate-400 border-slate-200/50 dark:border-white/5 hover:text-foreground dark:hover:text-slate-300"
                       }`}
                     >
                       Niestandardowa (Gabaryt)
@@ -2461,7 +2812,7 @@ export function OrderDetailsColumn({
                       }
                       disabled={isConfigLoading}
                     >
-                      <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-lg">
+                      <SelectTrigger className="h-7 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200/50 dark:border-white/10 rounded-lg">
                         <SelectValue placeholder="Wybierz opakowanie..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -2476,52 +2827,52 @@ export function OrderDetailsColumn({
                 ) : (
                   <div className="space-y-2 pt-0.5">
                     <div className="grid grid-cols-4 gap-1.5">
-                      <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Dł</span>
+                      <div className="relative flex items-center bg-slate-50 dark:bg-slate-900/60 border border-slate-200/50 dark:border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
+                        <span className="text-[9px] font-bold text-muted-foreground dark:text-slate-400 uppercase mr-0.5 shrink-0 select-none">Dł</span>
                         <input
                           id={`length_cm-${pkg.id}`}
                           name="length_cm"
                           value={pkg.customPackage.length_cm}
                           onChange={(e) => handleCustomDimensionChange(index, e)}
-                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground dark:text-slate-200 min-w-0"
                         />
-                        <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                        <span className="text-[9px] text-muted-foreground/60 dark:text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
                       </div>
 
-                      <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Sz</span>
+                      <div className="relative flex items-center bg-slate-50 dark:bg-slate-900/60 border border-slate-200/50 dark:border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
+                        <span className="text-[9px] font-bold text-muted-foreground dark:text-slate-400 uppercase mr-0.5 shrink-0 select-none">Sz</span>
                         <input
                           id={`width_cm-${pkg.id}`}
                           name="width_cm"
                           value={pkg.customPackage.width_cm}
                           onChange={(e) => handleCustomDimensionChange(index, e)}
-                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground dark:text-slate-200 min-w-0"
                         />
-                        <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                        <span className="text-[9px] text-muted-foreground/60 dark:text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
                       </div>
 
-                      <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Wy</span>
+                      <div className="relative flex items-center bg-slate-50 dark:bg-slate-900/60 border border-slate-200/50 dark:border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
+                        <span className="text-[9px] font-bold text-muted-foreground dark:text-slate-400 uppercase mr-0.5 shrink-0 select-none">Wy</span>
                         <input
                           id={`height_cm-${pkg.id}`}
                           name="height_cm"
                           value={pkg.customPackage.height_cm}
                           onChange={(e) => handleCustomDimensionChange(index, e)}
-                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground dark:text-slate-200 min-w-0"
                         />
-                        <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
+                        <span className="text-[9px] text-muted-foreground/60 dark:text-slate-500 ml-0.5 shrink-0 select-none">cm</span>
                       </div>
 
-                      <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase mr-0.5 shrink-0 select-none">Wg</span>
+                      <div className="relative flex items-center bg-slate-50 dark:bg-slate-900/60 border border-slate-200/50 dark:border-white/10 rounded-lg px-1.5 focus-within:border-primary/50 transition-all">
+                        <span className="text-[9px] font-bold text-muted-foreground dark:text-slate-400 uppercase mr-0.5 shrink-0 select-none">Wg</span>
                         <input
                           id={`weight_kg-${pkg.id}`}
                           name="weight_kg"
                           value={pkg.customPackage.weight_kg}
                           onChange={(e) => handleCustomDimensionChange(index, e)}
-                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200 min-w-0"
+                          className="w-full bg-transparent border-none shadow-none outline-none p-0 h-7 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground dark:text-slate-200 min-w-0"
                         />
-                        <span className="text-[9px] text-slate-500 ml-0.5 shrink-0 select-none">kg</span>
+                        <span className="text-[9px] text-muted-foreground/60 dark:text-slate-500 ml-0.5 shrink-0 select-none">kg</span>
                       </div>
                     </div>
 
@@ -2534,7 +2885,7 @@ export function OrderDetailsColumn({
                           }
                           value={pkg.courier_code || ""}
                         >
-                          <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-lg">
+                          <SelectTrigger className="h-7 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200/50 dark:border-white/10 rounded-lg">
                             <SelectValue placeholder="Wybierz typ opakowania..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -2557,7 +2908,7 @@ export function OrderDetailsColumn({
                           }
                           value={pkg.courier_code || ""}
                         >
-                          <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-lg">
+                          <SelectTrigger className="h-7 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200/50 dark:border-white/10 rounded-lg">
                             <SelectValue placeholder="Wybierz typ opakowania..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -2572,14 +2923,14 @@ export function OrderDetailsColumn({
                     )}
 
                     {/* Palet presets compact */}
-                    <div className="pt-1.5 flex items-center justify-between gap-2 flex-wrap border-t border-white/5">
+                    <div className="pt-1.5 flex items-center justify-between gap-2 flex-wrap border-t border-slate-200/50 dark:border-white/5">
                       <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider select-none">Palety:</span>
                       <div className="flex gap-1">
                         {PALLET_PRESETS.map((preset) => (
                           <button
                             key={preset.label}
                             type="button"
-                            className="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-slate-300 text-[8px] font-medium border border-white/5 transition-all flex items-center gap-0.5"
+                            className="px-1.5 py-0.5 rounded bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-foreground/80 dark:text-slate-300 text-[8px] font-medium border border-slate-200/50 dark:border-white/5 transition-all flex items-center gap-0.5"
                             onClick={() => {
                               setPackages((pkgs) =>
                                 pkgs.map((p, i) =>
@@ -2608,12 +2959,12 @@ export function OrderDetailsColumn({
                   </div>
                 )}
 
-                {isCodOrder && (
-                  <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-3 h-7 mt-1">
+                {effectiveIsCodOrder && (
+                  <div className="pt-2 border-t border-slate-200/50 dark:border-white/5 flex items-center justify-between gap-3 h-7 mt-1">
                     <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider select-none flex items-center gap-1">
                       <CreditCard className="h-3 w-3 text-emerald-500" /> Kwota Pobrania
                     </span>
-                    <div className="relative flex items-center bg-slate-900/60 border border-white/10 rounded-lg px-2 focus-within:border-primary/50 transition-all max-w-[140px]">
+                    <div className="relative flex items-center bg-slate-50 dark:bg-slate-900/60 border border-slate-200/50 dark:border-white/10 rounded-lg px-2 focus-within:border-primary/50 transition-all max-w-[140px]">
                       <input
                         id={`cod-amount-${pkg.id}`}
                         value={pkg.codAmount}
@@ -2621,11 +2972,11 @@ export function OrderDetailsColumn({
                           handleCodAmountChange(index, e.target.value)
                         }
                         placeholder="0.00"
-                        className="w-full bg-transparent border-none shadow-none outline-none p-0 h-6 text-xs font-mono text-right focus:outline-none focus:ring-0 text-slate-200"
+                        className="w-full bg-transparent border-none shadow-none outline-none p-0 h-6 text-xs font-mono text-right focus:outline-none focus:ring-0 text-foreground dark:text-slate-200"
                         type="number"
                         step="0.01"
                       />
-                      <span className="text-[9px] text-slate-500 ml-1.5 shrink-0 select-none font-medium">PLN</span>
+                      <span className="text-[9px] text-muted-foreground/60 dark:text-slate-500 ml-1.5 shrink-0 select-none font-medium">PLN</span>
                     </div>
                   </div>
                 )}
@@ -2637,16 +2988,16 @@ export function OrderDetailsColumn({
             <Button
               variant="outline"
               size="sm"
-              className="w-full h-8 text-[11px] bg-slate-950/20 hover:bg-slate-950/40 border-white/5 rounded-lg transition-all"
+              className="w-full h-8 text-[11px] bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/20 dark:hover:bg-slate-950/40 border-slate-200/50 dark:border-white/5 rounded-lg transition-all"
               onClick={addPackage}
             >
               <PlusCircle className="mr-1.5 h-3.5 w-3.5 text-primary" /> Dodaj paczkę
             </Button>
-            {isCodOrder && packages.length > 1 && (
+            {effectiveIsCodOrder && packages.length > 1 && (
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full h-8 text-[11px] bg-slate-950/20 hover:bg-slate-950/40 border-white/5 rounded-lg transition-all"
+                className="w-full h-8 text-[11px] bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/20 dark:hover:bg-slate-950/40 border-slate-200/50 dark:border-white/5 rounded-lg transition-all"
                 onClick={handleSplitCodClick}
               >
                 <DivideCircle className="mr-1.5 h-3.5 w-3.5 text-primary" /> Podziel pobranie
@@ -2655,13 +3006,13 @@ export function OrderDetailsColumn({
           </div>
 
           {availableServicesForCourier.length > 0 && (
-            <div className="pt-2 border-t border-white/5 space-y-1.5">
+            <div className="pt-2 border-t border-slate-200/50 dark:border-white/5 space-y-1.5">
               <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Usługi dodatkowe</Label>
               <div className="grid grid-cols-2 gap-2 pt-0.5">
                 {availableServicesForCourier.map((serviceMap) => (
                   <div
                     key={serviceMap.id}
-                    className="flex items-center space-x-1.5 bg-slate-950/20 border border-white/5 rounded-lg px-2 py-1.5 hover:bg-slate-950/40 transition-colors"
+                    className="flex items-center space-x-1.5 bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-lg px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-950/40 transition-colors"
                   >
                     <Checkbox
                       id={serviceMap.id}
@@ -2675,7 +3026,7 @@ export function OrderDetailsColumn({
                     />
                     <label
                       htmlFor={serviceMap.id}
-                      className="text-[11px] text-slate-300 font-medium cursor-pointer truncate select-none leading-none"
+                      className="text-[11px] text-foreground/80 dark:text-slate-300 font-medium cursor-pointer truncate select-none leading-none"
                       title={`${serviceMap.marketplace_service_name} (${serviceMap.courier_service_code})`}
                     >
                       {serviceMap.marketplace_service_name}
@@ -2688,24 +3039,24 @@ export function OrderDetailsColumn({
 
           {/* ── PICKUP / COLLAPSIBLE DETAILS ── */}
           {isApaczkaSelected && (
-            <details className="group border border-white/5 bg-slate-950/20 rounded-xl overflow-hidden transition-all duration-300 [&::-webkit-details-marker]:hidden">
-              <summary className="flex items-center justify-between px-3 py-2 text-xs font-semibold cursor-pointer select-none hover:bg-white/5 list-none">
-                <div className="flex items-center gap-1.5 text-slate-300">
+            <details className="group border border-slate-200/50 dark:border-white/5 bg-slate-50 dark:bg-slate-950/20 rounded-xl overflow-hidden transition-all duration-300 [&::-webkit-details-marker]:hidden">
+              <summary className="flex items-center justify-between px-3 py-2 text-xs font-semibold cursor-pointer select-none hover:bg-slate-100 dark:hover:bg-white/5 list-none">
+                <div className="flex items-center gap-1.5 text-foreground/80 dark:text-slate-300">
                   <Truck className="w-3.5 h-3.5 text-primary" />
                   <span>Zlecenie podjazdu kuriera</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 font-normal truncate max-w-[150px]">
+                  <span className="text-[10px] text-muted-foreground dark:text-slate-400 font-normal truncate max-w-[150px]">
                     {pickupType === "COURIER" ? "Kurier" : pickupType === "SELF" ? "Własne" : pickupType === "BOX_MACHINE" ? "Paczkomat" : "Poczta"}{pickupDate ? `, ${pickupDate}` : ""}
                   </span>
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-open:rotate-180 transition-transform duration-200" />
                 </div>
               </summary>
-              <div className="p-3 pt-2 border-t border-white/5 grid grid-cols-2 gap-2.5 bg-slate-950/40">
+              <div className="p-3 pt-2 border-t border-slate-200/50 dark:border-white/5 grid grid-cols-2 gap-2.5 bg-slate-100/50 dark:bg-slate-950/40">
                 <div className="space-y-1">
                   <Label className="text-[10px] text-muted-foreground font-medium">Typ nadania</Label>
                   <Select value={pickupType} onValueChange={setPickupType}>
-                    <SelectTrigger className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-md">
+                    <SelectTrigger className="h-7 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200/50 dark:border-white/10 rounded-md">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2721,7 +3072,7 @@ export function OrderDetailsColumn({
                     type="date"
                     value={pickupDate}
                     onChange={(e) => setPickupDate(e.target.value)}
-                    className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-md py-0 px-2 text-slate-200"
+                    className="h-7 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200/50 dark:border-white/10 rounded-md py-0 px-2 text-foreground dark:text-slate-200"
                   />
                 </div>
                 <div className="space-y-1">
@@ -2730,7 +3081,7 @@ export function OrderDetailsColumn({
                     type="time"
                     value={pickupHoursFrom}
                     onChange={(e) => setPickupHoursFrom(e.target.value)}
-                    className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-md text-center py-0 px-2 text-slate-200"
+                    className="h-7 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200/50 dark:border-white/10 rounded-md text-center py-0 px-2 text-foreground dark:text-slate-200"
                   />
                 </div>
                 <div className="space-y-1">
@@ -2739,16 +3090,16 @@ export function OrderDetailsColumn({
                     type="time"
                     value={pickupHoursTo}
                     onChange={(e) => setPickupHoursTo(e.target.value)}
-                    className="h-7 text-xs bg-slate-900/50 border-white/10 rounded-md text-center py-0 px-2 text-slate-200"
+                    className="h-7 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200/50 dark:border-white/10 rounded-md text-center py-0 px-2 text-foreground dark:text-slate-200"
                   />
                 </div>
               </div>
             </details>
           )}
 
-          <div className="pt-2 border-t border-white/5 space-y-2.5">
-            <div className="flex items-center justify-between gap-3 bg-slate-950/20 border border-white/5 rounded-lg px-2.5 py-1.5">
-              <Label htmlFor="reference-number" className="text-[10px] font-semibold text-slate-300 uppercase tracking-wider shrink-0 select-none">
+          <div className="pt-2 border-t border-slate-200/50 dark:border-white/5 space-y-2.5">
+            <div className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-lg px-2.5 py-1.5">
+              <Label htmlFor="reference-number" className="text-[10px] font-semibold text-foreground/80 dark:text-slate-300 uppercase tracking-wider shrink-0 select-none">
                 Nr referencyjny etykiety
               </Label>
               <Input
@@ -2756,7 +3107,7 @@ export function OrderDetailsColumn({
                 value={referenceNumber}
                 onChange={(e) => setReferenceNumber(e.target.value)}
                 placeholder="Domyślnie: nr zamówienia"
-                className="h-7 text-xs bg-slate-900/50 border-white/10 max-w-[160px] text-right text-slate-200"
+                className="h-7 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200/50 dark:border-white/10 max-w-[160px] text-right text-foreground dark:text-slate-200"
               />
             </div>
             
@@ -2782,7 +3133,7 @@ export function OrderDetailsColumn({
       </div>
       </TabsContent>
 
-      <TabsContent value="chat" className="flex-1 overflow-hidden mt-3 outline-none flex flex-col h-full bg-slate-950/20 border border-white/5 rounded-xl p-4">
+      <TabsContent value="chat" className="flex-1 overflow-hidden mt-3 outline-none flex flex-col h-full bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-white/5 rounded-xl p-4">
         {order.buyer_login && order.service_integration ? (
           <div className="flex-1 flex flex-col min-h-[450px]">
             <ChatPanel
@@ -2811,9 +3162,9 @@ export function OrderDetailsColumn({
       <TabsContent value="tasks" className="flex-1 overflow-y-auto mt-3 pr-1 outline-none">
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 pb-4">
           {/* Lewa kolumna: Notatki do zamówienia */}
-          <Card className="border-white/5 bg-slate-900/40 backdrop-blur-xl">
+          <Card className="border-slate-200/50 dark:border-white/5 bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-sm text-slate-200">
+              <CardTitle className="flex items-center gap-2 text-sm text-foreground dark:text-slate-200">
                 <StickyNote className="h-4 w-4 text-primary" /> Notatki wewnętrzne
               </CardTitle>
               <Badge variant="outline" className="text-xs bg-primary/5 text-primary border-primary/20">{orderNotes.length}</Badge>
@@ -2827,7 +3178,7 @@ export function OrderDetailsColumn({
                   onChange={(e: any) => setNewNoteContent(e.target.value)}
                   required
                   rows={3}
-                  className="rounded-xl border-white/10 focus-visible:ring-indigo-500 bg-slate-950/40 text-xs text-slate-200"
+                  className="rounded-xl border-slate-200 dark:border-white/10 focus-visible:ring-indigo-500 bg-white dark:bg-slate-950/40 text-xs text-foreground dark:text-slate-200"
                 />
                 <div className="flex justify-end">
                   <Button
@@ -2845,7 +3196,7 @@ export function OrderDetailsColumn({
                 </div>
               </form>
 
-              <Separator className="bg-white/5 my-3" />
+              <Separator className="bg-slate-100 dark:bg-white/5 my-3" />
 
               {/* Lista notatek */}
               <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
@@ -2854,20 +3205,20 @@ export function OrderDetailsColumn({
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   </div>
                 ) : orderNotes.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500 italic text-xs">
+                  <div className="text-center py-8 text-muted-foreground italic text-xs">
                     Brak notatek do tego zamówienia.
                   </div>
                 ) : (
                   orderNotes.map((note) => (
-                    <div key={note.id} className="p-3 bg-slate-950/30 border border-white/5 rounded-xl relative group hover:bg-slate-900/30 transition-all duration-200">
-                      <div className="flex items-center justify-between text-[9px] font-semibold text-slate-500 mb-1.5">
+                    <div key={note.id} className="p-3 bg-slate-50 dark:bg-slate-950/30 border border-slate-200/50 dark:border-white/5 rounded-xl relative group hover:bg-slate-100 dark:hover:bg-slate-900/30 transition-all duration-200">
+                      <div className="flex items-center justify-between text-[9px] font-semibold text-muted-foreground dark:text-slate-500 mb-1.5">
                         <span className="flex items-center gap-1">
                           <User className="h-2.5 w-2.5" />
                           {note.author.name || note.author.email}
                         </span>
                         <span>{new Date(note.created_at).toLocaleString("pl-PL")}</span>
                       </div>
-                      <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed pr-6">{note.content}</p>
+                      <p className="text-xs text-foreground/95 dark:text-slate-300 whitespace-pre-wrap leading-relaxed pr-6">{note.content}</p>
                       <Button
                         onClick={() => handleDeleteNote(note.id)}
                         variant="ghost"
@@ -2884,9 +3235,9 @@ export function OrderDetailsColumn({
           </Card>
 
           {/* Prawa kolumna: Zadania i decyzje */}
-          <Card className="border-white/5 bg-slate-900/40 backdrop-blur-xl">
+          <Card className="border-slate-200/50 dark:border-white/5 bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-sm text-slate-200">
+              <CardTitle className="flex items-center gap-2 text-sm text-foreground dark:text-slate-200">
                 <ClipboardList className="h-4 w-4 text-indigo-400" /> Zadania i decyzje
               </CardTitle>
               <Badge variant="outline" className="text-xs bg-indigo-500/5 text-indigo-400 border-indigo-500/20">{orderTasks.length}</Badge>
@@ -2898,7 +3249,7 @@ export function OrderDetailsColumn({
                     <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
                   </div>
                 ) : orderTasks.length === 0 ? (
-                  <div className="text-center py-8 text-slate-500 italic text-xs">
+                  <div className="text-center py-8 text-muted-foreground italic text-xs">
                     Brak przypisanych zadań. Możesz utworzyć nowe zadanie z dymka na dole strony.
                   </div>
                 ) : (
@@ -2916,9 +3267,9 @@ export function OrderDetailsColumn({
                       "bg-slate-500/10 text-slate-400";
 
                     return (
-                      <div key={task.id} className="p-3 bg-slate-950/30 border border-white/5 rounded-xl hover:bg-slate-900/30 transition-all duration-200 flex flex-col gap-2">
+                      <div key={task.id} className="p-3 bg-slate-50 dark:bg-slate-950/30 border border-slate-200/50 dark:border-white/5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900/30 transition-all duration-200 flex flex-col gap-2">
                         <div className="flex items-center justify-between text-[9px]">
-                          <span className="font-semibold text-slate-500">
+                          <span className="font-semibold text-muted-foreground dark:text-slate-500">
                             Zleca: {task.created_by.name || task.created_by.email}
                           </span>
                           <div className="flex items-center gap-1">
@@ -2930,15 +3281,15 @@ export function OrderDetailsColumn({
                           </div>
                         </div>
                         
-                        <h4 className="text-xs font-bold text-slate-200 leading-normal">{task.title}</h4>
+                        <h4 className="text-xs font-bold text-foreground dark:text-slate-200 leading-normal">{task.title}</h4>
                         {task.description && (
-                          <p className="text-[10px] text-slate-400 line-clamp-2">{task.description}</p>
+                          <p className="text-[10px] text-muted-foreground dark:text-slate-400 line-clamp-2">{task.description}</p>
                         )}
 
-                        <Separator className="bg-white/5 my-0.5" />
+                        <Separator className="bg-slate-100 dark:bg-white/5 my-0.5" />
 
                         <div className="flex items-center justify-between text-[9px] text-slate-500">
-                          <span>Przypisane do: <strong className="text-slate-300">{task.assigned_to ? (task.assigned_to.name || task.assigned_to.email) : "Każdy"}</strong></span>
+                          <span>Przypisane do: <strong className="text-foreground/90 dark:text-slate-300">{task.assigned_to ? (task.assigned_to.name || task.assigned_to.email) : "Każdy"}</strong></span>
                           <Button
                             onClick={() => {
                               window.dispatchEvent(new CustomEvent("open-internal-task", { detail: { taskId: task.id } }));

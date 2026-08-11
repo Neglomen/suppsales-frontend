@@ -16,7 +16,7 @@ import api from "@/lib/api";
 import { DataTable } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Printer, ExternalLink, FileText, FileCheck2 } from "lucide-react";
+import { Download, Printer, ExternalLink, FileText, FileCheck2, Loader2 } from "lucide-react";
 import { MarketplaceOrder } from "@/types/marketplace-order";
 import { SalesCorrectionModal } from "./sales-correction-modal";
 
@@ -248,6 +248,35 @@ export function InvoiceHistoryTable() {
     setIsCorrectionModalOpen(true);
   };
 
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+
+  const handleDownloadSubiektPdf = async (order: MarketplaceOrder, docNumber?: string) => {
+    const targetDoc = docNumber || order.erp_sales_document_number;
+    if (!targetDoc) return;
+    const tid = toast.loading(`Pobieranie dokumentu ${targetDoc}...`);
+    setDownloadingDocId(targetDoc);
+    try {
+      const params = docNumber ? { doc_number: docNumber } : {};
+      const response = await api.get(`/orders/${order.id}/sales-invoice/pdf`, {
+        params,
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      const filename = `${targetDoc.replace(/\//g, "-")}.pdf`;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Pobrano ${targetDoc}!`, { id: tid });
+    } catch (err) {
+      handleDownloadInvoice(order);
+      toast.dismiss(tid);
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
+
   const columns = useMemo<ColumnDef<MarketplaceOrder>[]>(
     () => [
       {
@@ -292,13 +321,48 @@ export function InvoiceHistoryTable() {
       },
       {
         accessorKey: "erp_sales_document_number",
-        header: "Numer Faktury (ERP)",
-        cell: ({ row }) => (
-          <Badge variant="outline" className="font-mono text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20 py-1 px-2.5">
-            <FileText className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-            {row.original.erp_sales_document_number || "Brak numeru"}
-          </Badge>
-        ),
+        header: "Dokumenty ERP",
+        cell: ({ row }) => {
+          const order = row.original;
+          const flags = Array.isArray(order.flags) ? order.flags : [];
+          const hasKfsFlag = flags.includes("KFS_ISSUED");
+
+          let kfsDocNumber = "";
+          const events = (order as any)?.events;
+          if (Array.isArray(events)) {
+            for (const ev of events) {
+              if (ev.summary?.includes("KFS") || ev.summary?.includes("Korekty Faktury") || ev.summary?.includes("Korekta Faktury")) {
+                if (ev.details?.subiekt_document_number) {
+                  kfsDocNumber = ev.details.subiekt_document_number;
+                  break;
+                }
+                const match = ev.summary?.match(/(KFS\s*[A-Za-z0-9\/\-_]+)/i);
+                if (match) {
+                  kfsDocNumber = match[1];
+                  break;
+                }
+              }
+            }
+          }
+
+          const hasKfs = hasKfsFlag || !!kfsDocNumber;
+          const kfsNum = kfsDocNumber || (order.erp_sales_document_number ? order.erp_sales_document_number.replace(/^FS/i, "KFS") : "KFS");
+
+          return (
+            <div className="flex flex-col gap-1 items-start">
+              <Badge variant="outline" className="font-mono text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20 py-0.5 px-2">
+                <FileText className="w-3 h-3 mr-1 shrink-0" />
+                {order.erp_sales_document_number || "Brak numeru"}
+              </Badge>
+              {hasKfs && (
+                <Badge variant="outline" className="font-mono text-[11px] bg-amber-500/10 text-amber-400 border-amber-500/30 py-0.5 px-2">
+                  <FileCheck2 className="w-3 h-3 mr-1 shrink-0" />
+                  {kfsNum}
+                </Badge>
+              )}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "total_to_pay",
@@ -317,51 +381,82 @@ export function InvoiceHistoryTable() {
         header: () => <div className="text-right">Akcje</div>,
         cell: ({ row }) => {
           const order = row.original;
+          const flags = Array.isArray(order.flags) ? order.flags : [];
+          const hasKfsFlag = flags.includes("KFS_ISSUED");
+
+          let kfsDocNumber = "";
+          const events = (order as any)?.events;
+          if (Array.isArray(events)) {
+            for (const ev of events) {
+              if (ev.summary?.includes("KFS") || ev.summary?.includes("Korekty Faktury") || ev.summary?.includes("Korekta Faktury")) {
+                if (ev.details?.subiekt_document_number) {
+                  kfsDocNumber = ev.details.subiekt_document_number;
+                  break;
+                }
+                const match = ev.summary?.match(/(KFS\s*[A-Za-z0-9\/\-_]+)/i);
+                if (match) {
+                  kfsDocNumber = match[1];
+                  break;
+                }
+              }
+            }
+          }
+
+          const hasKfs = hasKfsFlag || !!kfsDocNumber;
+          const kfsNum = kfsDocNumber || (order.erp_sales_document_number ? order.erp_sales_document_number.replace(/^FS/i, "KFS") : "KFS");
           
           return (
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-1.5 flex-wrap">
+              {hasKfs && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-all gap-1 text-xs font-semibold"
+                  disabled={downloadingDocId === kfsNum}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadSubiektPdf(order, kfsNum);
+                  }}
+                  title="Pobierz plik PDF Korekty (KFS)"
+                >
+                  {downloadingDocId === kfsNum ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                  Pobierz KFS
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 group border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition-all"
+                className="h-8 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition-all gap-1 text-xs"
+                disabled={downloadingDocId === order.erp_sales_document_number}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadSubiektPdf(order);
+                }}
+                title="Pobierz plik PDF Faktury (FS)"
+              >
+                {downloadingDocId === order.erp_sales_document_number ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                Pobierz FS
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 border-amber-500/20 bg-muted/30 hover:bg-amber-500/10 text-muted-foreground hover:text-amber-300 transition-all text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleOpenCorrection(order);
                 }}
               >
-                <FileCheck2 className="w-4 h-4 mr-1.5" />
+                <FileCheck2 className="w-3.5 h-3.5 mr-1" />
                 Koryguj
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 group hover:border-primary/50 hover:bg-primary/5 transition-all w-24"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handlePrintInvoice(order);
-                }}
-              >
-                <Printer className="w-4 h-4 mr-2 group-hover:text-primary transition-colors" />
-                Drukuj
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 group hover:border-primary/50 hover:bg-primary/5 transition-all w-24"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDownloadInvoice(order);
-                }}
-              >
-                <Download className="w-4 h-4 mr-2 group-hover:text-primary transition-colors" />
-                Zapisz
               </Button>
             </div>
           );
         },
       },
     ],
-    [router]
+    [router, downloadingDocId]
   );
 
   if (isError) {

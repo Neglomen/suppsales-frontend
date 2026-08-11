@@ -83,5 +83,6 @@ export interface MarketplaceOrder {
     city?: string | null;
   } | null;
   erp_sales_document_number?: string | null;
+  erp_sales_correction_number?: string | null;
   erp_sales_document_synced_at?: string | null;
 }

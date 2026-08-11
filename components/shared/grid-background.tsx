@@ -9,13 +9,13 @@ export function AnimatedBackground({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex items-center justify-center min-h-screen w-full overflow-hidden bg-slate-950">
+    <div className="relative flex items-center justify-center min-h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
       {/* Animated background radial glows */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(99,102,241,0.15),transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_75%,rgba(236,72,153,0.08),transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(99,102,241,0.06),transparent_60%)] dark:bg-[radial-gradient(circle_at_30%_30%,rgba(99,102,241,0.15),transparent_60%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_75%,rgba(236,72,153,0.04),transparent_60%)] dark:bg-[radial-gradient(circle_at_75%_75%,rgba(236,72,153,0.08),transparent_60%)] pointer-events-none" />
 
       {/* Grid pattern overlay */}
-      <div className="absolute inset-0 bg-grid-premium opacity-25" />
+      <div className="absolute inset-0 bg-grid-premium opacity-[0.35] dark:opacity-[0.15] pointer-events-none" />
 
       {/* Interactive 3D Sphere */}
       <ThreeDGlobe />

@@ -71,3 +71,15 @@ export function getErrorMessage(error: unknown): string {
     return String((error as any).message);
   return "Wystąpił nieznany błąd";
 }
+
+export function getMediaUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+    return url;
+  }
+  const apiBase = api.defaults.baseURL || "http://127.0.0.1:8000/api/v1";
+  const base = apiBase.replace(/\/api\/v1\/?$/, "");
+  const cleanUrl = url.startsWith("/") ? url : `/${url}`;
+  return `${base}${cleanUrl}`;
+}
+

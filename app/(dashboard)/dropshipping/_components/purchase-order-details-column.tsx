@@ -95,9 +95,9 @@ const ProductLineItem = ({
     onIndexChange(value);
   };
   return (
-    <div className="space-y-2 bg-slate-950/40 p-3 rounded-xl border border-white/5">
+    <div className="space-y-2 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-200/50 dark:border-white/5">
       <div className="flex justify-between items-start gap-2">
-        <Label htmlFor={`item-${item.marketplaceLineItemId}`} className="font-semibold text-xs text-slate-200">
+        <Label htmlFor={`item-${item.marketplaceLineItemId}`} className="font-semibold text-xs text-foreground dark:text-slate-200">
           {item.name} <span className="text-primary font-bold">(x{item.quantity})</span>
         </Label>
         <span className="text-[10px] text-muted-foreground font-mono">
@@ -532,9 +532,9 @@ export function PurchaseOrderDetailsColumn({
   const renderDeliveryAndPackageCards = () => (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
       {/* Adres Dostawy */}
-      <Card className="glass-dark border-white/10 shadow-sm rounded-2xl overflow-hidden">
-        <CardHeader className="bg-slate-950/40 border-b border-white/10 pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-bold text-slate-200 flex items-center gap-2">
+      <Card className="glass-dark shadow-sm rounded-2xl overflow-hidden">
+        <CardHeader className="bg-slate-50 dark:bg-slate-950/40 border-b border-slate-200/50 dark:border-white/10 pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-bold text-foreground dark:text-slate-200 flex items-center gap-2">
             <MapPin className="h-4 w-4 text-primary" /> Adres Dostawy Odbiorcy
           </CardTitle>
           <Button
@@ -551,88 +551,88 @@ export function PurchaseOrderDetailsColumn({
           {address ? (
             <div className="space-y-2">
               {recipientName && (
-                <p className="font-bold text-sm text-slate-100 flex items-center gap-2">
-                  <User className="h-4 w-4 text-slate-400 shrink-0" />
+                <p className="font-bold text-sm text-foreground dark:text-slate-100 flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground/60 dark:text-slate-400 shrink-0" />
                   <span>{recipientName}</span>
                 </p>
               )}
               {companyName && (
-                <p className="font-semibold text-slate-300 flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
+                <p className="font-semibold text-foreground/80 dark:text-slate-300 flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground/60 dark:text-slate-400 shrink-0" />
                   <span>{companyName}</span>
                 </p>
               )}
               {street && (
-                <p className="text-slate-300 font-medium flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                <p className="text-foreground/80 dark:text-slate-300 font-medium flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground/60 dark:text-slate-400 shrink-0" />
                   <span>{street}</span>
                 </p>
               )}
               {(zipCode || city) && (
-                <p className="text-slate-300 font-medium flex items-center gap-2">
-                  <Home className="h-4 w-4 text-slate-400 shrink-0" />
+                <p className="text-foreground/80 dark:text-slate-300 font-medium flex items-center gap-2">
+                  <Home className="h-4 w-4 text-muted-foreground/60 dark:text-slate-400 shrink-0" />
                   <span>{zipCode} {city}</span>
                   {countryCode && (
-                    <span className="uppercase text-[10px] text-slate-500 font-bold ml-1 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                    <span className="uppercase text-[10px] text-muted-foreground dark:text-slate-500 font-bold ml-1 bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 rounded border border-slate-200/50 dark:border-white/5">
                       {countryCode}
                     </span>
                   )}
                 </p>
               )}
               {phone && (
-                <p className="text-slate-400 flex items-center gap-2 pt-1.5 border-t border-white/5">
-                  <Phone className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  <span>Telefon: <span className="font-mono text-slate-200">{phone}</span></span>
+                <p className="text-muted-foreground dark:text-slate-400 flex items-center gap-2 pt-1.5 border-t border-slate-200/50 dark:border-white/5">
+                  <Phone className="h-3.5 w-3.5 text-muted-foreground/60 dark:text-slate-500 shrink-0" />
+                  <span>Telefon: <span className="font-mono text-foreground dark:text-slate-200">{phone}</span></span>
                 </p>
               )}
               {email && (
-                <p className="text-slate-400 flex items-center gap-2 truncate">
-                  <Mail className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">Email: <span className="text-slate-200">{email}</span></span>
+                <p className="text-muted-foreground dark:text-slate-400 flex items-center gap-2 truncate">
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground/60 dark:text-slate-500 shrink-0" />
+                  <span className="truncate">Email: <span className="text-foreground dark:text-slate-200">{email}</span></span>
                 </p>
               )}
             </div>
           ) : (
-            <p className="text-slate-500 italic">Brak pełnego adresu dostawy w zamówieniu.</p>
+            <p className="text-muted-foreground/60 italic">Brak pełnego adresu dostawy w zamówieniu.</p>
           )}
         </CardContent>
       </Card>
 
       {/* Sposób Dostawy & Paczka */}
-      <Card className="glass-dark border-white/10 shadow-sm rounded-2xl overflow-hidden">
-        <CardHeader className="bg-slate-950/40 border-b border-white/10 pb-3">
-          <CardTitle className="text-sm font-bold text-slate-200 flex items-center gap-2">
+      <Card className="glass-dark shadow-sm rounded-2xl overflow-hidden">
+        <CardHeader className="bg-slate-50 dark:bg-slate-950/40 border-b border-slate-200/50 dark:border-white/10 pb-3">
+          <CardTitle className="text-sm font-bold text-foreground dark:text-slate-200 flex items-center gap-2">
             <Truck className="h-4 w-4 text-primary" /> Sposób Dostawy & Paczka
           </CardTitle>
         </CardHeader>
         <CardContent className="text-xs space-y-3 pt-4">
-          <div className="space-y-1 bg-slate-950/30 p-2.5 rounded-xl border border-white/5">
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Metoda wysyłki:</span>
-            <p className="font-bold text-slate-100 flex items-center gap-1.5 truncate">
+          <div className="space-y-1 bg-slate-50 dark:bg-slate-950/30 p-2.5 rounded-xl border border-slate-200/50 dark:border-white/5">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground dark:text-slate-500 tracking-wider">Metoda wysyłki:</span>
+            <p className="font-bold text-foreground dark:text-slate-100 flex items-center gap-1.5 truncate">
               <Truck className="h-3.5 w-3.5 text-primary shrink-0" /> {deliveryMethodName}
             </p>
           </div>
 
           {/* Punkt Odbioru / Paczkomat */}
           {pickupPointName && (
-            <div className="space-y-1 bg-slate-950/30 p-2.5 rounded-xl border border-white/5">
-              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Punkt odbioru / Paczkomat:</span>
+            <div className="space-y-1 bg-slate-50 dark:bg-slate-950/30 p-2.5 rounded-xl border border-slate-200/50 dark:border-white/5">
+              <span className="text-[10px] uppercase font-bold text-muted-foreground dark:text-slate-500 tracking-wider">Punkt odbioru / Paczkomat:</span>
               <div className="flex items-center justify-between gap-2">
                 <span className="font-bold text-primary font-mono text-xs truncate">{pickupPointName}</span>
                 <Badge variant="outline" className="text-[9px] uppercase border-primary/30 text-primary shrink-0">Punkt</Badge>
               </div>
               {pickupPointAddress && (
-                <p className="text-[10px] text-slate-400 truncate">{pickupPointAddress}</p>
+                <p className="text-[10px] text-muted-foreground dark:text-slate-400 truncate">{pickupPointAddress}</p>
               )}
             </div>
           )}
 
           {/* Numery Śledzenia Przesyłki */}
           <div className="space-y-1 pt-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">Numery listów przewozowych:</span>
+            <span className="text-[10px] uppercase font-bold text-muted-foreground dark:text-slate-500 tracking-wider block">Numery listów przewozowych:</span>
             {trackingNumbers && trackingNumbers.length > 0 ? (
               trackingNumbers.map((track, i) => (
-                <div key={i} className="flex items-center justify-between bg-slate-950/50 p-2 rounded-xl border border-white/5 font-mono text-xs text-slate-200">
+                <div key={i} className="flex items-center justify-between bg-slate-50 dark:bg-slate-950/50 p-2 rounded-xl border border-slate-200/50 dark:border-white/5 font-mono text-xs text-foreground dark:text-slate-200">
                   <span className="truncate">{track}</span>
                   <a
                     href={`https://allegro.pl/sledz-przesylke?numer=${track}`}
@@ -645,7 +645,7 @@ export function PurchaseOrderDetailsColumn({
                 </div>
               ))
             ) : (
-              <p className="text-slate-500 italic text-[11px]">Brak wygenerowanego numeru śledzenia paczki.</p>
+              <p className="text-muted-foreground/60 italic text-[11px]">Brak wygenerowanego numeru śledzenia paczki.</p>
             )}
           </div>
         </CardContent>
@@ -657,12 +657,12 @@ export function PurchaseOrderDetailsColumn({
     <>
       <div className="p-3 sm:p-4 space-y-3.5 h-full overflow-y-auto w-full flex flex-col scrollbar-thin">
         {/* ── HERO HEADER (Design Zgodny z Nabijarką) ── */}
-        <div className="relative rounded-2xl overflow-hidden border border-border/30 bg-slate-900/60 backdrop-blur-md shadow-xl shrink-0 p-3.5 sm:p-5">
+        <div className="relative rounded-2xl overflow-hidden border border-slate-200/50 dark:border-border/30 bg-slate-100/80 dark:bg-slate-900/60 backdrop-blur-md shadow-xl shrink-0 p-3.5 sm:p-5">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/15 via-transparent to-transparent pointer-events-none" />
           
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-950/40 border border-white/10 flex items-center justify-center shadow-inner shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200/50 dark:border-white/10 flex items-center justify-center shadow-inner shrink-0">
                 {!providerType && <Package className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />}
                 {providerType === "ALLEGRO" && <span className="text-orange-500 font-extrabold text-xs sm:text-sm tracking-wider">ALL</span>}
                 {providerType === "BASELINKER" && <span className="text-blue-400 font-extrabold text-xs sm:text-sm tracking-wider">BL</span>}
@@ -673,7 +673,7 @@ export function PurchaseOrderDetailsColumn({
                   <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold truncate">
                     {(order.serviceIntegration || (order as any).service_integration)?.name || "Zamówienie"}
                   </span>
-                  <Badge variant="outline" className="text-[9px] font-bold uppercase py-0 px-1.5 border-white/10 bg-white/5 shrink-0">
+                  <Badge variant="outline" className="text-[9px] font-bold uppercase py-0 px-1.5 border-slate-200/50 dark:border-white/10 bg-slate-100 dark:bg-white/5 shrink-0">
                     {order.status}
                   </Badge>
                 </div>
@@ -691,13 +691,13 @@ export function PurchaseOrderDetailsColumn({
                 </h1>
                 <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5 mt-0.5 truncate">
                   <User className="h-3 w-3 text-primary shrink-0" /> {buyerLogin}
-                  {recipientName && <span className="text-slate-300 font-sans truncate">({recipientName})</span>}
+                  {recipientName && <span className="text-foreground/80 dark:text-slate-300 font-sans truncate">({recipientName})</span>}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <div className="flex items-center gap-2 bg-slate-950/40 rounded-xl px-2.5 py-1.5 border border-white/10">
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950/40 rounded-xl px-2.5 py-1.5 border border-slate-200/50 dark:border-white/10">
                 <CreditCard className="h-3.5 w-3.5 text-primary" />
                 <div>
                   <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold">Kwota</p>
@@ -715,8 +715,8 @@ export function PurchaseOrderDetailsColumn({
           </div>
 
           {/* Szybki pasek podsumowujący pod nagłówkiem */}
-          <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 truncate text-slate-300">
+          <div className="mt-3 pt-2.5 border-t border-slate-200/50 dark:border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 truncate text-foreground/80 dark:text-slate-300">
               <Truck className="h-3.5 w-3.5 text-primary shrink-0" />
               <span className="font-semibold truncate">{deliveryMethodName}</span>
               {pickupPointName && (
@@ -743,7 +743,7 @@ export function PurchaseOrderDetailsColumn({
 
         {/* ── PASEK ZAKŁADEK (Tabs Layout Zgodny z Nabijarką) ── */}
         <Tabs defaultValue="supplier" className="flex-1 flex flex-col w-full min-h-0">
-          <TabsList className="bg-slate-900/60 border border-white/10 p-1 rounded-2xl flex flex-nowrap overflow-x-auto scrollbar-none h-auto gap-1 shrink-0 w-full">
+          <TabsList className="bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/50 dark:border-white/10 p-1 rounded-2xl flex flex-nowrap overflow-x-auto scrollbar-none h-auto gap-1 shrink-0 w-full">
             <TabsTrigger
               value="supplier"
               className="rounded-xl gap-1.5 px-3.5 py-1.5 text-xs font-bold data-[state=active]:bg-primary/15 data-[state=active]:text-primary transition-all shrink-0"
@@ -799,8 +799,8 @@ export function PurchaseOrderDetailsColumn({
               </Alert>
             )}
 
-            <Card className="glass-dark border-white/10 shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="bg-slate-950/40 border-b border-white/10 pb-4">
+            <Card className="glass-dark shadow-sm rounded-2xl overflow-hidden">
+              <CardHeader className="bg-slate-50 dark:bg-slate-950/40 border-b border-slate-200/50 dark:border-white/10 pb-4">
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle className="text-base font-bold text-primary flex items-center gap-2">
@@ -820,7 +820,7 @@ export function PurchaseOrderDetailsColumn({
               <CardContent className="space-y-4 pt-4">
                 {!activePurchaseOrder && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="supplier" className="text-xs font-semibold text-slate-200">
+                    <Label htmlFor="supplier" className="text-xs font-semibold text-foreground dark:text-slate-200">
                       Wybierz hurtownię dropshippingową
                     </Label>
                     <Select
@@ -828,7 +828,7 @@ export function PurchaseOrderDetailsColumn({
                       onValueChange={setSelectedSupplierId}
                       disabled={areSuppliersLoading}
                     >
-                      <SelectTrigger id="supplier" className="bg-slate-950/50 border-white/10 text-xs">
+                      <SelectTrigger id="supplier" className="bg-slate-50 dark:bg-slate-950/50 border-slate-200/50 dark:border-white/10 text-xs">
                         <SelectValue placeholder="Wybierz hurtownię z listy..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -842,10 +842,10 @@ export function PurchaseOrderDetailsColumn({
                   </div>
                 )}
 
-                <Separator className="bg-white/10" />
+                <Separator className="bg-slate-200/50 dark:bg-white/10" />
 
                 <div className="space-y-3">
-                  <span className="text-xs font-bold text-slate-300 block">Zakupione Towary ({lineItems.length}):</span>
+                  <span className="text-xs font-bold text-foreground/80 dark:text-slate-300 block">Zakupione Towary ({lineItems.length}):</span>
                   {lineItems.map((item, index) => {
                     const rawItem = (order.lineItems || (order as any).line_items)?.[index];
                     const offerId =
@@ -900,7 +900,7 @@ export function PurchaseOrderDetailsColumn({
                         variant="outline"
                         onClick={handleCreateDraft}
                         disabled={isCreating || !selectedSupplierId}
-                        className="w-full border-white/10 hover:bg-white/5"
+                        className="w-full border-slate-200/50 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5"
                       >
                         {isCreating && (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -928,9 +928,9 @@ export function PurchaseOrderDetailsColumn({
 
           {/* ── KARTA 3: Dane do Faktury VAT (FV) ── */}
           <TabsContent value="invoice" className="space-y-4 mt-3 flex-1 overflow-y-auto">
-            <Card className="glass-dark border-white/10 shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="bg-slate-950/40 border-b border-white/10 pb-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <Card className="glass-dark shadow-sm rounded-2xl overflow-hidden">
+              <CardHeader className="bg-slate-50 dark:bg-slate-950/40 border-b border-slate-200/50 dark:border-white/10 pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-bold text-foreground dark:text-slate-200 flex items-center gap-2">
                   <Receipt className="h-4 w-4 text-primary" /> Dane Rozliczeniowe & Faktura VAT
                 </CardTitle>
                 {invoiceAddress && (
@@ -946,41 +946,41 @@ export function PurchaseOrderDetailsColumn({
               </CardHeader>
               <CardContent className="text-xs space-y-3 pt-4">
                 {invoiceFullname || invoiceNip || invoiceStreet ? (
-                  <div className="space-y-2 bg-slate-950/30 p-3 rounded-xl border border-white/5">
+                  <div className="space-y-2 bg-slate-50 dark:bg-slate-950/30 p-3 rounded-xl border border-slate-200/50 dark:border-white/5">
                     {invoiceFullname && (
-                      <p className="font-bold text-sm text-slate-100 flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
+                      <p className="font-bold text-sm text-foreground dark:text-slate-100 flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground/60 dark:text-slate-400 shrink-0" />
                         <span>{invoiceFullname}</span>
                       </p>
                     )}
                     {invoiceNip && (
                       <p className="font-mono text-primary font-bold text-xs flex items-center gap-2">
-                        <Receipt className="h-4 w-4 text-slate-400 shrink-0" />
+                        <Receipt className="h-4 w-4 text-muted-foreground/60 dark:text-slate-400 shrink-0" />
                         <span>NIP: {invoiceNip}</span>
                       </p>
                     )}
                     {invoiceStreet && (
-                      <p className="text-slate-300 font-medium flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                      <p className="text-foreground/80 dark:text-slate-300 font-medium flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground/60 dark:text-slate-400 shrink-0" />
                         <span>{invoiceStreet}</span>
                       </p>
                     )}
                     {(invoiceZip || invoiceCity) && (
-                      <p className="text-slate-300 font-medium flex items-center gap-2">
-                        <Home className="h-4 w-4 text-slate-400 shrink-0" />
+                      <p className="text-foreground/80 dark:text-slate-300 font-medium flex items-center gap-2">
+                        <Home className="h-4 w-4 text-muted-foreground/60 dark:text-slate-400 shrink-0" />
                         <span>{invoiceZip} {invoiceCity}</span>
                       </p>
                     )}
                   </div>
                 ) : (
-                  <p className="text-slate-500 italic">Brak danych do faktury VAT (zamówienie konsumenckie / paragon).</p>
+                  <p className="text-muted-foreground/60 italic">Brak danych do faktury VAT (zamówienie konsumenckie / paragon).</p>
                 )}
 
                 {/* Status dokumentu sprzedaży w Subiekcie GT / ERP */}
-                <div className="flex items-center justify-between bg-slate-950/50 p-3 rounded-xl border border-white/5">
+                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-950/50 p-3 rounded-xl border border-slate-200/50 dark:border-white/5">
                   <div className="space-y-0.5">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Faktura w ERP (Subiekt GT):</span>
-                    <p className="font-mono font-bold text-xs text-slate-200">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground dark:text-slate-500 tracking-wider">Faktura w ERP (Subiekt GT):</span>
+                    <p className="font-mono font-bold text-xs text-foreground dark:text-slate-200">
                       {erpInvoiceNumber ? `Faktura #${erpInvoiceNumber}` : "Brak przypisanego dokumentu FS"}
                     </p>
                   </div>
@@ -1005,15 +1005,15 @@ export function PurchaseOrderDetailsColumn({
               <Alert className="border-amber-500/30 bg-amber-500/10 rounded-2xl shadow-sm">
                 <MessageSquare className="h-4 w-4 text-amber-400" />
                 <AlertTitle className="text-xs font-bold uppercase text-amber-400">Uwagi / Wiadomość od kupującego</AlertTitle>
-                <AlertDescription className="mt-1 text-xs italic text-slate-200 font-medium">
+                <AlertDescription className="mt-1 text-xs italic text-foreground dark:text-slate-200 font-medium">
                   "{messageToSeller}"
                 </AlertDescription>
               </Alert>
             )}
 
-            <Card className="glass-dark border-white/10 shadow-sm rounded-2xl overflow-hidden min-h-[350px]">
-              <CardHeader className="bg-slate-950/40 border-b border-white/10 pb-3">
-                <CardTitle className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <Card className="glass-dark shadow-sm rounded-2xl overflow-hidden min-h-[350px]">
+              <CardHeader className="bg-slate-50 dark:bg-slate-950/40 border-b border-slate-200/50 dark:border-white/10 pb-3">
+                <CardTitle className="text-sm font-bold text-foreground dark:text-slate-200 flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 text-primary" /> Historia Konwersacji z Kupującym
                 </CardTitle>
               </CardHeader>
@@ -1036,9 +1036,9 @@ export function PurchaseOrderDetailsColumn({
 
           {/* ── KARTA 5: Inne Zamówienia Klienta (Historia Zakupów) ── */}
           <TabsContent value="related" className="space-y-4 mt-3 flex-1 overflow-y-auto">
-            <Card className="glass-dark border-white/10 shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="bg-slate-950/40 border-b border-white/10 pb-3">
-                <CardTitle className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <Card className="glass-dark shadow-sm rounded-2xl overflow-hidden">
+              <CardHeader className="bg-slate-50 dark:bg-slate-950/40 border-b border-slate-200/50 dark:border-white/10 pb-3">
+                <CardTitle className="text-sm font-bold text-foreground dark:text-slate-200 flex items-center gap-2">
                   <ShoppingBag className="h-4 w-4 text-primary" /> Pozostałe Transakcje Kupującego ({relatedOrders.length})
                 </CardTitle>
                 <CardDescription className="text-xs">
@@ -1068,12 +1068,12 @@ export function PurchaseOrderDetailsColumn({
                           target="_blank"
                           rel="noopener noreferrer"
                           title={roItemsSummary}
-                          className="relative block bg-slate-950/60 p-3 rounded-xl border border-white/5 hover:border-primary/50 hover:bg-slate-900 transition-all group space-y-2 shadow-sm"
+                          className="relative block bg-white dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200/50 dark:border-white/5 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-all group space-y-2 shadow-sm"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <span
                               title={roItemsSummary}
-                              className="text-xs font-bold text-slate-200 group-hover:text-primary transition-colors line-clamp-2 leading-tight"
+                              className="text-xs font-bold text-foreground dark:text-slate-200 group-hover:text-primary transition-colors line-clamp-2 leading-tight"
                             >
                               {roItemsSummary}
                             </span>
@@ -1085,12 +1085,12 @@ export function PurchaseOrderDetailsColumn({
                             </Badge>
                           </div>
 
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1.5 border-t border-white/5">
-                            <span className="flex items-center gap-1 text-slate-300 font-sans font-medium">
-                              📅 <span className="font-semibold text-slate-200">{formattedDate}</span>
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground dark:text-slate-400 font-mono pt-1.5 border-t border-slate-100 dark:border-white/5">
+                            <span className="flex items-center gap-1 text-foreground/80 dark:text-slate-300 font-sans font-medium">
+                              📅 <span className="font-semibold text-foreground dark:text-slate-200">{formattedDate}</span>
                             </span>
                             {(ro.total_to_pay || ro.totalToPay) && (
-                              <span className="font-bold text-slate-200 font-mono text-xs">
+                              <span className="font-bold text-foreground dark:text-slate-200 font-mono text-xs">
                                 {ro.total_to_pay || ro.totalToPay} PLN
                               </span>
                             )}

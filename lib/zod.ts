@@ -61,10 +61,13 @@ export type FullRegisterSchemaType = z.infer<typeof FullRegisterSchema>;
 
 export type ServiceIntegrationFormValues = {
   name: string;
-  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "KSEF" | "AB" | "SUBIEKT_GT" | "APACZKA" | "EMPIK" | "GEIS" | "GEODIS" | "INPOST_BUY" | "RABEN";
+  provider_type: "ALLEGRO" | "BASELINKER" | "SUUS" | "KSEF" | "AB" | "SUBIEKT_GT" | "APACZKA" | "EMPIK" | "GEIS" | "GEODIS" | "INPOST_BUY" | "RABEN" | "WOOCOMMERCE";
   sync_orders?: boolean; // Zmieniamy na opcjonalne, bo `reset` czasami go nie ma
   sync_messages?: boolean;
   sync_returns?: boolean;
+  woocommerce_shop_url?: string;
+  woocommerce_consumer_key?: string;
+  woocommerce_consumer_secret?: string;
   api_token?: string;
   suus_login?: string;
   suus_password?: string;
@@ -113,11 +116,15 @@ export type ServiceIntegrationFormValues = {
 export const serviceIntegrationFormSchema = z
   .object({
     name: z.string().min(2, "Nazwa musi mieć co najmniej 2 znaki."),
-    provider_type: z.enum(["ALLEGRO", "BASELINKER", "SUUS", "KSEF", "AB", "SUBIEKT_GT", "APACZKA", "EMPIK", "GEIS", "GEODIS", "INPOST_BUY", "RABEN"]),
+    provider_type: z.enum(["ALLEGRO", "BASELINKER", "SUUS", "KSEF", "AB", "SUBIEKT_GT", "APACZKA", "EMPIK", "GEIS", "GEODIS", "INPOST_BUY", "RABEN", "WOOCOMMERCE"]),
 
     sync_orders: z.boolean().optional(),
     sync_messages: z.boolean().optional(),
     sync_returns: z.boolean().optional(),
+
+    woocommerce_shop_url: z.string().optional(),
+    woocommerce_consumer_key: z.string().optional(),
+    woocommerce_consumer_secret: z.string().optional(),
 
     api_token: z.string().optional(),
     suus_login: z.string().optional(),
@@ -415,6 +422,9 @@ export const IntegrationUpdateSchema = z.object({
   inpost_buy_client_secret: z.string().optional(),
   inpost_buy_organization_id: z.string().optional(),
   inpost_buy_sandbox: z.boolean().optional(),
+  woocommerce_shop_url: z.string().optional(),
+  woocommerce_consumer_key: z.string().optional(),
+  woocommerce_consumer_secret: z.string().optional(),
 });
 
 export type IntegrationUpdateSchemaType = z.infer<

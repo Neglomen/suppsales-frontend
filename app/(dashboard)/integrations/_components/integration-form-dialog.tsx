@@ -35,6 +35,7 @@ import {
   GeodisIcon,
   InPostIcon,
   RabenIcon,
+  WooCommerceIcon,
 } from "@/components/shared/icons";
 import { KsefIcon } from "@/components/shared/ksef-icon";
 import {
@@ -56,6 +57,7 @@ import { GeisFormFields } from "./providers/GeisFormFields";
 import { GeodisFormFields } from "./providers/GeodisFormFields";
 import { InPostBuyFormFields } from "./providers/InPostBuyFormFields";
 import { RabenFormFields } from "./providers/RabenFormFields";
+import { WooCommerceFormFields } from "./providers/WooCommerceFormFields";
 import { Package } from "lucide-react";
 
 interface IntegrationFormDialogProps {
@@ -64,7 +66,7 @@ interface IntegrationFormDialogProps {
   onSuccess: (newIntegration: ServiceIntegration) => void;
 }
 
-type ProviderType = "ALLEGRO" | "BASELINKER" | "SUUS" | "AB" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "EMPIK" | "GEIS" | "GEODIS" | "INPOST_BUY" | "RABEN";
+type ProviderType = "ALLEGRO" | "BASELINKER" | "SUUS" | "AB" | "SUBIEKT_GT" | "KSEF" | "APACZKA" | "EMPIK" | "GEIS" | "GEODIS" | "INPOST_BUY" | "RABEN" | "WOOCOMMERCE";
 
 const CATEGORIES = [
   { id: "ALL", name: "Wszystkie", icon: <Grid className="h-4 w-4 mr-2.5" /> },
@@ -152,6 +154,13 @@ const Step1SelectType = ({
       title: "InPost Buy",
       description: "Obsługa zamówień z aplikacji InPost Mobile.",
       icon: <InPostIcon className="w-24 h-auto" />,
+    },
+    {
+      type: "WOOCOMMERCE" as ProviderType,
+      category: "MARKETPLACE",
+      title: "WooCommerce",
+      description: "Zamówienia, stany magazynowe i ceny.",
+      icon: <WooCommerceIcon className="w-24 h-auto" />,
     },
     {
       type: "SUUS" as ProviderType,
@@ -330,6 +339,11 @@ const Step2EnterDetails = ({
       icon: <InPostIcon className="w-24 h-auto" />,
     },
     {
+      type: "WOOCOMMERCE" as ProviderType,
+      title: "WooCommerce",
+      icon: <WooCommerceIcon className="w-24 h-auto" />,
+    },
+    {
       type: "SUUS" as ProviderType,
       title: "RÖHLIG SUUS",
       icon: <SuusIcon className="w-30 h-auto" />,
@@ -397,12 +411,13 @@ const Step2EnterDetails = ({
         {providerType === "SUBIEKT_GT" && <SubiektFormFields />}
         {providerType === "KSEF" && <KsefFormFields />}
         {providerType === "EMPIK" && <EmpikFormFields />}
+        {providerType === "WOOCOMMERCE" && <WooCommerceFormFields />}
         {providerType === "INPOST_BUY" && <InPostBuyFormFields />}
         {providerType === "RABEN" && <RabenFormFields />}
       </div>
 
       {/* SYNC SETTINGS */}
-      {["ALLEGRO", "BASELINKER", "EMPIK", "INPOST_BUY"].includes(providerType) && (
+      {["ALLEGRO", "BASELINKER", "EMPIK", "INPOST_BUY", "WOOCOMMERCE"].includes(providerType) && (
         <div className="space-y-3 rounded-2xl border border-border/15 bg-card/10 p-6 shadow-sm backdrop-blur-sm">
           <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">
             Synchronizacja danych
@@ -461,6 +476,9 @@ export function IntegrationFormDialog({
     apaczka_app_id: "",
     apaczka_app_secret: "",
     empik_token: "",
+    woocommerce_shop_url: "",
+    woocommerce_consumer_key: "",
+    woocommerce_consumer_secret: "",
     inpost_buy_client_id: "",
     inpost_buy_client_secret: "",
     inpost_buy_organization_id: "",
@@ -498,6 +516,9 @@ export function IntegrationFormDialog({
         break;
       case "EMPIK":
         defaultName = "Konto Empik";
+        break;
+      case "WOOCOMMERCE":
+        defaultName = "Sklep WooCommerce";
         break;
       case "INPOST_BUY":
         defaultName = "Konto InPost Buy";
@@ -573,6 +594,9 @@ export function IntegrationFormDialog({
       nip,
       environment,
       empik_token,
+      woocommerce_shop_url,
+      woocommerce_consumer_key,
+      woocommerce_consumer_secret,
       inpost_buy_client_id,
       inpost_buy_client_secret,
       inpost_buy_organization_id,
@@ -618,6 +642,12 @@ export function IntegrationFormDialog({
       api_config = { api_token: api_token };
     else if (values.provider_type === "EMPIK")
       api_config = { api_token: empik_token };
+    else if (values.provider_type === "WOOCOMMERCE")
+      api_config = {
+        shop_url: woocommerce_shop_url,
+        consumer_key: woocommerce_consumer_key,
+        consumer_secret: woocommerce_consumer_secret,
+      };
     else if (values.provider_type === "INPOST_BUY")
       api_config = {
         client_id: inpost_buy_client_id,

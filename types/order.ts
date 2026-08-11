@@ -7,6 +7,7 @@ interface OrderEventLog {
   type: string;
   summary: string;
   occurred_at: string; // ISO date string
+  details_payload?: Record<string, any> | null;
 }
 
 // Główny, szczegółowy typ odpowiedzi z API dla /orders/{id}
@@ -26,6 +27,7 @@ export interface OrderDetailsApiResponse {
   is_printed: boolean;
   purchased_at: string; // ISO date string
   erp_sales_document_number?: string | null;
+  erp_sales_correction_number?: string | null;
   erp_sales_document_sync_status?: string | null;
   erp_sales_document_synced_at?: string | null;
   flags?: string[] | null;

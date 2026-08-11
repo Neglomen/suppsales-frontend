@@ -32,7 +32,7 @@ export default function DropshippingPage() {
   return (
     <div className="space-y-3 max-w-[1700px] mx-auto w-full h-[calc(100vh-5.5rem)] sm:h-[calc(100vh-6.5rem)] lg:h-[calc(100vh-7.5rem)] flex flex-col overflow-hidden pb-2 px-2 sm:px-4">
       {/* Szklany, lekki nagłówek zoptymalizowany pod laptopy i mniejsze ekrany */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/30 bg-slate-900/60 backdrop-blur-md p-3.5 sm:p-5 shadow-lg shrink-0">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-border/30 bg-slate-100/80 dark:bg-slate-900/60 backdrop-blur-md p-3.5 sm:p-5 shadow-lg shrink-0">
         <div className="absolute top-0 right-0 w-[250px] h-[250px] bg-primary/5 blur-[80px] rounded-full pointer-events-none" />
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 relative z-10">

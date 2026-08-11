@@ -199,17 +199,58 @@ export function SalesCorrectionModal({
         line_items: formattedItems,
       };
 
-      await api.post(
+      const res = await api.post(
         `/sales-invoices/orders/${order.id}/create-sales-correction`,
         payload
       );
 
-      toast.success("Zlecono utworzenie Korekty Faktury Sprzedaży (KFS) w Subiekcie!");
+      const taskId = res.data?.task_id;
+      if (taskId) {
+        toast.loading("Wystawianie Korekty w Subiekt GT...", { id: "kfs-toast" });
+        
+        const pollTaskStatus = (tId: string): Promise<{ document_number: string; message?: string }> => {
+          return new Promise((resolve, reject) => {
+            const startTime = Date.now();
+            const timeout = 3 * 60 * 1000;
+            const interval = setInterval(async () => {
+              try {
+                if (Date.now() - startTime > timeout) {
+                  clearInterval(interval);
+                  reject(new Error("Przekroczono limit czasu oczekiwania na wystawienie korekty."));
+                  return;
+                }
+                const statusRes = await api.get(`/tasks/${tId}/status`);
+                const data = statusRes.data;
+                if (data.status === "SUCCESS") {
+                  clearInterval(interval);
+                  const docNumber = data.result?.result?.subiekt_document_number || data.result?.subiekt_document_number;
+                  resolve({
+                    document_number: docNumber || "KFS",
+                    message: data.result?.result?.message || data.result?.message,
+                  });
+                } else if (data.status === "FAILURE" || data.status === "FAILED" || data.status === "ERROR") {
+                  clearInterval(interval);
+                  const errorMsg = data.result?.error || data.result?.result?.error || "Nie udało się utworzyć korekty w Subiekcie.";
+                  reject(new Error(errorMsg));
+                }
+              } catch (err) {
+                // cichy retry
+              }
+            }, 1500);
+          });
+        };
+
+        const resultData = await pollTaskStatus(taskId);
+        toast.success(`Wystawiono Korektę Faktury (KFS): ${resultData.document_number}`, { id: "kfs-toast" });
+      } else {
+        toast.success("Zlecono utworzenie Korekty Faktury Sprzedaży (KFS) w Subiekcie!");
+      }
+
       if (onSuccess) onSuccess();
       onClose();
     } catch (err: any) {
-      const msg = err.response?.data?.detail || "Nie udało się wystawić korekty.";
-      toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      const msg = err.message || err.response?.data?.detail || "Nie udało się wystawić korekty w Subiekcie.";
+      toast.error(typeof msg === "string" ? msg : JSON.stringify(msg), { id: "kfs-toast" });
     } finally {
       setIsSubmitting(false);
     }

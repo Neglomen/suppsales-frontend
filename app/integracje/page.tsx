@@ -151,10 +151,10 @@ export default function IntegrationsPage() {
   }, [activeCategory, searchQuery]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden relative selection:bg-primary selection:text-white">
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-foreground dark:text-slate-100 overflow-x-hidden relative selection:bg-primary selection:text-white transition-colors duration-500">
       {/* Glow background effects */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/10 blur-[150px] rounded-full pointer-events-none z-0" />
-      <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-purple-600/10 blur-[150px] rounded-full pointer-events-none z-0" />
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/5 dark:bg-primary/10 blur-[150px] rounded-full pointer-events-none z-0" />
+      <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-purple-600/5 dark:bg-purple-600/10 blur-[150px] rounded-full pointer-events-none z-0" />
 
       {/* Header */}
       <MarketingNavbar />
@@ -165,16 +165,16 @@ export default function IntegrationsPage() {
           
           {/* Hero Section */}
           <div className="text-center space-y-5 max-w-3xl mx-auto">
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/10 text-primary-foreground text-[10px] font-bold uppercase tracking-wider">
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/10 text-primary dark:text-primary-foreground text-[10px] font-bold uppercase tracking-wider shadow-sm shadow-primary/5">
               <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" /> Ekosystem SuppSales
             </span>
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-tight text-slate-100">
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-tight text-foreground">
               Wszystkie Integracje <br />
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-purple-400 to-pink-500">
                 w Jednym Miejscu
               </span>
             </h1>
-            <p className="text-slate-400 text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
+            <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
               Łączymy najpopularniejsze platformy sprzedażowe, systemy magazynowe ERP oraz spedycje, by w pełni zautomatyzować Twój e-commerce.
             </p>
 
@@ -185,13 +185,13 @@ export default function IntegrationsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Szukaj integracji (np. Allegro, Subiekt)..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-2xl glass border-white/10 bg-slate-950/60 text-slate-100 placeholder-slate-500 focus:border-primary/50 shadow-inner h-11"
+                className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white/70 dark:bg-slate-950/60 border-slate-200/60 dark:border-white/10 text-foreground placeholder-slate-450 focus:border-primary/50 shadow-xs h-11"
               />
             </div>
           </div>
 
           {/* Category Tabs */}
-          <div className="flex flex-wrap justify-center gap-2 border-b border-white/5 pb-6">
+          <div className="flex flex-wrap justify-center gap-2 border-b border-slate-200 dark:border-white/5 pb-6">
             {CATEGORIES.map((cat) => {
               const Icon = cat.icon;
               return (
@@ -203,7 +203,7 @@ export default function IntegrationsPage() {
                     "px-4 py-2 rounded-xl text-xs font-bold transition-all h-9 border flex items-center gap-2",
                     activeCategory === cat.value
                       ? "bg-primary/15 text-primary border-primary/25 shadow-sm"
-                      : "text-slate-400 hover:text-slate-200 bg-white/[0.02] border-transparent hover:bg-white/5"
+                      : "text-muted-foreground hover:text-foreground bg-slate-100/50 dark:bg-white/[0.02] border-transparent hover:bg-slate-200/50 dark:hover:bg-white/5"
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -219,8 +219,8 @@ export default function IntegrationsPage() {
               <Card
                 key={item.id}
                 className={cn(
-                  "glass border-white/5 bg-slate-900/20 backdrop-blur-xl rounded-2xl overflow-hidden hover:scale-[1.01] hover:shadow-lg transition-all duration-300 flex flex-col justify-between h-full border group",
-                  item.status === "active" ? "hover:border-primary/30 hover:shadow-primary/5" : "opacity-75"
+                  "glass border-slate-200/60 dark:border-white/5 bg-white/60 dark:bg-slate-900/20 backdrop-blur-xl rounded-2xl overflow-hidden hover:scale-[1.01] hover:shadow-lg transition-all duration-300 flex flex-col justify-between h-full border group",
+                  item.status === "active" ? "hover:border-primary/30 dark:hover:border-primary/30 hover:shadow-primary/5" : "opacity-75"
                 )}
               >
                 <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
@@ -230,7 +230,7 @@ export default function IntegrationsPage() {
                         <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
                           <Plug className="h-5 w-5" />
                         </div>
-                        <h3 className="font-extrabold text-base text-slate-100">{item.name}</h3>
+                        <h3 className="font-extrabold text-base text-foreground">{item.name}</h3>
                       </div>
                       
                       {item.badgeText && (
@@ -240,23 +240,23 @@ export default function IntegrationsPage() {
                       )}
 
                       {item.status === "coming_soon" && (
-                        <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider border-slate-700 text-slate-500 bg-slate-950/20 rounded-md">
+                        <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider border-slate-200 dark:border-slate-700 text-muted-foreground bg-slate-100 dark:bg-slate-950/20 rounded-md">
                           Wkrótce
                         </Badge>
                       )}
                     </div>
 
-                    <p className="text-xs text-slate-400 leading-relaxed">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
                       {item.description}
                     </p>
                   </div>
 
                   {item.features.length > 0 && (
-                    <div className="space-y-2 pt-2 border-t border-white/5">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Możliwości:</span>
+                    <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/5">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Możliwości:</span>
                       <ul className="space-y-1.5">
                         {item.features.map((feat, idx) => (
-                          <li key={idx} className="text-xs text-slate-300 flex items-center gap-2 font-medium">
+                          <li key={idx} className="text-xs text-foreground/80 dark:text-slate-300 flex items-center gap-2 font-medium">
                             <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                             <span>{feat}</span>
                           </li>
@@ -270,10 +270,10 @@ export default function IntegrationsPage() {
           </div>
 
           {/* Bottom Call to Action */}
-          <div className="rounded-3xl border border-white/5 bg-slate-900/30 backdrop-blur-md p-8 md:p-12 text-center space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[350px] bg-primary/10 blur-[100px] rounded-full pointer-events-none -z-10" />
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-100">Chcesz zintegrować swój sklep?</h2>
-            <p className="text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
+          <div className="rounded-3xl border border-slate-200 dark:border-white/5 bg-white/40 dark:bg-slate-900/30 backdrop-blur-md p-8 md:p-12 text-center space-y-6 relative overflow-hidden shadow-sm">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[350px] h-[350px] bg-primary/5 dark:bg-primary/10 blur-[100px] rounded-full pointer-events-none -z-10" />
+            <h2 className="text-2xl sm:text-3xl font-black text-foreground">Chcesz zintegrować swój sklep?</h2>
+            <p className="text-sm text-muted-foreground max-w-lg mx-auto leading-relaxed">
               Zarejestruj się za darmo i przetestuj możliwości pełnej automatyzacji Allegro, Subiekta i spedycji przez 14 dni bez zobowiązań.
             </p>
             <div className="flex justify-center gap-4">
@@ -291,7 +291,6 @@ export default function IntegrationsPage() {
         </div>
       </main>
 
-      {/* Footer */}
       {/* Footer */}
       <MarketingFooter />
     </div>

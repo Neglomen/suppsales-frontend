@@ -33,6 +33,7 @@ import {
   Check,
   X,
   Download,
+  FileCheck2,
   FileDown,
   AlertTriangle,
   ArrowLeft,
@@ -55,7 +56,7 @@ import { format } from "date-fns";
 import { Separator } from "@/components/ui/separator";
 import { ChatPanel } from "./_components/chat-panel";
 import { DisputeChatDialog, translateDisputeSubject } from "./_components/dispute-chat-dialog";
-import { AllegroIcon, BaseLinkerIcon, EmpikIcon, InPostIcon } from "@/components/shared/icons";
+import { AllegroIcon, BaseLinkerIcon, EmpikIcon, InPostIcon, WooCommerceIcon } from "@/components/shared/icons";
 import { SendEmailDialog } from "../../../../components/shared/send-email-dialog";
 import { OrderDetailsApiResponse, MappedOrderDetails, Dispute } from "@/types/order";
 import { ServiceIntegration } from "@/types/service-integration";
@@ -98,53 +99,58 @@ const translateStatus = (status: string | null | undefined): string => {
 };
 
 // --- Funkcja Pomocnicza do Budowania Linków Śledzenia ---
-function getTrackingUrl(trackingNumber: string, providerType?: string, serviceCode?: string) {
+// providerType  – typ dostawcy kurierskiego (np. "RABEN", "GEIS", "INPOST_BUY", "APACZKA")
+//                 LUB kod przewoźnika Allegro/Empik (np. "DPD", "DHL", "INPOST", "GLS")
+// serviceCode   – opcjonalny kod usługi z integracji kurierskiej
+function getTrackingUrl(trackingNumber: string, providerType?: string, serviceCode?: string): string | null {
   if (!trackingNumber) return null;
   const cleanNum = trackingNumber.trim();
-  
-  if (providerType === "SUUS") {
-    return `https://wb.suus.com/druid.php?m=project&picker=1&s=Tracking`;
-  }
-  if (providerType === "RABEN") {
-    return `https://mytrack.raben-group.com/tracking?id=${cleanNum}`;
-  }
-  
   const numOnly = cleanNum.replace(/\s+/g, "");
-  
-  // Allegro Delivery
-  if (/^AD[A-Z0-9]+$/i.test(numOnly)) {
-    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  const providerUp = (providerType || "").toUpperCase().trim();
+
+  // --- Rozpoznawanie po providerType (najwyższy priorytet) ---
+  if (providerUp === "SUUS" || providerUp === "ROHLIG_SUUS") {
+    return `https://portal.suus.com/order-details/${numOnly}`;
   }
-  
-  // UPS
-  if (/^1Z[A-Z0-9]{16}$/i.test(numOnly)) {
-    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  if (providerUp === "RABEN") {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
   }
-  // InPost
-  if (/^\d{24}$/.test(numOnly)) {
-    return `https://inpost.pl/sledz-przesylke?number=${numOnly}`;
+  if (providerUp === "GEIS") {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
   }
-  // DHL
-  if (/^\d{11}$/.test(numOnly)) {
+  if (providerUp === "GEODIS") {
+    return `https://tracking.geodis.pl/?reference=${numOnly}`;
+  }
+  if (providerUp === "INPOST" || providerUp === "INPOST_BUY" || providerUp === "INPOST_KURIER") {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  if (providerUp === "DHL") {
     return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
   }
-  // DPD
-  if (/^\d{13,14}[A-Z]?$/i.test(numOnly)) {
+  if (providerUp === "DPD" || providerUp === "DPD_PL") {
     return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
   }
-  // GLS
-  if (/^\d{11,12}$/.test(numOnly)) {
+  if (providerUp === "GLS") {
     return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
   }
-  // Poczta Polska
-  if (/^[A-Z]{2}\d{9}[A-Z]{2}$/i.test(numOnly) || /^\d{20}$/.test(numOnly)) {
+  if (providerUp === "UPS") {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (providerUp === "FEDEX") {
+    return `https://www.fedex.com/fedextrack/?trknbr=${numOnly}`;
+  }
+  if (providerUp === "POCZTA_POLSKA" || providerUp === "POCZTEX") {
     return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
   }
+  if (providerUp === "ALLEGRO" || providerUp === "ALLEGRO_ONE" || providerUp === "ALLEGRO_ONE_PICKUP" || providerUp === "ALLEGRO_ONE_MOBILE" || providerUp === "ALLEGRO_DELIVERY") {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+  // APACZKA — nie ma własnej strony śledzenia, przechodzi do serviceCode/regex poniżej
 
-  // Fallbacks na podstawie kodu usługi/dostawcy
+  // --- Fallback: kod usługi (np. z Apaczki) ---
   const codeLower = (serviceCode || "").toLowerCase();
-  if (codeLower.includes("inpost")) {
-    return `https://inpost.pl/sledz-przesylke?number=${numOnly}`;
+  if (codeLower.includes("inpost") || codeLower.includes("paczkomat")) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
   }
   if (codeLower.includes("dpd")) {
     return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
@@ -155,8 +161,77 @@ function getTrackingUrl(trackingNumber: string, providerType?: string, serviceCo
   if (codeLower.includes("gls")) {
     return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
   }
-  
-  return `https://www.google.com/search?q=tracking+${numOnly}`;
+  if (codeLower.includes("ups")) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  if (codeLower.includes("raben")) {
+    return `https://mytrack.raben-group.com/tracking?id=${numOnly}`;
+  }
+  if (codeLower.includes("geis")) {
+    return `https://www.geis.pl/pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+
+  // --- Fallback: rozpoznawanie po formacie numeru ---
+  // Allegro Delivery (zaczynające się na A, np. A000..., AD..., ALE..., AL...)
+  if (/^A[A-Z0-9]+$/i.test(numOnly)) {
+    return `https://allegro.pl/allegrodelivery/sledzenie-paczki?numer=${numOnly}`;
+  }
+  // UPS (1Z...)
+  if (/^1Z[A-Z0-9]{16}$/i.test(numOnly)) {
+    return `https://www.ups.com/track?tracknum=${numOnly}`;
+  }
+  // InPost Paczkomat (dokładnie 24 cyfry)
+  if (/^\d{24}$/.test(numOnly)) {
+    return `https://inpost.pl/sledzenie-przesylek?number=${numOnly}`;
+  }
+  // DPD (13-14 cyfr, opcjonalna litera)
+  if (/^\d{13,14}[A-Za-z]?$/.test(numOnly)) {
+    return `https://tracktrace.dpd.com.pl/parcelDetails?p1=${numOnly}`;
+  }
+  // Poczta Polska (format XX999999999XX lub 20 cyfr)
+  if (/^[A-Z]{2}\d{9}[A-Z]{2}$/i.test(numOnly) || /^\d{20}$/.test(numOnly)) {
+    return `https://emonitoring.poczta-polska.pl/?numer=${numOnly}`;
+  }
+  // GLS (11-12 cyfr — przed DHL, bo DHL to dokładnie 11)
+  if (/^\d{12}$/.test(numOnly)) {
+    return `https://gls-group.eu/PL/pl/sledzenie-paczki?match=${numOnly}`;
+  }
+  // DHL (dokładnie 10 lub 11 cyfr)
+  if (/^\d{10,11}$/.test(numOnly)) {
+    return `https://sprawdz.dhl.com.pl/szukaj.aspx?m=0&num=${numOnly}`;
+  }
+
+  // Ostateczny fallback – Google
+  return `https://www.google.com/search?q=${encodeURIComponent("śledzenie przesyłki")}+${numOnly}`;
+}
+
+// Wyciąga identyfikator przewoźnika powiązany z danym numerem śledzenia z payloadu zamówienia.
+// Sprawdza listę przesyłek Allegro (carrierID), a w razie braku — nazwy metody dostawy.
+function getAllegroCarrierForWaybill(detailsPayload: any, waybill: string): string | undefined {
+  if (!detailsPayload) return undefined;
+
+  // 1. Szukaj w liście przesyłek Allegro (shipments z carrierId)
+  const shipments: any[] = detailsPayload?.shipments || [];
+  const shipMatch = shipments.find((s: any) => s.waybill === waybill || s.waybill?.trim() === waybill.trim());
+  if (shipMatch?.carrierId) return shipMatch.carrierId;
+
+  // 2. Fallback: wyciągnij z nazwy metody dostawy (delivery.method.name)
+  const methodName: string = (detailsPayload?.delivery?.method?.name || "").toLowerCase();
+  if (!methodName) return undefined;
+
+  if (methodName.includes("inpost") || methodName.includes("paczkomat")) return "INPOST";
+  if (methodName.includes("dpd")) return "DPD";
+  if (methodName.includes("dhl")) return "DHL";
+  if (methodName.includes("gls")) return "GLS";
+  if (methodName.includes("ups")) return "UPS";
+  if (methodName.includes("fedex")) return "FEDEX";
+  if (methodName.includes("raben")) return "RABEN";
+  if (methodName.includes("geis")) return "GEIS";
+  if (methodName.includes("suus") || methodName.includes("rohlig")) return "SUUS";
+  if (methodName.includes("allegro one") || methodName.includes("allegroone")) return "ALLEGRO_ONE";
+  if (methodName.includes("poczta") || methodName.includes("pocztex")) return "POCZTA_POLSKA";
+
+  return undefined;
 }
 
 
@@ -196,6 +271,59 @@ const mapOrderPayloadToDetails = (
   order: OrderDetailsApiResponse
 ): MappedOrderDetails => {
   const payload = order.details_payload;
+
+  if (order.integration?.provider_type === "WOOCOMMERCE") {
+    const currency = payload?.currency || "PLN";
+    const rawShipping = payload?.shipping;
+    const hasShipping = !!(rawShipping?.address_1 && rawShipping?.city);
+    const shipping = hasShipping ? rawShipping : payload?.billing;
+    const billing = payload?.billing;
+
+    return {
+      delivery: {
+        methodName: payload?.shipping_lines?.[0]?.method_title || "Brak informacji",
+        isPickupPoint: false,
+        address: shipping ? {
+          firstName: shipping.first_name || undefined,
+          lastName: shipping.last_name || undefined,
+          street: ((shipping.address_1 || "") + (shipping.address_2 ? " " + shipping.address_2 : "")).trim() || undefined,
+          zipCode: shipping.postcode || undefined,
+          city: shipping.city || undefined,
+          countryCode: shipping.country || undefined,
+          phoneNumber: billing?.phone || undefined,
+        } : undefined,
+      },
+      payment: {
+        type: ["cod", "pobranie"].some(x => payload?.payment_method?.toLowerCase().includes(x)) ? "CASH_ON_DELIVERY" : "ONLINE",
+        provider: payload?.payment_method_title || payload?.payment_method || "Brak informacji",
+        status: order.payment_status || "COMPLETED",
+        total: `${payload?.total || "0.00"} ${currency}`,
+      },
+      invoice: {
+        required: !!billing?.company,
+        address: billing ? {
+          companyName: billing.company || undefined,
+          taxId: (payload?.meta_data || []).find((m: any) => ["billing_nip", "_billing_nip", "vat_number", "nip", "billing_vat"].includes(m.key))?.value || undefined,
+          street: ((billing.address_1 || "") + (billing.address_2 ? " " + billing.address_2 : "")).trim() || undefined,
+          zipCode: billing.postcode || undefined,
+          city: billing.city || undefined,
+          countryCode: billing.country || undefined,
+        } : undefined,
+      },
+      line_items: (payload?.line_items || []).map((line: any) => {
+        return {
+          id: line.variation_id && line.variation_id > 0 ? `${line.product_id}-${line.variation_id}` : `${line.product_id}`,
+          name: line.name || "Brak nazwy",
+          quantity: line.quantity || 1,
+          price: `${(parseFloat(line.total || "0") / (line.quantity || 1)).toFixed(2)} ${currency}`,
+          sku: line.sku || undefined,
+          imageUrl: line.image?.src || null,
+          offerId: line.variation_id && line.variation_id > 0 ? `${line.product_id}-${line.variation_id}` : `${line.product_id}`,
+        };
+      }),
+      buyerComments: payload?.customer_note || undefined,
+    };
+  }
 
   if (order.integration?.provider_type === "EMPIK") {
     const currency = payload?.currency_iso_code || "PLN";
@@ -664,7 +792,6 @@ function InvoiceSection({ order, mapped, onEdit }: {
   );
 }
 
-// --- Log entry ---
 function LogEntry({ log }: { log: OrderDetailsApiResponse["event_logs"][0] }) {
   const iconMap: Record<string, React.ReactNode> = {
     ADDRESS_CHANGE: <MapPin className="h-4 w-4 text-blue-400" />,
@@ -676,19 +803,42 @@ function LogEntry({ log }: { log: OrderDetailsApiResponse["event_logs"][0] }) {
   const icon = iconMap[log.type] || <ScrollText className="h-4 w-4 text-muted-foreground" />;
 
   return (
-    <div className="flex gap-4 items-start py-3.5 border-b border-border/10 last:border-0 hover:bg-muted/10 px-2 rounded-xl transition-all duration-200 group">
-      <div className="mt-0.5 shrink-0 w-8 h-8 rounded-xl bg-foreground/5 border border-border/20 group-hover:border-primary/20 flex items-center justify-center transition-all duration-300">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold leading-snug text-foreground/90 group-hover:text-foreground transition-colors">{log.summary}</p>
-        <div className="flex items-center gap-2 mt-1.5">
-          <Badge variant="secondary" className="text-[9px] px-2 py-0 h-4 bg-muted/40 text-muted-foreground border-none font-bold rounded-full font-mono uppercase">{log.source}</Badge>
-          <Badge variant="outline" className="text-[9px] px-2 py-0 h-4 border-border/60 text-muted-foreground font-bold rounded-full font-mono uppercase">{log.type}</Badge>
-          <span className="text-[10px] text-muted-foreground/60 ml-auto font-medium">
-            {new Date(log.occurred_at).toLocaleString("pl-PL")}
-          </span>
+    <div className="relative">
+      {/* Timeline dot */}
+      <span className="absolute -left-[31px] top-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 border border-primary/40 ring-4 ring-slate-900">
+        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+      </span>
+      
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2.5">
+            <div className="shrink-0 mt-0.5 w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+              {icon}
+            </div>
+            <p className="text-xs font-semibold leading-snug text-foreground/90">
+              {log.summary}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 mt-1.5 ml-[34px]">
+            <Badge variant="outline" className="text-[9px] px-1.5 h-4 bg-primary/5 text-primary border-primary/10 font-bold uppercase tracking-wider font-mono">
+              {log.source}
+            </Badge>
+            <Badge variant="outline" className="text-[9px] px-1.5 h-4 bg-slate-100 dark:bg-white/5 text-muted-foreground border-slate-200 dark:border-white/10 font-bold uppercase tracking-wider font-mono">
+              {log.type}
+            </Badge>
+          </div>
+          {log.details_payload && Object.keys(log.details_payload).length > 0 && (
+            <details className="mt-2 text-[10px] text-muted-foreground cursor-pointer ml-[34px]">
+              <summary className="hover:text-foreground transition-colors select-none font-bold">Pokaż szczegóły logu</summary>
+              <pre className="mt-1 p-2 bg-black/40 rounded border border-white/5 font-mono overflow-x-auto text-[9px] max-w-full">
+                {JSON.stringify(log.details_payload, null, 2)}
+              </pre>
+            </details>
+          )}
         </div>
+        <span className="text-[10px] font-mono text-muted-foreground shrink-0 mt-0.5">
+          {new Date(log.occurred_at).toLocaleString("pl-PL")}
+        </span>
       </div>
     </div>
   );
@@ -705,34 +855,63 @@ function ErpSalesInvoiceSection({
 }) {
   const [downloading, setDownloading] = useState(false);
 
-  const handleDownloadPdf = async () => {
-    if (!order.erp_sales_document_number) return;
-    setDownloading(true);
+  const [downloadingDoc, setDownloadingDoc] = useState<string | null>(null);
+
+  const kfsDetails = useMemo(() => {
+    if (!order) return null;
+    const flags = Array.isArray(order.flags) ? order.flags : [];
+    const hasFlag = flags.includes("KFS_ISSUED");
+
+    let kfsDocNumber = "";
+    const events = (order as any)?.events;
+    if (Array.isArray(events)) {
+      for (const ev of events) {
+        if (ev.summary?.includes("KFS") || ev.summary?.includes("Korekty Faktury") || ev.summary?.includes("Korekta Faktury")) {
+          if (ev.details?.subiekt_document_number) {
+            kfsDocNumber = ev.details.subiekt_document_number;
+            break;
+          }
+          const match = ev.summary?.match(/(KFS\s*[A-Za-z0-9\/\-_]+)/i);
+          if (match) {
+            kfsDocNumber = match[1];
+            break;
+          }
+        }
+      }
+    }
+
+    if (!hasFlag && !kfsDocNumber) return null;
+
+    return {
+      hasKfs: true,
+      kfsDocNumber: kfsDocNumber || (order.erp_sales_document_number ? order.erp_sales_document_number.replace(/^FS/i, "KFS") : "KFS"),
+    };
+  }, [order]);
+
+  const handleDownloadSalesDoc = async (docNumber?: string) => {
+    const targetDoc = docNumber || order.erp_sales_document_number;
+    if (!targetDoc) return;
+    setDownloadingDoc(targetDoc);
+    const tid = toast.loading(`Pobieranie dokumentu ${targetDoc}...`);
     try {
-      // Pobieramy token z instancji axios (interceptory ustawiają Authorization header)
+      const params = docNumber ? { doc_number: docNumber } : {};
       const response = await api.get(`/orders/${order.id}/sales-invoice/pdf`, {
+        params,
         responseType: "blob",
       });
       const blob = new Blob([response.data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      const safeName = (order.erp_sales_document_number || "faktura")
-        .replace(/\//g, "-")
-        .replace(/\s+/g, "_");
+      const safeName = targetDoc.replace(/\//g, "-").replace(/\s+/g, "_");
       link.href = url;
-      link.download = `FS_${safeName}.pdf`;
+      link.download = `${safeName}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
+      toast.success(`Pobrano ${targetDoc}!`, { id: tid });
     } catch (err: any) {
-      const detail =
-        err.response?.data instanceof Blob
-          ? await err.response.data.text().then((t: string) => {
-              try { return JSON.parse(t).detail; } catch { return t; }
-            })
-          : err.response?.data?.detail || err.message;
-      toast.error(`Nie udało się pobrać PDF faktury: ${detail}`);
+      toast.error(`Nie udało się pobrać PDF: ${err.message || "Błąd"}`);
     } finally {
-      setDownloading(false);
+      setDownloadingDoc(null);
     }
   };
 
@@ -763,8 +942,8 @@ function ErpSalesInvoiceSection({
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between pb-2 mb-3.5 border-b border-border/20">
+    <div className="space-y-3">
+      <div className="flex items-center justify-between pb-2 border-b border-border/20">
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/90 font-mono">
           <Receipt className="h-3.5 w-3.5 text-primary/70" />
           <span>Faktura sprzedaży (ERP)</span>
@@ -788,22 +967,49 @@ function ErpSalesInvoiceSection({
             variant="outline"
             size="sm"
             className="shrink-0 gap-1.5 text-xs h-8.5 border-emerald-500/20 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-500/40 bg-white/5 rounded-xl shadow-md transition-all duration-300 self-end"
-            onClick={handleDownloadPdf}
-            disabled={downloading}
-            title={`Pobierz PDF: ${order.erp_sales_document_number}`}
+            onClick={() => handleDownloadSalesDoc(order.erp_sales_document_number!)}
+            disabled={downloadingDoc === order.erp_sales_document_number}
+            title={`Pobierz PDF FS: ${order.erp_sales_document_number}`}
           >
-            {downloading ? (
+            {downloadingDoc === order.erp_sales_document_number ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Download className="h-3.5 w-3.5" />
             )}
-            {downloading ? "Pobieranie..." : "Pobierz PDF"}
+            Pobierz FS (PDF)
           </Button>
         )}
       </div>
 
+      {/* Sekcja Pobierania Korekty KFS jeśli została wystawiona */}
+      {kfsDetails?.hasKfs && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <FileCheck2 className="h-4 w-4 text-amber-400 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-bold text-amber-400 text-xs">Korekta Faktury (KFS):</p>
+              <p className="font-mono text-[11px] text-amber-200 truncate font-semibold mt-0.5">{kfsDetails.kfsDocNumber}</p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 text-xs h-7.5 border-amber-500/40 text-amber-300 hover:text-amber-200 hover:bg-amber-500/20 bg-amber-500/10 rounded-lg transition-all font-semibold"
+            onClick={() => handleDownloadSalesDoc(kfsDetails.kfsDocNumber)}
+            disabled={downloadingDoc === kfsDetails.kfsDocNumber}
+          >
+            {downloadingDoc === kfsDetails.kfsDocNumber ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            Pobierz KFS (PDF)
+          </Button>
+        </div>
+      )}
+
       {syncedAt && (
-        <p className="text-[10px] text-muted-foreground/60 mt-2 font-mono">
+        <p className="text-[10px] text-muted-foreground/60 mt-1 font-mono">
           Zsynchronizowano: {new Date(syncedAt).toLocaleString("pl-PL")}
         </p>
       )}
@@ -856,6 +1062,22 @@ function OrderDetailsContent() {
       toast.error("Nie udało się pobrać zadań powiązanych z zamówieniem.");
     } finally {
       setIsOrderTasksLoading(false);
+    }
+  }, [orderId]);
+
+  const [orderThreads, setOrderThreads] = useState<any[]>([]);
+  const [isThreadsLoading, setIsThreadsLoading] = useState(false);
+
+  const fetchOrderThreads = useCallback(async () => {
+    if (!orderId) return;
+    setIsThreadsLoading(true);
+    try {
+      const res = await api.get(`/communication/threads`, { params: { order_id: orderId, days: 365 } });
+      setOrderThreads(res.data || []);
+    } catch {
+      // Nie rzucamy błędu — wiadomości mogą być niedostępne
+    } finally {
+      setIsThreadsLoading(false);
     }
   }, [orderId]);
 
@@ -1155,8 +1377,17 @@ function OrderDetailsContent() {
       fetchOrderDetails();
       fetchOrderNotes();
       fetchOrderTasks();
+      fetchOrderThreads();
     }
-  }, [orderId, fetchOrderDetails, fetchOrderNotes, fetchOrderTasks]);
+  }, [orderId, fetchOrderDetails, fetchOrderNotes, fetchOrderTasks, fetchOrderThreads]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchOrderTasks();
+    };
+    window.addEventListener("refresh-tasks", handleRefresh);
+    return () => window.removeEventListener("refresh-tasks", handleRefresh);
+  }, [fetchOrderTasks]);
 
   const mappedDetails = useMemo(() => {
     if (!order) return null;
@@ -1240,6 +1471,11 @@ function OrderDetailsContent() {
   const shippingCost = useMemo(() => {
     if (!order || !order.details_payload) return "0.00";
     const payload = order.details_payload;
+    if (order.integration?.provider_type === "WOOCOMMERCE") {
+      return payload.shipping_total !== undefined && payload.shipping_total !== null
+        ? parseFloat(payload.shipping_total).toFixed(2)
+        : "0.00";
+    }
     if (order.integration?.provider_type === "EMPIK") {
       return payload.shipping_price !== undefined && payload.shipping_price !== null 
         ? parseFloat(payload.shipping_price).toFixed(2)
@@ -1310,6 +1546,7 @@ function OrderDetailsContent() {
                 {providerType === "BASELINKER" && <BaseLinkerIcon className="max-h-7 max-w-[80%] w-auto shrink-0" />}
                 {providerType === "EMPIK" && <EmpikIcon className="max-h-7 max-w-[80%] w-auto rounded shrink-0" />}
                 {providerType === "INPOST_BUY" && <InPostIcon className="max-h-7 max-w-[80%] w-auto rounded shrink-0" />}
+                {providerType === "WOOCOMMERCE" && <WooCommerceIcon className="max-h-7 max-w-[80%] w-auto rounded shrink-0" />}
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold font-mono">
@@ -1745,7 +1982,18 @@ function OrderDetailsContent() {
                     <div className="py-2.5 border-t border-border/20 mt-2.5 space-y-1.5">
                       <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest font-mono font-bold mb-1">Nr śledzenia</p>
                       {Array.from(new Set(order.tracking_numbers)).map((t) => {
-                        const trackingUrl = getTrackingUrl(t);
+                        // 1. Priorytet: szukaj w systemowych przesyłkach (np. GEIS, mimo że metoda dostawy to SUUS)
+                        const sysShipment = shipments?.find((s) => s.tracking_number === t);
+                        const sysCourierInteg = sysShipment
+                          ? shippingConfig?.couriers.find((c) => c.id === sysShipment.courier_integration_id)
+                          : undefined;
+                        // 2. Fallback: Allegro carrierId lub nazwa metody dostawy
+                        const allegroCarrier = !sysShipment ? getAllegroCarrierForWaybill(order.details_payload, t) : undefined;
+                        const trackingUrl = getTrackingUrl(
+                          t,
+                          sysCourierInteg?.provider_type ?? allegroCarrier ?? order.integration?.provider_type,
+                          sysShipment?.courier_service_code
+                        );
                         return (
                           <div key={t} className="flex items-center justify-between gap-2 bg-muted/20 p-2 rounded-xl border border-border/40 hover:border-primary/20 transition-all duration-200">
                             <span className="font-mono text-xs font-semibold text-foreground/95">{t}</span>
@@ -1846,12 +2094,13 @@ function OrderDetailsContent() {
 
                       {/* Przesyłki zewnętrzne */}
                       {externalTracking.map((t) => {
-                        const trackingUrl = getTrackingUrl(t);
+                        const allegroCarrier = getAllegroCarrierForWaybill(order.details_payload, t);
+                        const trackingUrl = getTrackingUrl(t, allegroCarrier || order.integration?.provider_type);
                         return (
                           <div key={t} className="p-3.5 rounded-xl border border-border/40 hover:border-primary/30 bg-amber-500/5 hover:bg-amber-500/10 transition-all duration-300 space-y-2.5 text-xs group">
                             <div className="flex items-center justify-between">
                               <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
-                                Przesyłka zewnętrzna
+                                {allegroCarrier ? allegroCarrier : "Przesyłka zewnętrzna"}
                               </Badge>
                               <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-muted/20 text-muted-foreground">
                                 Zewnętrzny
@@ -1885,6 +2134,95 @@ function OrderDetailsContent() {
           </div>
         </TabsContent>
 
+        {/* ── TAB: Messages ── */}
+        <TabsContent value="messages" className="mt-4 space-y-3">
+          {isThreadsLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : orderThreads.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-20" />
+              <p className="text-sm font-medium">Brak wiadomości powiązanych z tym zamówieniem.</p>
+              <p className="text-xs mt-1 opacity-60">Wiadomości pojawią się po synchronizacji skrzynki odbiorczej.</p>
+            </div>
+          ) : (
+            orderThreads.map((thread: any) => {
+              const msgs: any[] = thread.messages || [];
+              const providerColor = thread.provider_type === "EMPIK" ? "text-pink-400" : "text-blue-400";
+              return (
+                <div key={thread.id} className="rounded-2xl border border-border/40 bg-card/60 overflow-hidden shadow-sm">
+                  {/* Thread Header */}
+                  <div className="flex items-center justify-between gap-3 px-5 py-3 bg-muted/20 border-b border-border/10">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className={`h-4 w-4 ${providerColor} shrink-0`} />
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${providerColor}`}>{thread.provider_type}</span>
+                      <span className="text-xs font-semibold text-foreground/80 truncate max-w-[180px]">{thread.interlocutor_login}</span>
+                      {!thread.read && (
+                        <span className="inline-block h-2 w-2 rounded-full bg-blue-400 animate-pulse" title="Nieprzeczytane" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground/60 font-mono">
+                        {thread.last_message_at ? new Date(thread.last_message_at).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                      </span>
+                      <a
+                        href={`/communication?thread_id=${thread.id}`}
+                        className="text-[10px] font-bold uppercase tracking-wider text-primary hover:text-primary/80 bg-primary/10 hover:bg-primary/20 border border-primary/20 px-2.5 py-1 rounded-lg transition-all duration-200"
+                      >
+                        Otwórz czat
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Messages list — last 5 */}
+                  <div className="divide-y divide-border/10 px-5">
+                    {msgs.length === 0 ? (
+                      <p className="text-xs text-muted-foreground/60 text-center py-5 italic">Brak wiadomości w tym wątku.</p>
+                    ) : (
+                      msgs.slice(-5).map((msg: any) => {
+                        const isSeller = msg.author_role === "SELLER";
+                        const isSystem = msg.author_role === "SYSTEM" || msg.author_role === "AUTORESPONDER";
+                        return (
+                          <div key={msg.id} className={`py-3 flex gap-3 ${isSeller ? "flex-row-reverse" : ""}`}>
+                            {/* Avatar */}
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border ${
+                              isSystem ? "bg-violet-500/20 border-violet-500/30 text-violet-400" :
+                              isSeller ? "bg-primary/20 border-primary/30 text-primary" :
+                              "bg-slate-700 border-slate-600 text-slate-300"
+                            }`}>
+                              {isSeller ? "T" : isSystem ? "A" : "K"}
+                            </div>
+                            {/* Bubble */}
+                            <div className={`max-w-[75%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                              isSystem ? "bg-violet-500/10 border border-violet-500/20 text-violet-300" :
+                              isSeller ? "bg-gradient-to-tr from-primary/80 to-violet-600/80 text-white" :
+                              "bg-slate-800/80 border border-white/5 text-slate-200"
+                            }`}>
+                              <p className="whitespace-pre-wrap">{msg.text || "(brak treści)"}</p>
+                              <p className={`text-[9px] mt-1.5 font-mono ${
+                                isSeller ? "text-white/50" : "text-muted-foreground/50"
+                              }`}>
+                                {msg.created_at ? new Date(msg.created_at).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                    {msgs.length > 5 && (
+                      <p className="text-center text-[10px] text-muted-foreground/50 py-2">
+                        Pokazano ostatnie 5 z {msgs.length} wiadomości — 
+                        <a href={`/communication?thread_id=${thread.id}`} className="text-primary hover:underline ml-1">otwórz pełny czat</a>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </TabsContent>
+
         {/* ── TAB: Returns & Disputes ── */}
         <TabsContent value="returns" className="mt-4 space-y-4">
           <div className="grid lg:grid-cols-3 gap-4">
@@ -1911,8 +2249,8 @@ function OrderDetailsContent() {
                         <div key={ret.id} className="py-3.5 first:pt-0 last:pb-0 flex items-center justify-between gap-4 group">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-foreground/95 select-all">
-                                {ret.external_return_id || ret.reference_number}
+                              <span className="font-mono font-extrabold text-xs bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-xl select-all tracking-wider shadow-sm shadow-primary/5">
+                                {ret.reference_number || ret.external_return_id}
                               </span>
                               <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-primary/5 text-primary border-primary/20">
                                 {ret.status}
@@ -2258,7 +2596,7 @@ function OrderDetailsContent() {
                   <p className="text-sm">Brak zarejestrowanych zdarzeń.</p>
                 </div>
               ) : (
-                <div>
+                <div className="relative border-l border-slate-200 dark:border-white/10 ml-3 pl-6 space-y-6 py-2">
                   {[...order.event_logs].reverse().map((log) => (
                     <LogEntry key={log.id} log={log} />
                   ))}
@@ -2376,6 +2714,10 @@ function OrderDetailsContent() {
                         task.status === "RESOLVED" ? "bg-emerald-500/10 text-emerald-500" :
                         "bg-slate-500/10 text-slate-500";
 
+                      const titleMatch = task.title.match(/^\[(.*?)\]\s*(.*)$/);
+                      const displayTitle = titleMatch ? titleMatch[2] : task.title;
+                      const category = titleMatch ? titleMatch[1] : null;
+
                       return (
                         <div key={task.id} className="p-3 bg-muted/20 border border-border/20 rounded-xl hover:bg-muted/30 transition-all duration-200 flex flex-col gap-2">
                           <div className="flex items-center justify-between text-[10px]">
@@ -2391,7 +2733,14 @@ function OrderDetailsContent() {
                             </div>
                           </div>
                           
-                          <h4 className="text-xs font-bold text-foreground leading-normal">{task.title}</h4>
+                          <div className="flex items-start gap-1.5 flex-wrap">
+                            {category && (
+                              <Badge variant="outline" className="border-indigo-500/20 bg-indigo-500/5 text-indigo-400 text-[8px] h-4.5 font-bold px-1.5 py-0 select-none shrink-0">
+                                {category}
+                              </Badge>
+                            )}
+                            <h4 className="text-xs font-bold text-foreground leading-normal flex-1">{displayTitle}</h4>
+                          </div>
                           {task.description && (
                             <p className="text-[11px] text-muted-foreground line-clamp-2">{task.description}</p>
                           )}
