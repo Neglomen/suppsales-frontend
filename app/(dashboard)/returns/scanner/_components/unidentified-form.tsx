@@ -41,9 +41,7 @@ export function UnidentifiedForm({ initialWaybill, onSuccess, onCancel }: Uniden
       formData.append("file", files[i]);
       
       try {
-        const response = await api.post<{ url: string }>("/returns/upload-photo", formData, {
-          headers: { "Content-Type": "multipart/form-data" }
-        });
+        const response = await api.post<{ url: string }>("/returns/upload-photo", formData);
         uploadedUrls.push(response.data.url);
       } catch (err) {
         toast.error(`Błąd wczytywania zdjęcia: ${files[i].name}`);
