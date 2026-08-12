@@ -42,6 +42,7 @@ import { AllegroIcon, BaseLinkerIcon, EmpikIcon } from "@/components/shared/icon
 import { ChatPanel } from "@/app/(dashboard)/orders/[id]/_components/chat-panel";
 import { DisputeChatDialog, translateDisputeSubject } from "@/app/(dashboard)/orders/[id]/_components/dispute-chat-dialog";
 import { ProcessingPanel } from "./_components/processing-panel";
+import { SalesCorrectionModal } from "../../shipping/_components/sales-correction-modal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -242,6 +243,9 @@ function ReturnDetailsContent() {
   // States for dispute dialog
   const [selectedDispute, setSelectedDispute] = useState<any | null>(null);
   const [isDisputeChatOpen, setIsDisputeChatOpen] = useState(false);
+
+  // State for ERP correction modal
+  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
 
   const loadData = useCallback(() => {
     if (!id) return;
@@ -837,6 +841,7 @@ function ReturnDetailsContent() {
             returnData={returnData}
             orderData={orderData}
             onRefresh={loadData}
+            onTriggerCorrection={() => setIsCorrectionModalOpen(true)}
           />
         </TabsContent>
 
@@ -953,6 +958,16 @@ function ReturnDetailsContent() {
               api.get<any>(`/orders/${returnData.order.id}`).then((response) => setOrderData(response.data));
             }
           }}
+        />
+      )}
+
+      {/* ── ERP SALES CORRECTION MODAL ── */}
+      {orderData && (
+        <SalesCorrectionModal
+          order={orderData}
+          isOpen={isCorrectionModalOpen}
+          onClose={() => setIsCorrectionModalOpen(false)}
+          onSuccess={loadData}
         />
       )}
     </div>
