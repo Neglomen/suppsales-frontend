@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import api, { getMediaUrl } from "@/lib/api";
+import api, { getMediaUrl, compressImage } from "@/lib/api";
 import toast from "react-hot-toast";
 import {
   Loader2,
@@ -37,14 +37,26 @@ export function UnidentifiedForm({ initialWaybill, onSuccess, onCancel }: Uniden
     const uploadedUrls: string[] = [];
 
     for (let i = 0; i < files.length; i++) {
-      const formData = new FormData();
-      formData.append("file", files[i]);
-      
       try {
+        const originalFile = files[i];
+        let fileToUpload = originalFile;
+        if (originalFile.type.startsWith("image/")) {
+          try {
+            fileToUpload = await compressImage(originalFile);
+          } catch (compressErr) {
+            console.error("Compression failed, uploading original:", compressErr);
+          }
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileToUpload);
+        
         const response = await api.post<{ url: string }>("/returns/upload-photo", formData);
         uploadedUrls.push(response.data.url);
-      } catch (err) {
-        toast.error(`Błąd wczytywania zdjęcia: ${files[i].name}`);
+      } catch (err: any) {
+        const detailMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || "";
+        const errorSuffix = detailMsg ? `: ${detailMsg}` : "";
+        toast.error(`Błąd przesyłania zdjęcia ${files[i].name}${errorSuffix}`);
       }
     }
 
